@@ -31,7 +31,7 @@ import {
 	periodTotal
 } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
-import { totalSaved } from '$lib/server/repo/buckets';
+import { totalSaved, savingsInPeriod } from '$lib/server/repo/buckets';
 import { listCategories } from '$lib/server/repo/workspaces';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
@@ -285,6 +285,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		periodIncome,
 		prevIncome,
 		savingsTotal,
+		periodSavings,
 		barCats
 	] = await Promise.all([
 		periodTotal(db, scope, cfg.queryPeriod, now),
@@ -293,9 +294,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		memberBreakdown(db, scope, cfg.queryPeriod, now),
 		cfg.showBudgets ? budgetVsActual(db, scope, cfg.queryPeriod, now) : Promise.resolve([]),
 		listCategories(db, ws.id),
-		incomeInPeriod(db, ws.id, cfg.queryPeriod, ws.timezone),
-		incomeInPeriod(db, ws.id, cfg.prevPeriod, ws.timezone),
+		incomeInPeriod(db, ws.id, cfg.queryPeriod, ws.timezone, today),
+		incomeInPeriod(db, ws.id, cfg.prevPeriod, ws.timezone, today),
 		totalSaved(db, ws.id),
+		savingsInPeriod(db, ws.id, cfg.queryPeriod, ws.timezone),
 		period !== 'day'
 			? bucketCategoryTrend(db, scope, cfg.queryPeriod, now, period === 'year' ? 'month' : 'day')
 			: Promise.resolve(new Map())
@@ -309,7 +311,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		prevTotalMinor: prevTotal,
 		incomeMinor: periodIncome,
 		prevIncomeMinor: prevIncome,
-		savingsMinor: savingsTotal,
+		savingsMinor: periodSavings,
 		categories: categories.map((c) => ({ ...c })),
 		members: members.map((m) => ({ ...m })),
 		buckets: cfg.buckets.map((b) => {

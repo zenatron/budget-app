@@ -15,7 +15,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const memberships = await listWorkspacesForUser(getDb(), locals.user.id);
 	return {
 		displayName: locals.user.displayName,
-		workspaces: memberships.map((m) => ({ slug: m.workspace.slug, name: m.workspace.name })),
+		workspaces: memberships.map((m) => ({ slug: m.workspace.slug, name: m.workspace.name, accentColor: m.workspace.accentColor })),
 		timezones: Intl.supportedValuesOf('timeZone'),
 		currencies: Intl.supportedValuesOf('currency')
 	};
@@ -27,7 +27,8 @@ const CreateSchema = v.object({
 	timezone: v.pipe(
 		v.string(),
 		v.check((tz) => Intl.supportedValuesOf('timeZone').includes(tz), 'Pick a timezone')
-	)
+	),
+	accentColor: v.optional(v.pipe(v.string(), v.regex(/^#[0-9A-Fa-f]{6}$/)))
 });
 
 const JOIN_MESSAGES: Record<JoinWorkspaceError['reason'], string> = {

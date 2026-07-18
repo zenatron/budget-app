@@ -5,6 +5,13 @@ import { isStale, waitingDays } from '$lib/domain/approval/staleness';
 import { systemClock } from '$lib/infra/time/system-clock';
 import type { RequestHandler } from './$types';
 
+function jsonSafe(data: unknown) {
+	return new Response(
+		JSON.stringify(data, (_, v) => (typeof v === 'bigint' ? v.toString() : v)),
+		{ headers: { 'content-type': 'application/json' } }
+	);
+}
+
 export const GET: RequestHandler = async ({ locals, url }) => {
 	const now = systemClock.now();
 	const search = url.searchParams.get('q') ?? undefined;
@@ -20,7 +27,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	const hasMore = items.length > 20;
 	if (hasMore) items.pop();
 	const staleAfterHours = locals.workspace!.staleAfterHours;
-	return json({
+	return jsonSafe({
 		purchases: items.map((i) => ({
 			...i,
 			createdAt: i.createdAt.toISOString(),

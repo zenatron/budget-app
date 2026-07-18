@@ -36,6 +36,20 @@
       "when": 1784408541918,
       "tag": "0004_strange_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784412756366,
+      "tag": "0005_fresh_piledriver",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784413865408,
+      "tag": "0006_hot_paladin",
+      "breakpoints": true
     }
   ]
 }

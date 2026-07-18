@@ -3,6 +3,8 @@
 	import { page } from '$app/state';
 	import Icon from '$lib/components/Icon.svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
+	import CommandPaletteOverlay from '$lib/components/CommandPaletteOverlay.svelte';
+	import { paletteOpen } from '$lib/command-palette-state.svelte';
 
 	let { data, children } = $props();
 	let pathname = $derived(page.url.pathname);
@@ -64,6 +66,7 @@
 		'#FFD60A'
 	];
 	const accent = $derived(
+		data.workspace.accentColor ??
 		accents[
 			slug.split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) % accents.length
 		]
@@ -118,7 +121,7 @@
 					/>
 				</button>
 				<div class="flex items-center gap-2">
-					<CommandPalette currency={data.workspace.currency} />
+					<CommandPalette />
 					<a
 						href="/w/{slug}/purchases/new"
 						class="press flex h-8 w-8 items-center justify-center rounded-full"
@@ -184,6 +187,10 @@
 		>
 			{@render children()}
 		</main>
+
+		{#if paletteOpen.value}
+			<CommandPaletteOverlay currency={data.workspace.currency} />
+		{/if}
 
 		<nav
 			class="material fixed right-0 bottom-0 left-0 z-20"

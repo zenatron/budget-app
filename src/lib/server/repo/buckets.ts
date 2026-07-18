@@ -1,6 +1,8 @@
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, eq, gte, lt, ne, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db';
 import { bucket, bucketTransaction, user, workspaceMember } from '$lib/server/db/schema';
+import type { Period } from '$lib/domain/analytics/period';
+import { zonedTimeToUtc } from '$lib/domain/time/zoned';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 
@@ -224,5 +226,29 @@ export async function totalSaved(db: Db, workspaceId: string): Promise<bigint> {
 		.from(bucketTransaction)
 		.innerJoin(bucket, eq(bucketTransaction.bucketId, bucket.id))
 		.where(eq(bucket.workspaceId, workspaceId));
+	return BigInt(rows[0]?.total ?? '0');
+}
+
+export async function savingsInPeriod(
+	db: Db,
+	workspaceId: string,
+	period: Period,
+	timezone: string
+): Promise<bigint> {
+	const from = zonedTimeToUtc(period.from, 0, 0, timezone);
+	const to = zonedTimeToUtc(period.toExclusive, 0, 0, timezone);
+	const rows = await db
+		.select({
+			total: sql<string>`coalesce(sum(${bucketTransaction.amountMinor}), 0)`
+		})
+		.from(bucketTransaction)
+		.innerJoin(bucket, eq(bucketTransaction.bucketId, bucket.id))
+		.where(
+			and(
+				eq(bucket.workspaceId, workspaceId),
+				gte(bucketTransaction.createdAt, from),
+				lt(bucketTransaction.createdAt, to)
+			)
+		);
 	return BigInt(rows[0]?.total ?? '0');
 }

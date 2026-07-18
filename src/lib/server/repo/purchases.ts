@@ -58,7 +58,8 @@ function toDomain(row: PurchaseRow, approverMemberIds: string[]): Purchase {
 		nudgeCount: row.nudgeCount,
 		recurringRuleId: row.recurringRuleId,
 		parentPurchaseId: row.parentPurchaseId,
-		approverMemberIds
+		approverMemberIds,
+		bucketId: row.bucketId ?? null
 	};
 }
 
@@ -124,6 +125,7 @@ export async function insertPurchase(
 		nudgeCount: p.nudgeCount,
 		recurringRuleId: p.recurringRuleId,
 		parentPurchaseId: p.parentPurchaseId,
+		bucketId: p.bucketId,
 		createdAt: now,
 		updatedAt: now
 	});
@@ -163,6 +165,7 @@ export async function applyTransition(
 			completedAt: p.completedAt,
 			lastNudgedAt: p.lastNudgedAt,
 			nudgeCount: p.nudgeCount,
+			bucketId: p.bucketId,
 			updatedAt: ev.at
 		})
 		.where(eq(purchase.id, p.id));

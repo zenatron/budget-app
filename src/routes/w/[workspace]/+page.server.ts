@@ -2,7 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import { and, eq, sql } from 'drizzle-orm';
 import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
-import { purchase, workspaceMember } from '$lib/server/db/schema';
+import { purchase, workspace, workspaceMember } from '$lib/server/db/schema';
 import { createInvite, listOpenInvites } from '$lib/server/repo/invites';
 import { listMembers } from '$lib/server/repo/workspaces';
 import { visibleTo } from '$lib/server/repo/purchases';
@@ -35,6 +35,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		);
 	return {
 		pendingCount: pendingRow.count,
+		bucketChargesSkipApproval: locals.workspace!.bucketChargesSkipApproval,
 		members: members.map((m) => ({
 			id: m.member.id,
 			displayName: m.user.displayName,
@@ -117,6 +118,16 @@ export const actions: Actions = {
 					eq(workspaceMember.workspaceId, locals.workspace!.id)
 				)
 			);
+		return { ok: true };
+	},
+
+	bucketSkipApproval: async ({ locals, request }) => {
+		if (locals.member!.role !== 'owner') error(403, 'Only the owner can change this setting');
+		const value = (await request.formData()).get('enabled') === 'true';
+		await getDb()
+			.update(workspace)
+			.set({ bucketChargesSkipApproval: value })
+			.where(eq(workspace.id, locals.workspace!.id));
 		return { ok: true };
 	}
 };

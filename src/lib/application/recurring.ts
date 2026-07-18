@@ -253,6 +253,7 @@ export async function materializeDueRules(db: Db, deps: Deps): Promise<number> {
 					recurringRuleId: r.id,
 					parentPurchaseId: null,
 					approverMemberIds: [],
+					bucketId: null,
 					merchantId: null
 				};
 				const event: TransitionEvent = {

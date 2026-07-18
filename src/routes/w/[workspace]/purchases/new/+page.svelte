@@ -94,6 +94,20 @@
 				</select>
 				<Icon name="chevronRight" class="h-4 w-4" style="color: var(--ink-4)" />
 			</div>
+			{#if data.buckets.length > 0}
+				<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
+					<Icon name="bank" class="h-5 w-5" style="color: var(--ink-4)" />
+					<select
+						name="bucketId"
+						class="-mx-1 flex-1 border-none bg-transparent p-0 text-[17px] outline-none"
+						style="color: var(--ink); appearance: none"
+					>
+						<option value="">Charge to bucket</option>
+						{#each data.buckets as b (b.id)}<option value={b.id}>{b.name}</option>{/each}
+					</select>
+					<Icon name="chevronRight" class="h-4 w-4" style="color: var(--ink-4)" />
+				</div>
+			{/if}
 			<!-- Photo (optional) -->
 			<label
 				class="row hairline cursor-pointer"

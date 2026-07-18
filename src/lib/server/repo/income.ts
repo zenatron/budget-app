@@ -2,7 +2,7 @@ import { and, eq, gte, isNotNull, isNull, lt } from 'drizzle-orm';
 import type { Db } from '$lib/server/db';
 import { income, user, workspaceMember } from '$lib/server/db/schema';
 import type { Period } from '$lib/domain/analytics/period';
-import { compareDates, nextOccurrence, parseRRule, addDays } from '$lib/domain/recurrence/rrule';
+import { compareDates, nextOccurrence, parseRRule, addDays, type CalDate } from '$lib/domain/recurrence/rrule';
 import { zonedTimeToUtc } from '$lib/domain/time/zoned';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
@@ -109,13 +109,15 @@ export async function listIncome(db: Db, workspaceId: string) {
 
 /**
  * Total income for a period: one-offs received in it, plus each recurring
- * template's occurrences that fall inside it.
+ * template's occurrences that fall inside it. Future occurrences (after
+ * `today`) are excluded — income is only counted as it arrives.
  */
 export async function incomeInPeriod(
 	db: Db,
 	workspaceId: string,
 	period: Period,
-	timezone: string
+	timezone: string,
+	today: CalDate
 ): Promise<bigint> {
 	const from = zonedTimeToUtc(period.from, 0, 0, timezone);
 	const to = zonedTimeToUtc(period.toExclusive, 0, 0, timezone);
@@ -143,11 +145,11 @@ export async function incomeInPeriod(
 		if (!r.rrule) continue;
 		try {
 			const rec = parseRRule(r.rrule);
-			// Count occurrences inside [from, toExclusive) on calendar dates.
 			let cursor = addDays(period.from, -1);
 			for (let i = 0; i < 400; i++) {
 				const occ = nextOccurrence(rec, cursor);
 				if (compareDates(occ, period.toExclusive) >= 0) break;
+				if (compareDates(occ, today) > 0) break;
 				total += r.amountMinor;
 				cursor = occ;
 			}

@@ -10,6 +10,7 @@ export interface CreateWorkspaceCmd {
 	name: string;
 	currency: string;
 	timezone: string;
+	accentColor?: string | null;
 }
 
 const DEFAULT_CATEGORIES: { name: string; icon: string; color: string }[] = [
@@ -65,6 +66,7 @@ export async function createWorkspace(
 			ownerUserId: cmd.userId,
 			currency: cmd.currency,
 			timezone: cmd.timezone,
+			accentColor: cmd.accentColor ?? null,
 			createdAt: now
 		});
 		await tx.insert(workspaceMember).values({

@@ -43,6 +43,8 @@ export interface Purchase {
 	parentPurchaseId: string | null;
 	/** Snapshot of routing at request time; never re-resolved while pending. */
 	approverMemberIds: string[];
+	/** Bucket this purchase charges against (withdrawal on completion). */
+	bucketId: string | null;
 }
 
 export class PurchaseStateError extends Error {

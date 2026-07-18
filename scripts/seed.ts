@@ -61,6 +61,7 @@ await db.insert(schema.workspace).values({
 	timezone: 'America/New_York',
 	maxSealDays: 30,
 	reapprovalThresholdPct: 20,
+	accentColor: '#FF9F0A',
 	createdAt: now
 });
 
@@ -678,36 +679,34 @@ await Promise.all([
 	})()
 ]);
 
-// ── Income (monthly for 12 months) ───────────────────────────────────
-for (let m = 1; m <= 12; m++) {
-	const day = m * 30 - 1;
-	if (day < 5) continue;
-	await db.insert(schema.income).values([
-		{
-			id: uuid(),
-			workspaceId: wsId,
-			memberId: aliceMember,
-			source: 'Salary',
-			amountMinor: 5_000_00n,
-			currency: 'USD',
-			rrule: 'FREQ=MONTHLY;BYMONTHDAY=1',
-			receivedAt: daysAgo(day),
-			note: null
-		},
-		{
-			id: uuid(),
-			workspaceId: wsId,
-			memberId: bobMember,
-			source: 'Salary',
-			amountMinor: 3_800_00n,
-			currency: 'USD',
-			rrule: 'FREQ=MONTHLY;BYMONTHDAY=15',
-			receivedAt: daysAgo(day - 14),
-			note: null
-		}
-	]);
-}
-// Extra income entries
+// ── Income (recurring + one-offs) ───────────────────────────────────
+// One recurring entry per member — the rrule expansion generates the
+// monthly occurrences on the fly; no need for 12 separate entries.
+await db.insert(schema.income).values([
+	{
+		id: uuid(),
+		workspaceId: wsId,
+		memberId: aliceMember,
+		source: 'Salary',
+		amountMinor: 5_000_00n,
+		currency: 'USD',
+		rrule: 'DTSTART=2025-07-01;FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=1',
+		receivedAt: daysAgo(29),
+		note: null
+	},
+	{
+		id: uuid(),
+		workspaceId: wsId,
+		memberId: bobMember,
+		source: 'Salary',
+		amountMinor: 3_800_00n,
+		currency: 'USD',
+		rrule: 'DTSTART=2025-07-15;FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=15',
+		receivedAt: daysAgo(15),
+		note: null
+	}
+]);
+// Extra one-off income entries
 await db.insert(schema.income).values([
 	{
 		id: uuid(),
@@ -788,7 +787,7 @@ console.log(
 		'  3 pending approval, 1 approved, 2 denied, 1 cancelled, 1 sealed',
 		'  5 recurring rules (Rent, Netflix, Gym, Internet, Phone)',
 		`  ${recCount} recurring-generated purchases`,
-		'  12 months of income entries',
+		'  2 recurring income entries + 3 one-off income entries',
 		'  12 months of budgets (overall + 8 categories)'
 	].join('\n')
 );

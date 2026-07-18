@@ -64,6 +64,8 @@ export const workspace = pgTable('workspace', {
 	reapprovalThresholdPct: integer('reapproval_threshold_pct').notNull().default(10),
 	sealedPurchaseCapMinor: bigint('sealed_purchase_cap_minor', { mode: 'bigint' }),
 	maxSealDays: integer('max_seal_days').notNull().default(90),
+	accentColor: text('accent_color'),
+	bucketChargesSkipApproval: boolean('bucket_charges_skip_approval').notNull().default(false),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull()
 });
 
@@ -159,6 +161,7 @@ export const purchase = pgTable(
 		nudgeCount: integer('nudge_count').notNull().default(0),
 		recurringRuleId: uuid('recurring_rule_id'),
 		parentPurchaseId: uuid('parent_purchase_id').references((): AnyPgColumn => purchase.id),
+		bucketId: uuid('bucket_id'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull()
 	},
@@ -177,6 +180,11 @@ export const purchase = pgTable(
 			name: 'purchase_recurring_rule_fk',
 			columns: [t.recurringRuleId],
 			foreignColumns: [recurringRule.id]
+		}),
+		foreignKey({
+			name: 'purchase_bucket_fk',
+			columns: [t.bucketId],
+			foreignColumns: [bucket.id]
 		})
 	]
 );

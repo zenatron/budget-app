@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { goto } from '$app/navigation';
 	import { money } from '$lib/actions/money';
 	import { formatMinor } from '$lib/money-format';
+	import { formatPct } from '$lib/format';
 	import Money from '$lib/components/Money.svelte';
 	import CategoryRing from '$lib/components/CategoryRing.svelte';
 	let { data } = $props();
@@ -9,6 +11,44 @@
 	const currency = $derived(data.workspace.currency);
 	const period = $derived(data.period);
 	const isMonth = $derived(period === 'month');
+
+	let touchStartX = $state(0);
+	let touchStartY = $state(0);
+	let swiping = $state(false);
+	let swipeOffset = $state(0);
+
+	function onTouchStart(e: TouchEvent) {
+		if (e.touches.length !== 1) return;
+		touchStartX = e.touches[0].clientX;
+		touchStartY = e.touches[0].clientY;
+		swiping = true;
+	}
+
+	function onTouchMove(e: TouchEvent) {
+		if (!swiping) return;
+		const dx = e.touches[0].clientX - touchStartX;
+		const dy = e.touches[0].clientY - touchStartY;
+		if (Math.abs(dy) > Math.abs(dx)) { swiping = false; return; }
+		swipeOffset = dx;
+	}
+
+	function onTouchEnd(e: TouchEvent) {
+		if (!swiping) { swipeOffset = 0; return; }
+		swiping = false;
+		const dx = e.changedTouches[0].clientX - touchStartX;
+		swipeOffset = 0;
+		if (Math.abs(dx) < 60) return;
+		navigate(dx > 0 ? 'prev' : 'next');
+	}
+
+	function navigate(dir: 'prev' | 'next') {
+		const href = navHref(dir);
+		if (!href) return;
+		document.documentElement.setAttribute('data-vt-slide', dir === 'next' ? 'right' : 'left');
+		goto(href).finally(() => {
+			document.documentElement.removeAttribute('data-vt-slide');
+		});
+	}
 
 	const maxCategory = $derived(
 		data.categories.reduce(
@@ -45,14 +85,28 @@
 	);
 	const overBudget = $derived(isMonth && overallPct !== null && overallPct > 1);
 
+	const savings = $derived(data.savingsMinor ?? 0n);
+	const net = $derived(data.incomeMinor - data.totalMinor - savings);
+	const prevNet = $derived(
+		data.prevIncomeMinor ? data.prevIncomeMinor - data.prevTotalMinor - savings : 0n
+	);
+	const netChange = $derived(
+		data.incomeMinor > 0n
+			? Number(((net - prevNet) * 1000n) / data.incomeMinor) / 10
+			: net !== prevNet ? (net > prevNet ? Infinity : -Infinity) : 0
+	);
+	const sp = $derived(
+		data.incomeMinor > 0n ? Number((net * 1000n) / data.incomeMinor) / 10 : 0
+	);
+
 	const comparison = $derived.by(() => {
 		if (data.prevTotalMinor === 0n)
 			return data.totalMinor > 0n ? `First ${period} of tracking` : null;
 		const pct = Number((data.totalMinor * 1000n) / data.prevTotalMinor) / 10;
 		const dir = pct > 100 ? 'up' : pct < 100 ? 'down' : 'flat';
-		const diff = Math.abs(pct - 100).toFixed(0);
+		const diff = Math.abs(pct - 100);
 		if (dir === 'flat') return `Same as ${data.prevLabel}`;
-		return { dir, text: `${diff}% ${dir === 'up' ? 'more' : 'less'} than ${data.prevLabel}` };
+		return { dir, text: `${formatPct(diff)} ${dir === 'up' ? 'more' : 'less'} than ${data.prevLabel}` };
 	});
 
 	const barWidth = $derived(period === 'year' ? 16 : period === 'week' ? 34 : 6);
@@ -64,7 +118,9 @@
 		return Math.min(100, Number((part * 1000n) / whole) / 10);
 	}
 
-	function navHref(dir: 'prev' | 'next'): string {
+	function navHref(dir: 'prev' | 'next'): string | null {
+		if (dir === 'prev' && !data.hasPrev) return null;
+		if (dir === 'next' && !data.hasNext) return null;
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity
 		const params = new URLSearchParams();
 		params.set('period', period);
@@ -78,7 +134,15 @@
 	}
 </script>
 
-<div class="space-y-7">
+<div
+	class="space-y-7"
+	role="region"
+	aria-label="Activity period"
+	ontouchstart={onTouchStart}
+	ontouchmove={onTouchMove}
+	ontouchend={onTouchEnd}
+	style="transform: translateX({swiping ? swipeOffset : 0}px); transition: transform {swiping ? '0s' : 'var(--dur) var(--ease-out)'}; touch-action: pan-y"
+>
 	<div class="flex items-center justify-between px-1 pt-1">
 		<h1 class="text-[28px]">Activity</h1>
 	</div>
@@ -110,8 +174,8 @@
 
 	<div class="-mx-1 flex items-center justify-between gap-1">
 		{#if data.hasPrev}
-			<a
-				href={navHref('prev')}
+			<button
+				onclick={() => navigate('prev')}
 				class="press flex h-9 w-9 items-center justify-center rounded-full"
 				style="color: var(--ink-3)"
 				aria-label="Previous"
@@ -126,14 +190,14 @@
 					stroke-linecap="round"
 					stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg
 				>
-			</a>
+			</button>
 		{:else}
 			<div class="h-9 w-9"></div>
 		{/if}
 		<span class="text-[17px] font-semibold" style="color: var(--ink)">{data.label}</span>
 		{#if data.hasNext}
-			<a
-				href={navHref('next')}
+			<button
+				onclick={() => navigate('next')}
 				class="press flex h-9 w-9 items-center justify-center rounded-full"
 				style="color: var(--ink-3)"
 				aria-label="Next"
@@ -148,7 +212,7 @@
 					stroke-linecap="round"
 					stroke-linejoin="round"><path d="M9 18l6-6-6-6" /></svg
 				>
-			</a>
+			</button>
 		{:else}
 			<div class="h-9 w-9"></div>
 		{/if}
@@ -187,8 +251,8 @@
 				style="color: {overBudget ? 'var(--deny)' : 'var(--ink-3)'}"
 			>
 				{overBudget
-					? `${((overallPct - 1) * 100).toFixed(0)}% over budget`
-					: `${(overallPct * 100).toFixed(0)}% of budget used`}
+					? `${formatPct((overallPct - 1) * 100)} over budget`
+					: `${formatPct(overallPct * 100)} of budget used`}
 			</p>
 		{:else if comparison}
 			<p
@@ -327,70 +391,68 @@
 		{/if}
 	</div>
 
-	{#if data.incomeMinor > 0n}
-		{@const savings = data.savingsMinor ?? 0n}
-		{@const net = data.incomeMinor - data.totalMinor - savings}
-		{@const prevNet = data.prevIncomeMinor ? data.prevIncomeMinor - data.prevTotalMinor : 0n}
-		{@const netChange = prevNet !== 0n ? Number(((net - prevNet) * 1000n) / (prevNet < 0n ? -prevNet : prevNet === 0n ? 1n : prevNet)) / 10 : 0
-		}
-		{@const sp = data.incomeMinor > 0n ? Number((net * 1000n) / data.incomeMinor) / 10 : 0}
-		<div>
-			<p class="section-label mb-3 px-1">Net position</p>
-			<div class="grid grid-cols-2 gap-2.5">
-				<div class="card overflow-hidden py-1">
-					<div class="flex items-center justify-between px-3.5 py-1.5">
-						<span class="text-[13px] font-medium" style="color: var(--approve)">In</span>
-						<Money minor={data.incomeMinor} {currency} sign class="text-[16px] font-semibold" />
-					</div>
-					<div class="hairline flex items-center justify-between px-3.5 py-1.5">
-						<span class="text-[13px] font-medium" style="color: var(--ink-3)">Out</span>
-						<Money minor={data.totalMinor} {currency} class="text-[16px] font-semibold" />
-					</div>
-					{#if savings > 0n}
-						<div class="flex items-center justify-between px-3.5 py-1.5">
-							<span class="text-[13px] font-medium" style="color: var(--seal)">Saved</span>
-							<Money minor={savings} {currency} sign class="text-[16px] font-semibold" />
-						</div>
-					{/if}
+	<div>
+		<p class="section-label mb-3 px-1">Net position</p>
+		<div class="grid grid-cols-2 gap-2.5">
+			<div class="card overflow-hidden py-1">
+				<div class="flex items-center justify-between px-3.5 py-1.5">
+					<span class="text-[13px] font-medium" style="color: var(--approve)">In</span>
+					<Money minor={data.incomeMinor} {currency} sign class="text-[16px] font-semibold" />
 				</div>
-				<div
-					class="card flex flex-col items-center justify-center p-4"
-					style="background: {net < 0n
-						? 'color-mix(in oklab, var(--deny) 8%, var(--surface))'
-						: 'color-mix(in oklab, var(--approve) 8%, var(--surface))'}"
-				>
-					<p
-						class="text-[11px] font-semibold tracking-[0.08em] uppercase"
-						style="color: {net < 0n ? 'var(--deny)' : 'var(--approve)'}"
-					>
-						Net
-					</p>
-					<span style="color: {net < 0n ? 'var(--deny)' : 'var(--approve)'}">
-						<Money minor={net} {currency} sign block class="mt-0.5 text-[18px] font-semibold" />
-					</span>
-					{#if prevNet !== 0n}
-						<span class="mt-1 inline-flex items-center gap-0.5 text-[11px] font-semibold" style="color: {netChange >= 0 ? 'var(--approve)' : 'var(--deny)'}">
-							<svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-								{#if netChange >= 0}
-									<path d="M2 8 C3 6, 5 2, 7 5 C8 7, 10 3, 10 2 M10 2 L8 3 M10 2 L10.5 4" />
-								{:else}
-									<path d="M2 2 C3 4, 5 8, 7 5 C8 3, 10 7, 10 8 M10 8 L8 7 M10 8 L10.5 6" />
-								{/if}
-							</svg>
-							{Math.abs(netChange).toFixed(0)}% vs {data.prevLabel}
-						</span>
-					{/if}
+				<div class="hairline flex items-center justify-between px-3.5 py-1.5">
+					<span class="text-[13px] font-medium" style="color: var(--ink-3)">Out</span>
+					<Money minor={data.totalMinor} {currency} class="text-[16px] font-semibold" />
+				</div>
+				<div class="flex items-center justify-between px-3.5 py-1.5">
+					<span class="text-[13px] font-medium" style="color: var(--seal)">Saved</span>
+					<Money minor={savings} {currency} sign class="text-[16px] font-semibold" />
 				</div>
 			</div>
-			<p class="mt-2.5 px-1 text-[13px]" style="color: var(--ink-3)">
-				{savings > 0n
-					? `${formatMinor(savings, currency)} in buckets · ${sp >= 0 ? `${sp.toFixed(0)}% free` : 'over budget'}`
-					: sp >= 0
-						? `Saving ${sp.toFixed(0)}% of what came in`
-						: `Spending more than income this ${period}`}
-			</p>
+			<div
+				class="card flex flex-col items-center justify-center p-4"
+				style="background: {net < 0n
+					? 'color-mix(in oklab, var(--deny) 8%, var(--surface))'
+					: 'color-mix(in oklab, var(--approve) 8%, var(--surface))'}"
+			>
+				<p
+					class="text-[11px] font-semibold tracking-[0.08em] uppercase"
+					style="color: {net < 0n ? 'var(--deny)' : 'var(--approve)'}"
+				>
+					Net
+				</p>
+				<span style="color: {net < 0n ? 'var(--deny)' : 'var(--approve)'}">
+					<Money minor={net} {currency} sign block class="mt-0.5 text-[18px] font-semibold" />
+				</span>
+				{#if prevNet !== 0n && net !== prevNet}
+					<span class="mt-1 inline-flex items-center gap-0.5 text-[11px] font-semibold" style="color: {netChange >= 0 ? 'var(--approve)' : 'var(--deny)'}">
+						<svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+							{#if netChange >= 0}
+								<path d="M2 8 C3 6, 5 2, 7 5 C8 7, 10 3, 10 2 M10 2 L8 3 M10 2 L10.5 4" />
+							{:else}
+								<path d="M2 2 C3 4, 5 8, 7 5 C8 3, 10 7, 10 8 M10 8 L8 7 M10 8 L10.5 6" />
+							{/if}
+						</svg>
+						{#if Number.isFinite(netChange)}
+							{formatPct(Math.abs(netChange))} vs {data.prevLabel}
+						{:else}
+							{netChange > 0 ? 'up' : 'down'} vs {data.prevLabel}
+						{/if}
+					</span>
+				{/if}
+			</div>
 		</div>
-	{/if}
+		<p class="mt-2.5 px-1 text-[13px]" style="color: var(--ink-3)">
+			{#if data.incomeMinor === 0n}
+				No income recorded this {period}
+			{:else if savings > 0n}
+				{formatMinor(savings, currency)} in buckets · {sp >= 0 ? `${formatPct(sp)} free` : 'over budget'}
+			{:else if sp >= 0}
+				Saving {formatPct(sp)} of what came in
+			{:else}
+				Spending more than income this {period}
+			{/if}
+		</p>
+	</div>
 
 	{#if isMonth && (data.budgets.length > 0 || data.isOwner)}
 		<div>
@@ -478,7 +540,7 @@
 							</span>
 							<span class="num" style="color: var(--ink-2)">
 								{formatMinor(c.totalMinor, currency)}
-								<span class="ml-1 text-[12px]" style="color: var(--ink-4)">{pct.toFixed(0)}%</span>
+								<span class="ml-1 text-[12px]" style="color: var(--ink-4)">{formatPct(pct)}</span>
 							</span>
 						</div>
 						<div

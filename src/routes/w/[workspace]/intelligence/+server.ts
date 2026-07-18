@@ -15,11 +15,13 @@ import { createBucket, listBuckets } from '$lib/server/repo/buckets';
 import { Money } from '$lib/domain/money/money';
 import { periodTotal, categoryBreakdown, memberBreakdown } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
-import { totalSaved } from '$lib/server/repo/buckets';
+import { savingsInPeriod } from '$lib/server/repo/buckets';
 import { monthPeriod, previousMonthPeriod, yearPeriod } from '$lib/domain/analytics/period';
 import { systemClock } from '$lib/infra/time/system-clock';
+import { calDateInZone } from '$lib/domain/time/zoned';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { parse, type TimePeriod } from '$lib/intelligence/parser';
+import { formatPct } from '$lib/format';
 import type { RequestHandler } from './$types';
 
 function stringifyBigInts(obj: unknown): unknown {
@@ -55,6 +57,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	};
 	const currency = locals.workspace!.currency;
 	const now = systemClock.now();
+	const today = calDateInZone(now, scope.timezone);
 
 	if (parsed.intent === 'spending_query') {
 		const period = timeToPeriod(parsed.period);
@@ -76,8 +79,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		const total = await periodTotal(db, scope, period, now);
 		const categories = await categoryBreakdown(db, scope, period, now);
 		const members = await memberBreakdown(db, scope, period, now);
-		const income = await incomeInPeriod(db, locals.workspace!.id, period, scope.timezone);
-
+		const income = await incomeInPeriod(db, locals.workspace!.id, period, scope.timezone, today);
 		let answer = '';
 		let detail: unknown[] = [];
 		let highlight: number | null = null;
@@ -110,7 +112,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			answer = `Total spending in ${parsed.period.label}: ${Money.of(total, currency).format()}`;
 			if (income > 0n) {
 				const pct = Number((total * 1000n) / income) / 10;
-				answer += ` (${pct.toFixed(0)}% of income)`;
+				answer += ` (${formatPct(pct)} of income)`;
 			}
 			detail = categories.slice(0, 5).map((c) => ({ label: c.name, amountMinor: c.totalMinor }));
 		}
@@ -121,8 +123,8 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	if (parsed.intent === 'net_position') {
 		const period = timeToPeriod(parsed.period);
 		const total = await periodTotal(db, scope, period, now);
-		const income = await incomeInPeriod(db, locals.workspace!.id, period, scope.timezone);
-		const savings = await totalSaved(db, locals.workspace!.id);
+		const income = await incomeInPeriod(db, locals.workspace!.id, period, scope.timezone, today);
+		const savings = await savingsInPeriod(db, locals.workspace!.id, period, scope.timezone);
 		const net = income - total - savings;
 		const pct = income > 0n ? Number((net * 1000n) / income) / 10 : 0;
 
@@ -131,7 +133,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		answer += `${Money.of(total, currency).format()} out`;
 		if (savings > 0n) answer += `, ${Money.of(savings, currency).format()} saved`;
 		answer += `. Net: ${Money.of(net, currency).format()}`;
-		if (income > 0n) answer += ` (${pct.toFixed(0)}% free)`;
+			if (income > 0n) answer += ` (${formatPct(pct)} free)`;
 
 		return jsonSafe({ intent: parsed.intent, answer });
 	}

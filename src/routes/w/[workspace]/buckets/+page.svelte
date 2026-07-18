@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { money } from '$lib/actions/money';
 	import { formatMinor } from '$lib/money-format';
+	import { formatPct } from '$lib/format';
 	import Icon from '$lib/components/Icon.svelte';
 	import Money from '$lib/components/Money.svelte';
 
@@ -188,7 +189,7 @@
 							></div>
 						</div>
 						<div class="mt-1 flex justify-between text-[11px]" style="color: var(--ink-4)">
-							<span>{progressPct(b)}% of {formatMinor(b.goalCapMinor, b.currency)}</span>
+							<span>{formatPct(progressPct(b))} of {formatMinor(b.goalCapMinor, b.currency)}</span>
 							<span>{b.memberName}</span>
 						</div>
 					{/if}
@@ -307,7 +308,7 @@
 								</div>
 								<input type="hidden" name="color" value={ec ?? ''} />
 								<div class="flex gap-2">
-									<button class="btn btn-accent flex-1 py-2.5 text-[14px]">Save changes</button>
+									<button class="btn btn-accent flex-1 py-2.5 text-[14px]">Save</button>
 									<button
 										type="button"
 										onclick={() => (editing = null)}
@@ -348,7 +349,7 @@
 								<input name="note" placeholder="Optional note" class="field text-[15px]" />
 								<div class="flex gap-2">
 									<button class="btn btn-accent flex-1 py-2.5 text-[14px]">
-										Save adjustment
+										Save
 									</button>
 									<button
 										type="button"

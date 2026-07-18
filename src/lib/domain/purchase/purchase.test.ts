@@ -40,6 +40,7 @@ function draft(overrides: Partial<Purchase> = {}): Purchase {
 		recurringRuleId: null,
 		parentPurchaseId: null,
 		approverMemberIds: [],
+		bucketId: null,
 		merchantId: null,
 		...overrides
 	};

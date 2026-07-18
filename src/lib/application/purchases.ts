@@ -4,7 +4,9 @@ import {
 	purchase as purchaseTable,
 	workspace,
 	workspaceMember,
-	merchant
+	merchant,
+	bucket,
+	bucketTransaction
 } from '$lib/server/db/schema';
 import { Money } from '$lib/domain/money/money';
 import type { ApprovalPolicy } from '$lib/domain/approval/policy';
@@ -70,6 +72,8 @@ export interface SubmitPurchaseCmd {
 	/** Gift mode: hide this purchase entirely from these members until the date. */
 	seal?: SealSpec;
 	merchantName?: string | null;
+	/** Charge this purchase against a bucket (withdraw on completion). */
+	bucketId?: string | null;
 }
 
 /**
@@ -152,6 +156,17 @@ export async function submitPurchase(
 			});
 		}
 
+		// Validate bucket if provided — must be active and in this workspace.
+		if (cmd.bucketId) {
+			const [bkt] = await tx
+				.select({ id: bucket.id, status: bucket.status, workspaceId: bucket.workspaceId })
+				.from(bucket)
+				.where(and(eq(bucket.id, cmd.bucketId), eq(bucket.workspaceId, scope.workspaceId)))
+				.limit(1);
+			if (!bkt) throw new PurchaseStateError('Bucket not found');
+			if (bkt.status !== 'active') throw new PurchaseStateError('Cannot charge to a paused or archived bucket');
+		}
+
 		const isLog = cmd.intent === 'log';
 		const draft: Purchase = {
 			id: deps.ids.newId(),
@@ -175,10 +190,13 @@ export async function submitPurchase(
 			recurringRuleId: null,
 			parentPurchaseId: null,
 			approverMemberIds: [],
+			bucketId: cmd.bucketId ?? null,
 			merchantId
 		};
 
-		const needed = approvalRequired(policy, cmd.amount, cmd.categoryId);
+		const needed = cmd.bucketId && ws.bucketChargesSkipApproval
+			? false
+			: approvalRequired(policy, cmd.amount, cmd.categoryId);
 		let result;
 		if (needed) {
 			const approvers = resolveApprovers(
@@ -217,6 +235,9 @@ export async function submitPurchase(
 			result = autoApprove(draft, now, 'approval not required');
 		}
 		await insertPurchase(tx, deps, result.purchase, result.event);
+		if (result.purchase.state === 'completed' && result.purchase.bucketId) {
+			await withdrawFromBucket(tx, deps, result.purchase);
+		}
 		if (cmd.seal) {
 			// Audit the seal itself — private until unseal, not secret after it.
 			await appendEvent(tx, deps.ids, result.purchase.id, {
@@ -308,6 +329,18 @@ export async function refundPurchase(
 			at: now
 		});
 
+		if (p.bucketId) {
+			await tx.insert(bucketTransaction).values({
+				id: deps.ids.newId(),
+				bucketId: p.bucketId,
+				amountMinor: amount.minor,
+				currency: amount.currency,
+				type: 'withdrawal',
+				note: `Refund: ${p.itemName}`,
+				createdAt: now
+			});
+		}
+
 		if (amount.minor === remaining) {
 			const r = markRefunded(p, scope.memberId, now);
 			await applyTransition(tx, deps.ids, r.purchase, r.event);
@@ -375,7 +408,8 @@ async function withPurchase(
 	deps: Deps,
 	scope: Scope,
 	purchaseId: string,
-	fn: (p: Purchase, thresholdPct: number) => ReturnType<typeof approve>
+	fn: (p: Purchase, thresholdPct: number) => ReturnType<typeof approve>,
+	after?: (tx: Db, deps: Deps, purchase: Purchase) => Promise<void>
 ): Promise<void> {
 	const now = deps.clock.now();
 	const result = await db.transaction(async (tx) => {
@@ -393,6 +427,9 @@ async function withPurchase(
 			.limit(1);
 		const r = fn(p, ws.pct);
 		await applyTransition(tx, deps.ids, r.purchase, r.event);
+		if (r.purchase.state === 'completed' && r.purchase.bucketId && after) {
+			await after(tx, deps, r.purchase);
+		}
 		return r;
 	});
 	await announcePurchaseChange(db, deps.notifier, result.purchase, result.event);
@@ -431,7 +468,7 @@ export async function completePurchase(
 ) {
 	await withPurchase(db, deps, scope, purchaseId, (p, pct) =>
 		complete(p, scope.memberId, final, pct, deps.clock.now())
-	);
+	, withdrawFromBucket);
 }
 
 export async function editPurchase(
@@ -444,4 +481,23 @@ export async function editPurchase(
 	await withPurchase(db, deps, scope, purchaseId, (p) =>
 		edit(p, scope.memberId, changes, deps.clock.now())
 	);
+}
+
+async function withdrawFromBucket(
+	tx: Db,
+	deps: Deps,
+	p: Purchase
+): Promise<void> {
+	if (!p.bucketId || !p.finalAmount) return;
+	const amountMinor = -p.finalAmount.minor;
+	if (amountMinor >= 0n) return;
+	await tx.insert(bucketTransaction).values({
+		id: deps.ids.newId(),
+		bucketId: p.bucketId,
+		amountMinor,
+		currency: p.finalAmount.currency,
+		type: 'withdrawal',
+		note: p.itemName,
+		createdAt: p.completedAt ?? deps.clock.now()
+	});
 }

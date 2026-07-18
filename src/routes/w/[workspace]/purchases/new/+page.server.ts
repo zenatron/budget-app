@@ -10,6 +10,7 @@ import { ImageValidationError } from '$lib/infra/images/process';
 import { getBlobStore } from '$lib/server/blobs';
 import { getDb } from '$lib/server/db';
 import { listCategories, listMembers } from '$lib/server/repo/workspaces';
+import { listBuckets } from '$lib/server/repo/buckets';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { getNotifier } from '$lib/server/notify';
@@ -17,9 +18,10 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const db = getDb();
-	const [categories, members] = await Promise.all([
+	const [categories, members, buckets] = await Promise.all([
 		listCategories(db, locals.workspace!.id),
-		listMembers(db, locals.workspace!.id)
+		listMembers(db, locals.workspace!.id),
+		listBuckets(db, locals.workspace!.id)
 	]);
 	return {
 		categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
@@ -27,7 +29,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		sealableMembers: members
 			.filter((m) => m.member.status === 'active' && m.member.id !== locals.member!.id)
 			.map((m) => ({ id: m.member.id, displayName: m.user.displayName })),
-		maxSealDays: locals.workspace!.maxSealDays
+		maxSealDays: locals.workspace!.maxSealDays,
+		buckets: buckets
+			.filter((b) => b.bucket.status === 'active')
+			.map((b) => ({ id: b.bucket.id, name: b.bucket.name }))
 	};
 };
 
@@ -75,7 +80,8 @@ export const actions: Actions = {
 					note: f.note?.trim() || null,
 					intent: f.intent,
 					seal,
-					merchantName: form.get('merchantName')?.toString()?.trim() || null
+					merchantName: form.get('merchantName')?.toString()?.trim() || null,
+					bucketId: form.get('bucketId')?.toString()?.trim() || null
 				}
 			));
 		} catch (e) {

@@ -175,6 +175,29 @@
 		</div>
 	</div>
 
+	<div class="card flex items-center justify-between p-4">
+		<div>
+			<p class="text-[15px] font-medium" style="color: var(--ink)">Bucket charges</p>
+			<p class="text-[13px]" style="color: var(--ink-4)">Skip approval for purchases charged to a bucket</p>
+		</div>
+		<form method="POST" action="?/bucketSkipApproval" use:enhance>
+			<button
+				name="enabled"
+				value={data.bucketChargesSkipApproval ? 'false' : 'true'}
+				aria-label="Toggle bucket charges skip approval"
+				class="press relative inline-flex h-7 w-11 items-center rounded-full transition-colors"
+				style="background: {data.bucketChargesSkipApproval
+					? 'var(--approve)'
+					: 'var(--surface-hi)'}"
+			>
+				<span
+					class="inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform"
+					style="transform: translateX({data.bucketChargesSkipApproval ? '22px' : '2px'})"
+				></span>
+			</button>
+		</form>
+	</div>
+
 	{#if data.member.role === 'owner'}
 		<div class="card p-5">
 			<div class="flex items-center justify-between">
