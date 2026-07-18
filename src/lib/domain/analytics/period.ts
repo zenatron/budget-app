@@ -71,4 +71,50 @@ export function monthLabel(date: CalDate): string {
 	return `${MONTHS[date.m - 1]} ${date.y}`;
 }
 
+export function yearPeriod(today: CalDate): Period {
+	return {
+		from: { y: today.y, m: 1, d: 1 },
+		toExclusive: { y: today.y + 1, m: 1, d: 1 }
+	};
+}
+
+export function previousYearPeriod(today: CalDate): Period {
+	return {
+		from: { y: today.y - 1, m: 1, d: 1 },
+		toExclusive: { y: today.y, m: 1, d: 1 }
+	};
+}
+
+export function yearLabel(date: CalDate): string {
+	return `${date.y}`;
+}
+
+export function dayPeriod(date: CalDate): Period {
+	return { from: date, toExclusive: addDays(date, 1) };
+}
+
+export function previousDayPeriod(date: CalDate): Period {
+	return dayPeriod(addDays(date, -1));
+}
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+export function dayLabel(date: CalDate): string {
+	const d = new Date(Date.UTC(date.y, date.m - 1, date.d));
+	return `${DAY_NAMES[d.getUTCDay()]}, ${MONTHS[date.m - 1]} ${date.d}, ${date.y}`;
+}
+
+/** Months in the period as "Jan", "Feb", etc. */
+export function listMonths(period: Period): { m: number; label: string }[] {
+	const months: { m: number; label: string }[] = [];
+	for (
+		let m = period.from.m;
+		m < (period.toExclusive.y > period.from.y ? 13 : period.toExclusive.m);
+		m++
+	) {
+		months.push({ m, label: MONTHS[m - 1].slice(0, 3) });
+	}
+	return months;
+}
+
 export { daysInMonth };

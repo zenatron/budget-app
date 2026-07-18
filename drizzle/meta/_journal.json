@@ -15,6 +15,27 @@
       "when": 1784331093820,
       "tag": "0001_purchase-image-thumb",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784404979001,
+      "tag": "0002_lucky_titania",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784407512068,
+      "tag": "0003_lumpy_sharon_carter",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784408541918,
+      "tag": "0004_strange_karnak",
+      "breakpoints": true
     }
   ]
 }

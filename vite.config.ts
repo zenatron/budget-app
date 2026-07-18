@@ -39,5 +39,8 @@ export default defineConfig({
 				}
 			}
 		})
-	]
+	],
+	server: {
+		allowedHosts: ['cachyos', 'localhost', '10.0.0.135', '.local']
+	}
 });

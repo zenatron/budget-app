@@ -152,6 +152,53 @@ export async function updateRuleAmount(
 		.where(eq(recurringRule.id, ruleId));
 }
 
+export interface UpdateRuleCmd {
+	itemName?: string;
+	amount?: Money;
+	categoryId?: string | null;
+	rrule?: string;
+	autoComplete?: boolean;
+}
+
+export async function updateRule(
+	db: Db,
+	deps: Deps,
+	scope: Scope,
+	ruleId: string,
+	cmd: UpdateRuleCmd
+) {
+	const now = deps.clock.now();
+	const rule = await loadOwnRule(db, scope, ruleId);
+	if (rule.status === 'ended') throw new RecurringRuleError('Rule already ended');
+
+	const [ws] = await db
+		.select({ timezone: workspace.timezone, currency: workspace.currency })
+		.from(workspace)
+		.where(eq(workspace.id, scope.workspaceId))
+		.limit(1);
+	if (!ws) throw new RecurringRuleError('Workspace not found');
+
+	const updates: Record<string, unknown> = {};
+	if (cmd.itemName !== undefined) updates.itemName = cmd.itemName;
+	if (cmd.amount !== undefined) {
+		if (cmd.amount.currency !== rule.currency || !cmd.amount.isPositive) {
+			throw new RecurringRuleError(`Amount must be positive ${rule.currency}`);
+		}
+		updates.amountMinor = cmd.amount.minor;
+	}
+	if (cmd.categoryId !== undefined) updates.categoryId = cmd.categoryId;
+	if (cmd.autoComplete !== undefined) updates.autoComplete = cmd.autoComplete;
+	if (cmd.rrule !== undefined) {
+		const rec = parseRRule(cmd.rrule);
+		const today = calDateInZone(now, ws.timezone);
+		const next = nextOccurrence(rec, addDays(today, -1));
+		updates.rrule = cmd.rrule;
+		updates.nextOccurrenceAt = zonedTimeToUtc(next, MATERIALIZE_HOUR, 0, ws.timezone);
+	}
+	if (Object.keys(updates).length === 0) return;
+	await db.update(recurringRule).set(updates).where(eq(recurringRule.id, ruleId));
+}
+
 /**
  * Materialization sweep. Each due rule generates its missed occurrences
  * (capped), advancing next_occurrence_at as it goes. Generated purchases skip
@@ -205,7 +252,8 @@ export async function materializeDueRules(db: Db, deps: Deps): Promise<number> {
 					nudgeCount: 0,
 					recurringRuleId: r.id,
 					parentPurchaseId: null,
-					approverMemberIds: []
+					approverMemberIds: [],
+					merchantId: null
 				};
 				const event: TransitionEvent = {
 					fromState: null,

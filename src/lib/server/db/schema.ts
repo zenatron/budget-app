@@ -35,6 +35,8 @@ export const purchaseState = pgEnum('purchase_state', [
 ]);
 export const recurringStatus = pgEnum('recurring_rule_status', ['active', 'paused', 'ended']);
 export const budgetPeriod = pgEnum('budget_period', ['month', 'week']);
+export const bucketStatus = pgEnum('bucket_status', ['active', 'paused', 'archived']);
+export const bucketTxnType = pgEnum('bucket_txn_type', ['accrual', 'withdrawal', 'adjustment']);
 
 // "user" is a reserved word in SQL; app_user keeps raw analytics queries sane.
 export const user = pgTable('app_user', {
@@ -285,9 +287,49 @@ export const budget = pgTable(
 		period: budgetPeriod('period').notNull(),
 		amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
 		effectiveFrom: date('effective_from').notNull(),
-		effectiveTo: date('effective_to')
+		effectiveTo: date('effective_to'),
+		lastAlertedAt: timestamp('last_alerted_at', { withTimezone: true })
 	},
 	(t) => [index('budget_workspace_idx').on(t.workspaceId)]
+);
+
+export const bucket = pgTable(
+	'bucket',
+	{
+		id: uuid('id').primaryKey(),
+		workspaceId: uuid('workspace_id')
+			.notNull()
+			.references(() => workspace.id),
+		memberId: uuid('member_id')
+			.notNull()
+			.references(() => workspaceMember.id),
+		name: text('name').notNull(),
+		monthlyAmountMinor: bigint('monthly_amount_minor', { mode: 'bigint' }).notNull(),
+		currency: text('currency').notNull(),
+		goalCapMinor: bigint('goal_cap_minor', { mode: 'bigint' }),
+		color: text('color'),
+		icon: text('icon'),
+		status: bucketStatus('status').notNull().default('active'),
+		dayOfMonth: integer('day_of_month').notNull().default(1),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull()
+	},
+	(t) => [index('bucket_workspace_idx').on(t.workspaceId)]
+);
+
+export const bucketTransaction = pgTable(
+	'bucket_transaction',
+	{
+		id: uuid('id').primaryKey(),
+		bucketId: uuid('bucket_id')
+			.notNull()
+			.references(() => bucket.id),
+		amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+		currency: text('currency').notNull(),
+		type: bucketTxnType('type').notNull(),
+		note: text('note'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull()
+	},
+	(t) => [index('bucket_txn_bucket_idx').on(t.bucketId)]
 );
 
 export const pushSubscription = pgTable('push_subscription', {

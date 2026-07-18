@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { error, fail } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { Money, InvalidMoneyError } from '$lib/domain/money/money';
@@ -20,6 +21,7 @@ import {
 import { getDb } from '$lib/server/db';
 import { listEvents, loadPurchase, memberNames } from '$lib/server/repo/purchases';
 import { listCategories } from '$lib/server/repo/workspaces';
+import { merchant } from '$lib/server/db/schema';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { getNotifier } from '$lib/server/notify';
@@ -47,6 +49,16 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		listImages(db, p.id)
 	]);
 
+	let merchantName: string | null = null;
+	if (p.merchantId) {
+		const [m] = await db
+			.select({ name: merchant.name })
+			.from(merchant)
+			.where(eq(merchant.id, p.merchantId))
+			.limit(1);
+		merchantName = m?.name ?? null;
+	}
+
 	const mine = p.memberId === locals.member!.id;
 	const pending = p.state === 'pending_approval';
 	const sealed = isSealed(p, now);
@@ -57,6 +69,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			itemName: p.itemName,
 			note: p.note,
 			categoryId: p.categoryId,
+			merchantName,
 			requestedAmountMinor: p.requestedAmount.minor,
 			approvedAmountMinor: p.approvedAmount?.minor ?? null,
 			finalAmountMinor: p.finalAmount?.minor ?? null,
@@ -80,6 +93,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			complete: p.state === 'approved' && mine,
 			cancel: mine && ['draft', 'pending_approval', 'approved'].includes(p.state),
 			edit: mine && ['draft', 'pending_approval', 'approved'].includes(p.state),
+			// Photos (receipts) can be attached in any state the requester owns.
+			addPhoto: mine && p.state !== 'cancelled',
 			unseal: mine && sealed,
 			refund: mine && p.state === 'completed' && !sealed && p.parentPurchaseId === null
 		},

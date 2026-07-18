@@ -1,10 +1,12 @@
-import { and, desc, eq, inArray, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, lte, or, sql, type SQL } from 'drizzle-orm';
 import type { Db } from '$lib/server/db';
 import {
 	approvalEvent,
 	category,
+	merchant,
 	purchase,
 	purchaseApprover,
+	purchaseImage,
 	user,
 	workspaceMember
 } from '$lib/server/db/schema';
@@ -41,6 +43,7 @@ function toDomain(row: PurchaseRow, approverMemberIds: string[]): Purchase {
 		itemName: row.itemName,
 		note: row.note,
 		categoryId: row.categoryId,
+		merchantId: row.merchantId,
 		requestedAmount: Money.of(row.requestedAmountMinor, row.currency),
 		approvedAmount:
 			row.approvedAmountMinor === null ? null : Money.of(row.approvedAmountMinor, row.currency),
@@ -107,7 +110,7 @@ export async function insertPurchase(
 		itemName: p.itemName,
 		note: p.note,
 		categoryId: p.categoryId,
-		merchantId: null,
+		merchantId: p.merchantId,
 		requestedAmountMinor: p.requestedAmount.minor,
 		approvedAmountMinor: p.approvedAmount?.minor ?? null,
 		finalAmountMinor: p.finalAmount?.minor ?? null,
@@ -191,6 +194,7 @@ async function insertEvent(db: Db, ids: IdGenerator, purchaseId: string, ev: Tra
 export interface PurchaseListItem {
 	id: string;
 	itemName: string;
+	merchantName: string | null;
 	state: PurchaseRow['state'];
 	amountMinor: bigint;
 	currency: string;
@@ -199,6 +203,8 @@ export interface PurchaseListItem {
 	categoryName: string | null;
 	categoryIcon: string | null;
 	categoryColor: string | null;
+	categoryId: string | null;
+	thumbBlobId: string | null;
 	requestedAt: Date | null;
 	completedAt: Date | null;
 	createdAt: Date;
@@ -213,8 +219,16 @@ export interface PurchaseListItem {
 export async function listPurchases(
 	db: Db,
 	scope: { workspaceId: string; viewerId: string },
-	now: Date
+	now: Date,
+	opts?: { search?: string; categoryId?: string; limit?: number; offset?: number }
 ): Promise<PurchaseListItem[]> {
+	const conditions: SQL[] = [
+		eq(purchase.workspaceId, scope.workspaceId),
+		visibleTo(scope.viewerId, now)
+	];
+	if (opts?.search) conditions.push(ilike(purchase.itemName, `%${opts.search}%`));
+	if (opts?.categoryId) conditions.push(eq(purchase.categoryId, opts.categoryId));
+
 	const rows = await db
 		.select({
 			p: purchase,
@@ -222,6 +236,8 @@ export async function listPurchases(
 			categoryName: category.name,
 			categoryIcon: category.icon,
 			categoryColor: category.color,
+			merchantName: merchant.name,
+			thumbBlobId: purchaseImage.thumbBlobId,
 			canDecide: sql<boolean>`exists (
 				select 1 from ${purchaseApprover}
 				where ${purchaseApprover.purchaseId} = ${purchase.id}
@@ -232,15 +248,22 @@ export async function listPurchases(
 		.innerJoin(workspaceMember, eq(purchase.memberId, workspaceMember.id))
 		.innerJoin(user, eq(workspaceMember.userId, user.id))
 		.leftJoin(category, eq(purchase.categoryId, category.id))
-		.where(and(eq(purchase.workspaceId, scope.workspaceId), visibleTo(scope.viewerId, now)))
+		.leftJoin(merchant, eq(purchase.merchantId, merchant.id))
+		.leftJoin(
+			purchaseImage,
+			and(eq(purchaseImage.purchaseId, purchase.id), eq(purchaseImage.position, 0))
+		)
+		.where(and(...conditions))
 		.orderBy(
 			desc(sql`${purchase.state} = 'pending_approval'`),
 			desc(sql`coalesce(${purchase.completedAt}, ${purchase.requestedAt}, ${purchase.createdAt})`)
 		)
-		.limit(200);
+		.limit(opts?.limit ?? 20)
+		.offset(opts?.offset ?? 0);
 	return rows.map((r) => ({
 		id: r.p.id,
 		itemName: r.p.itemName,
+		merchantName: r.merchantName,
 		state: r.p.state,
 		amountMinor: r.p.finalAmountMinor ?? r.p.requestedAmountMinor,
 		currency: r.p.currency,
@@ -249,6 +272,8 @@ export async function listPurchases(
 		categoryName: r.categoryName,
 		categoryIcon: r.categoryIcon,
 		categoryColor: r.categoryColor,
+		categoryId: r.p.categoryId,
+		thumbBlobId: r.thumbBlobId,
 		requestedAt: r.p.requestedAt,
 		completedAt: r.p.completedAt,
 		createdAt: r.p.createdAt,

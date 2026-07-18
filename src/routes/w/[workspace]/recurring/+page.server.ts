@@ -17,7 +17,7 @@ import {
 	endRule,
 	pauseRule,
 	resumeRule,
-	updateRuleAmount
+	updateRule
 } from '$lib/application/recurring';
 import { listCategories } from '$lib/server/repo/workspaces';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
@@ -42,17 +42,30 @@ export const load: PageServerLoad = async ({ locals }) => {
 	return {
 		rules: rules
 			.filter((r) => r.status !== 'ended')
-			.map((r) => ({
-				id: r.id,
-				itemName: r.itemName,
-				amountMinor: r.amountMinor,
-				currency: r.currency,
-				cadence: describe(r.rrule),
-				nextAt: r.nextOccurrenceAt?.toISOString() ?? null,
-				status: r.status,
-				autoComplete: r.autoComplete,
-				mine: r.memberId === locals.member!.id
-			})),
+			.map((r) => {
+				let parsed: Recurrence | null = null;
+				try {
+					parsed = parseRRule(r.rrule);
+				} catch {
+					/* malformed rule — skip pre-population */
+				}
+				return {
+					id: r.id,
+					itemName: r.itemName,
+					amountMinor: r.amountMinor,
+					currency: r.currency,
+					cadence: describe(r.rrule),
+					nextAt: r.nextOccurrenceAt?.toISOString() ?? null,
+					status: r.status,
+					autoComplete: r.autoComplete,
+					categoryId: r.categoryId,
+					mine: r.memberId === locals.member!.id,
+					freq: parsed?.freq ?? 'monthly',
+					interval: parsed?.interval ?? 1,
+					monthDay: parsed?.byMonthDay ?? null,
+					byDay: parsed?.byDay ?? []
+				};
+			}),
 		categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon }))
 	};
 };
@@ -61,7 +74,20 @@ function describe(rrule: string): string {
 	try {
 		return describeRecurrence(parseRRule(rrule));
 	} catch {
-		return rrule;
+		// Graceful fallback: strip DTSTART, convert FREQ to readable text
+		const parts: Record<string, string> = {};
+		for (const part of rrule.split(';')) {
+			const [k, v] = part.split('=');
+			if (k && v !== undefined) parts[k.toUpperCase()] = v;
+		}
+		const freq =
+			{ DAILY: 'Daily', WEEKLY: 'Weekly', MONTHLY: 'Monthly', YEARLY: 'Yearly' }[parts.FREQ] ??
+			parts.FREQ ??
+			'';
+		const intv = parts.INTERVAL && parts.INTERVAL !== '1' ? ` (every ${parts.INTERVAL})` : '';
+		const byday = parts.BYDAY ? ` on ${parts.BYDAY}` : '';
+		const bymonthday = parts.BYMONTHDAY ? ` day ${parts.BYMONTHDAY}` : '';
+		return `${freq}${intv}${byday}${bymonthday}` || rrule;
 	}
 }
 
@@ -129,19 +155,64 @@ export const actions: Actions = {
 	resume: (event) => ruleAction(event, resumeRule),
 	end: (event) => ruleAction(event, endRule),
 
-	price: async ({ locals, request }) => {
+	edit: async ({ locals, request }) => {
 		const form = await request.formData();
 		const ruleId = String(form.get('ruleId') ?? '');
+		const weekDays = form.getAll('weekDay').map(Number);
+		const raw = Object.fromEntries(form);
+
+		const itemName = String(raw.itemName ?? '').trim();
+		const amountRaw = String(raw.amount ?? '').trim();
+		const categoryId = raw.categoryId as string | undefined;
+		const freq = raw.freq as string | undefined;
+		const intervalRaw = raw.interval as string | undefined;
+		const startDate = raw.startDate as string | undefined;
+		const autoComplete = form.get('autoComplete') === 'on';
+
+		if (!itemName) return fail(400, { error: 'What is it?' });
+		if (!amountRaw) return fail(400, { error: 'How much?' });
+
 		try {
-			await updateRuleAmount(
+			const updates: {
+				itemName?: string;
+				amount?: Money;
+				categoryId?: string | null;
+				rrule?: string;
+				autoComplete?: boolean;
+			} = {};
+
+			if (itemName) updates.itemName = itemName;
+			updates.amount = Money.fromDecimal(amountRaw, locals.workspace!.currency);
+			if (categoryId !== undefined) updates.categoryId = categoryId || null;
+			updates.autoComplete = autoComplete;
+
+			if (freq && startDate) {
+				const [y, m, d] = startDate.split('-').map(Number);
+				const interval = Math.max(1, Math.min(52, parseInt(intervalRaw ?? '1') || 1));
+				const rec: Recurrence = { start: { y, m, d }, freq: freq as Recurrence['freq'], interval };
+				if (freq === 'weekly' && weekDays.length > 0) {
+					rec.byDay = weekDays.filter((n) => n >= 1 && n <= 7);
+				}
+				if ((freq === 'monthly' || freq === 'yearly') && raw.monthDay) {
+					rec.byMonthDay = Number(raw.monthDay);
+					if (freq === 'yearly') rec.byMonth = m;
+				}
+				updates.rrule = formatRRule(rec);
+			}
+
+			await updateRule(
 				getDb(),
 				deps,
 				{ workspaceId: locals.workspace!.id, memberId: locals.member!.id },
 				ruleId,
-				Money.fromDecimal(String(form.get('amount') ?? ''), locals.workspace!.currency)
+				updates
 			);
 		} catch (e) {
-			if (e instanceof InvalidMoneyError || e instanceof RecurringRuleError) {
+			if (
+				e instanceof InvalidMoneyError ||
+				e instanceof RecurrenceError ||
+				e instanceof RecurringRuleError
+			) {
 				return fail(400, { error: e.message });
 			}
 			throw e;

@@ -1,6 +1,11 @@
 import { and, eq, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db';
-import { purchase as purchaseTable, workspace, workspaceMember } from '$lib/server/db/schema';
+import {
+	purchase as purchaseTable,
+	workspace,
+	workspaceMember,
+	merchant
+} from '$lib/server/db/schema';
 import { Money } from '$lib/domain/money/money';
 import type { ApprovalPolicy } from '$lib/domain/approval/policy';
 import { approvalRequired, resolveApprovers } from '$lib/domain/approval/evaluate';
@@ -64,6 +69,7 @@ export interface SubmitPurchaseCmd {
 	spentAt?: Date;
 	/** Gift mode: hide this purchase entirely from these members until the date. */
 	seal?: SealSpec;
+	merchantName?: string | null;
 }
 
 /**
@@ -94,6 +100,34 @@ export async function submitPurchase(
 		}
 		if (!cmd.amount.isPositive) {
 			throw new PurchaseStateError('Amount must be positive');
+		}
+
+		let merchantId: string | null = null;
+		if (cmd.merchantName) {
+			const normalized = cmd.merchantName.trim().toLowerCase().replace(/\s+/g, ' ');
+			if (normalized.length > 0) {
+				const [existing] = await tx
+					.select({ id: merchant.id })
+					.from(merchant)
+					.where(
+						and(
+							eq(merchant.workspaceId, scope.workspaceId),
+							eq(merchant.normalizedName, normalized)
+						)
+					)
+					.limit(1);
+				if (existing) {
+					merchantId = existing.id;
+				} else {
+					merchantId = deps.ids.newId();
+					await tx.insert(merchant).values({
+						id: merchantId,
+						workspaceId: scope.workspaceId,
+						name: cmd.merchantName.trim(),
+						normalizedName: normalized
+					});
+				}
+			}
 		}
 
 		const members = await tx
@@ -140,7 +174,8 @@ export async function submitPurchase(
 			nudgeCount: 0,
 			recurringRuleId: null,
 			parentPurchaseId: null,
-			approverMemberIds: []
+			approverMemberIds: [],
+			merchantId
 		};
 
 		const needed = approvalRequired(policy, cmd.amount, cmd.categoryId);

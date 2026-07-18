@@ -1,0 +1,1 @@
+ALTER TABLE "bucket" ADD COLUMN "day_of_month" integer DEFAULT 1 NOT NULL;

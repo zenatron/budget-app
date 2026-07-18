@@ -189,13 +189,7 @@ export class Money {
 
 	/** Exact decimal string, e.g. "-12.34". No thousands separators. */
 	toDecimalString(): string {
-		const digits = minorUnitDigits(this.currency);
-		const neg = this.minor < 0n;
-		const abs = neg ? -this.minor : this.minor;
-		const s = abs.toString().padStart(digits + 1, '0');
-		const intPart = s.slice(0, s.length - digits);
-		const frac = digits > 0 ? '.' + s.slice(s.length - digits) : '';
-		return `${neg ? '-' : ''}${intPart}${frac}`;
+		return formatMinorUnits(this.minor, minorUnitDigits(this.currency));
 	}
 
 	/** Locale-aware currency formatting; precise for arbitrarily large amounts. */
@@ -209,6 +203,22 @@ export class Money {
 	toJSON(): { minor: string; currency: string } {
 		return { minor: this.minor.toString(), currency: this.currency };
 	}
+}
+
+/**
+ * Convert a bigint amount in minor units to a decimal string.
+ *
+ * @param minor  The amount in minor units (e.g. cents) as a bigint.
+ * @param digits Number of minor-unit digits for the currency (2 for USD, 0 for JPY, etc.).
+ * @returns Exact decimal string with no thousands separators, e.g. "-12.34".
+ */
+export function formatMinorUnits(minor: bigint, digits: number): string {
+	const neg = minor < 0n;
+	const abs = neg ? -minor : minor;
+	const s = abs.toString().padStart(digits + 1, '0');
+	const intPart = s.slice(0, s.length - digits);
+	const frac = digits > 0 ? '.' + s.slice(s.length - digits) : '';
+	return `${neg ? '-' : ''}${intPart}${frac}`;
 }
 
 /** bigint division with banker's rounding (round half to even). */

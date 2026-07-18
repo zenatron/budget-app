@@ -26,6 +26,7 @@ export interface Purchase {
 	itemName: string;
 	note: string | null;
 	categoryId: string | null;
+	merchantId: string | null;
 	requestedAmount: Money;
 	approvedAmount: Money | null;
 	finalAmount: Money | null;

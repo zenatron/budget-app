@@ -1,95 +1,71 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-
+	import Icon from '$lib/components/Icon.svelte';
 	let { data, form } = $props();
-
-	const defaultTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 </script>
 
-<svelte:head>
-	<title>Welcome — Budget</title>
-</svelte:head>
+<svelte:head><title>Welcome — Budget</title></svelte:head>
 
-<main class="min-h-svh bg-neutral-50 px-6 py-12 dark:bg-neutral-950">
-	<div class="mx-auto max-w-md space-y-8">
-		<header>
-			<h1 class="text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-50">
-				Hi, {data.displayName}
-			</h1>
-			<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+<main
+	class="min-h-svh px-5 py-10"
+	style="--ws-accent: #B4472B; --accent: #B4472B; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5rem)"
+>
+	<div class="mx-auto max-w-md space-y-4">
+		<header class="px-1 pt-4 pb-2">
+			<h1 class="text-[30px] leading-tight">Hi, {data.displayName}</h1>
+			<p class="mt-1 text-[17px] leading-relaxed" style="color: var(--ink-3)">
 				Create a workspace or join one with an invite code.
 			</p>
 		</header>
 
 		{#if data.workspaces.length > 0}
-			<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
-				<h2 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Your workspaces</h2>
-				<ul class="mt-2 divide-y divide-neutral-100 dark:divide-neutral-800">
-					{#each data.workspaces as ws (ws.slug)}
-						<li>
-							<a
-								href="/w/{ws.slug}"
-								class="block py-2.5 font-medium text-neutral-900 hover:text-neutral-600 dark:text-neutral-50 dark:hover:text-neutral-300"
-							>
-								{ws.name}
-							</a>
-						</li>
-					{/each}
-				</ul>
-			</section>
+			<div class="card overflow-hidden">
+				{#each data.workspaces as ws, i (ws.slug)}
+					<a
+						href="/w/{ws.slug}"
+						class="row row-tap {i < data.workspaces.length - 1 ? 'hairline' : ''}"
+					>
+						<span
+							class="flex h-8 w-8 items-center justify-center rounded-[9px] font-[family-name:var(--font-display)] text-[15px] font-semibold text-white"
+							style="background: color-mix(in oklab, var(--ws-accent) 80%, black)"
+							>{ws.name.charAt(0)}</span
+						>
+						<span class="flex-1 text-[17px]" style="color: var(--ink)">{ws.name}</span>
+						<Icon name="chevronRight" class="h-4 w-4" style="color: var(--ink-4)" />
+					</a>
+				{/each}
+			</div>
 		{/if}
 
-		<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
-			<h2 class="font-medium text-neutral-900 dark:text-neutral-50">Create a workspace</h2>
-			<form method="POST" action="?/create" use:enhance class="mt-4 space-y-3">
-				<label class="block">
-					<span class="text-sm text-neutral-600 dark:text-neutral-400">Name</span>
-					<input
-						name="name"
-						required
-						maxlength="60"
-						placeholder="Our household"
-						class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-					/>
-				</label>
+		<div class="card space-y-3.5 p-5">
+			<p class="text-[17px] font-semibold" style="color: var(--ink)">Create a workspace</p>
+			<form method="POST" action="?/create" use:enhance class="space-y-3.5">
+				<input name="name" required maxlength="60" placeholder="Our household" class="field" />
 				<div class="grid grid-cols-2 gap-3">
-					<label class="block">
-						<span class="text-sm text-neutral-600 dark:text-neutral-400">Currency</span>
-						<select
-							name="currency"
-							class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-						>
-							{#each data.currencies as c (c)}
-								<option value={c} selected={c === 'USD'}>{c}</option>
-							{/each}
-						</select>
-					</label>
-					<label class="block">
-						<span class="text-sm text-neutral-600 dark:text-neutral-400">Timezone</span>
-						<select
-							name="timezone"
-							class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-						>
-							{#each data.timezones as tz (tz)}
-								<option value={tz} selected={tz === defaultTz}>{tz}</option>
-							{/each}
-						</select>
-					</label>
+					<select name="currency" class="field text-[15px]">
+						{#each data.currencies as c (c)}<option value={c} selected={c === 'USD'}>{c}</option
+							>{/each}
+					</select>
+					<select name="timezone" class="field text-[15px]">
+						{#each data.timezones as t (t)}<option value={t} selected={t === tz}>{t}</option>{/each}
+					</select>
 				</div>
 				{#if form?.action === 'create' && form?.error}
-					<p class="text-sm text-red-600 dark:text-red-400">{form.error}</p>
+					<div
+						class="rounded-[10px] px-4 py-3 text-[15px]"
+						style="color: var(--deny); background: color-mix(in oklab, var(--deny) 14%, transparent)"
+					>
+						{form.error}
+					</div>
 				{/if}
-				<button
-					class="w-full rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition active:scale-[0.98] dark:bg-neutral-50 dark:text-neutral-900"
-				>
-					Create workspace
-				</button>
+				<button class="btn btn-accent w-full">Create workspace</button>
 			</form>
-		</section>
+		</div>
 
-		<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
-			<h2 class="font-medium text-neutral-900 dark:text-neutral-50">Join with an invite code</h2>
-			<form method="POST" action="?/join" use:enhance class="mt-4 space-y-3">
+		<div class="card space-y-3.5 p-5">
+			<p class="text-[17px] font-semibold" style="color: var(--ink)">Join a workspace</p>
+			<form method="POST" action="?/join" use:enhance class="space-y-3.5">
 				<input
 					name="code"
 					required
@@ -97,23 +73,22 @@
 					autocapitalize="characters"
 					autocomplete="off"
 					spellcheck="false"
-					class="w-full rounded-lg border-neutral-200 bg-white font-mono text-sm tracking-widest uppercase dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+					class="field text-center font-mono tracking-[0.14em] uppercase"
 				/>
 				{#if form?.action === 'join' && form?.error}
-					<p class="text-sm text-red-600 dark:text-red-400">{form.error}</p>
+					<div
+						class="rounded-[10px] px-4 py-3 text-[15px]"
+						style="color: var(--deny); background: color-mix(in oklab, var(--deny) 14%, transparent)"
+					>
+						{form.error}
+					</div>
 				{/if}
-				<button
-					class="w-full rounded-xl border border-neutral-200 px-4 py-2.5 text-sm font-medium text-neutral-900 transition active:scale-[0.98] dark:border-neutral-700 dark:text-neutral-50"
-				>
-					Join workspace
-				</button>
+				<button class="btn btn-ghost w-full">Join with code</button>
 			</form>
-		</section>
+		</div>
 
-		<form method="POST" action="/auth/logout" class="text-center">
-			<button class="text-sm text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300">
-				Sign out
-			</button>
+		<form method="POST" action="/auth/logout" class="pt-1 text-center">
+			<button class="btn btn-plain" style="color: var(--ink-4)">Sign out</button>
 		</form>
 	</div>
 </main>

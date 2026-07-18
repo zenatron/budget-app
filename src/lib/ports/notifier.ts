@@ -5,7 +5,12 @@
  */
 
 export type NotificationEventType =
-	'approval_requested' | 'approval_decided' | 'stale_nudge' | 'seal_opened' | 'recurring_due';
+	| 'approval_requested'
+	| 'approval_decided'
+	| 'stale_nudge'
+	| 'seal_opened'
+	| 'recurring_due'
+	| 'budget_exceeded';
 
 export interface NotificationMessage {
 	title: string;

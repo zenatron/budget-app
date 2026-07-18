@@ -1,13 +1,15 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { formatMinor } from '$lib/money-format';
-
+	import { money } from '$lib/actions/money';
+	import Icon from '$lib/components/Icon.svelte';
+	import Money from '$lib/components/Money.svelte';
 	let { data, form } = $props();
 
 	let freq = $state('monthly');
 	let showNew = $state(false);
-	let editingPrice: string | null = $state(null);
-
+	let editing: string | null = $state(null);
+	let editFreq: Record<string, string> = $state({});
+	let patternInput = $state('');
 	const today = new Date().toISOString().slice(0, 10);
 	const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -15,227 +17,352 @@
 		if (!iso) return '—';
 		return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
+
+	function editFreqFor(r: (typeof data.rules)[number]): string {
+		return editFreq[r.id] ?? r.freq;
+	}
+
+	function startEdit(r: (typeof data.rules)[number]) {
+		editing = editing === r.id ? null : r.id;
+		editFreq = { ...editFreq, [r.id]: r.freq };
+	}
+
+	function parsePattern(text: string) {
+		const t = text.toLowerCase().trim();
+		if (!t) return;
+		if (/\b(every\s+)?day\b/.test(t) || /\bdaily\b/.test(t)) freq = 'daily';
+		else if (/\b(every\s+)?week\b/.test(t) || /\bweekly\b/.test(t)) freq = 'weekly';
+		else if (/\b(every\s+)?month\b/.test(t) || /\bmonthly\b/.test(t)) freq = 'monthly';
+		else if (/\b(every\s+)?year\b/.test(t) || /\byearly\b/.test(t)) freq = 'yearly';
+
+		const intervalMatch = t.match(/every\s+(\d+)/);
+		if (intervalMatch) {
+			const intv = parseInt(intervalMatch[1]);
+			if (intv >= 1 && intv <= 52) {
+				patternInput = t;
+				(document.querySelector('[name="interval"]') as HTMLInputElement).value = String(intv);
+			}
+		}
+
+		const foundDays: number[] = [];
+		const dayMap: Record<string, number> = {
+			sun: 7,
+			mon: 1,
+			tue: 2,
+			wed: 3,
+			thu: 4,
+			fri: 5,
+			sat: 6
+		};
+		for (const [name, idx] of Object.entries(dayMap)) {
+			if (t.includes(name)) foundDays.push(idx);
+		}
+		if (foundDays.length > 0) {
+			const checkboxes = document.querySelectorAll(
+				'[name="weekDay"]'
+			) as NodeListOf<HTMLInputElement>;
+			checkboxes.forEach((cb) => (cb.checked = foundDays.includes(parseInt(cb.value))));
+		}
+
+		const monthDayMatch = t.match(/\b(\d+)(?:st|nd|rd|th)?\b/);
+		if (monthDayMatch && (freq === 'monthly' || freq === 'yearly')) {
+			const day = parseInt(monthDayMatch[1]);
+			if (day >= 1 && day <= 28) {
+				const select = document.querySelector('[name="monthDay"]') as HTMLSelectElement;
+				if (select) select.value = String(day);
+			}
+		}
+		if (/\blast\s+day\b/.test(t)) {
+			const select = document.querySelector('[name="monthDay"]') as HTMLSelectElement;
+			if (select) select.value = '-1';
+		}
+	}
 </script>
 
 <div class="space-y-4">
-	<div class="flex items-center justify-between">
-		<h1 class="text-lg font-semibold text-neutral-900 dark:text-neutral-50">Recurring</h1>
+	<div class="flex items-center justify-between px-1 pt-1">
+		<h1 class="text-[28px]">Recurring</h1>
 		<button
 			onclick={() => (showNew = !showNew)}
-			class="rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition active:scale-[0.98] dark:bg-neutral-50 dark:text-neutral-900"
+			class="btn {showNew ? 'btn-ghost' : 'btn-tint'} px-4 py-2 text-[14px]"
 		>
-			{showNew ? 'Close' : 'New rule'}
+			{showNew ? 'Cancel' : '+ New'}
 		</button>
 	</div>
 
 	{#if form?.error}
-		<p
-			class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300"
+		<div
+			class="card p-4 text-[15px]"
+			style="color: var(--deny); background: color-mix(in oklab, var(--deny) 12%, var(--surface))"
 		>
 			{form.error}
-		</p>
+		</div>
 	{/if}
 
 	{#if showNew}
 		<form
 			method="POST"
 			action="?/create"
-			use:enhance
-			class="space-y-3 rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900"
+			use:enhance={() => {
+				return async ({ update, result }) => {
+					await update();
+					if (result.type === 'success') showNew = false;
+				};
+			}}
+			class="card space-y-3.5 p-5"
 		>
-			<div class="grid grid-cols-2 gap-3">
-				<label class="block">
-					<span class="text-sm text-neutral-600 dark:text-neutral-400">Item</span>
-					<input
-						name="itemName"
-						required
-						placeholder="Streaming service"
-						class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-					/>
-				</label>
-				<label class="block">
-					<span class="text-sm text-neutral-600 dark:text-neutral-400">
-						Amount ({data.workspace.currency})
-					</span>
-					<input
-						name="amount"
-						required
-						inputmode="decimal"
-						placeholder="9.99"
-						class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm tabular-nums dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-					/>
-				</label>
+			<div class="grid grid-cols-[1fr_auto] gap-3">
+				<input name="itemName" required placeholder="Streaming service" class="field text-[16px]" />
+				<input
+					name="amount"
+					required
+					use:money
+					inputmode="decimal"
+					placeholder="9.99"
+					class="field w-28 text-[16px] tabular-nums"
+				/>
+			</div>
+			<div class="relative">
+				<input
+					name="pattern"
+					bind:value={patternInput}
+					oninput={() => parsePattern(patternInput)}
+					placeholder="e.g. every month on the 1st, or every 2 weeks on Mon and Thu"
+					class="field pr-8 text-[15px]"
+				/>
+				<span
+					class="absolute top-1/2 right-3 -translate-y-1/2 text-[12px]"
+					style="color: var(--ink-4)">?</span
+				>
 			</div>
 			<div class="grid grid-cols-3 gap-3">
-				<label class="block">
-					<span class="text-sm text-neutral-600 dark:text-neutral-400">Repeats</span>
-					<select
-						name="freq"
-						bind:value={freq}
-						class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-					>
-						<option value="daily">Daily</option>
-						<option value="weekly">Weekly</option>
-						<option value="monthly">Monthly</option>
-						<option value="yearly">Yearly</option>
-					</select>
-				</label>
-				<label class="block">
-					<span class="text-sm text-neutral-600 dark:text-neutral-400">Every</span>
-					<input
-						name="interval"
-						type="number"
-						min="1"
-						max="52"
-						value="1"
-						class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-					/>
-				</label>
-				<label class="block">
-					<span class="text-sm text-neutral-600 dark:text-neutral-400">Starting</span>
-					<input
-						name="startDate"
-						type="date"
-						value={today}
-						required
-						class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-					/>
-				</label>
-			</div>
-
-			{#if freq === 'weekly'}
-				<fieldset>
-					<legend class="text-sm text-neutral-600 dark:text-neutral-400">On</legend>
-					<div class="mt-1 flex flex-wrap gap-3">
-						{#each dayNames as name, i (name)}
-							<label class="flex items-center gap-1 text-sm text-neutral-700 dark:text-neutral-300">
-								<input
-									type="checkbox"
-									name="weekDay"
-									value={i + 1}
-									class="rounded border-neutral-300 dark:border-neutral-600"
-								/>
-								{name}
-							</label>
-						{/each}
-					</div>
-				</fieldset>
-			{:else if freq === 'monthly' || freq === 'yearly'}
-				<label class="block">
-					<span class="text-sm text-neutral-600 dark:text-neutral-400">Day of month</span>
-					<select
-						name="monthDay"
-						class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-					>
-						{#each Array.from({ length: 28 }, (_, i) => i + 1) as day (day)}
-							<option value={day}>{day}</option>
-						{/each}
-						<option value="-1">Last day</option>
-					</select>
-				</label>
-			{/if}
-
-			<label class="block">
-				<span class="text-sm text-neutral-600 dark:text-neutral-400">Category</span>
-				<select
-					name="categoryId"
-					class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-				>
-					<option value="">None</option>
-					{#each data.categories as c (c.id)}
-						<option value={c.id}>{c.icon} {c.name}</option>
-					{/each}
+				<select name="freq" bind:value={freq} class="field text-[15px]">
+					<option value="daily">Daily</option>
+					<option value="weekly">Weekly</option>
+					<option value="monthly">Monthly</option>
+					<option value="yearly">Yearly</option>
 				</select>
-			</label>
-
-			<label class="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
 				<input
-					type="checkbox"
-					name="autoComplete"
-					checked
-					class="rounded border-neutral-300 dark:border-neutral-600"
+					name="interval"
+					type="number"
+					min="1"
+					max="52"
+					value="1"
+					class="field text-[15px] tabular-nums"
 				/>
-				Record automatically (fixed price — no confirmation needed)
+				<input name="startDate" type="date" value={today} required class="field text-[15px]" />
+			</div>
+			{#if freq === 'weekly'}
+				<div class="flex flex-wrap gap-x-4 gap-y-2">
+					{#each dayNames as name, i (name)}
+						<label class="flex items-center gap-1.5 text-[15px]" style="color: var(--ink)">
+							<input type="checkbox" name="weekDay" value={i + 1} class="rounded" />
+							{name}
+						</label>
+					{/each}
+				</div>
+			{:else if freq === 'monthly' || freq === 'yearly'}
+				<select name="monthDay" class="field text-[15px]">
+					{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}<option value={d}
+							>Day {d}</option
+						>{/each}
+					<option value="-1">Last day</option>
+				</select>
+			{/if}
+			<select name="categoryId" class="field text-[15px]">
+				<option value="">No category</option>
+				{#each data.categories as c (c.id)}<option value={c.id}>{c.icon} {c.name}</option>{/each}
+			</select>
+			<label class="flex items-center gap-2 text-[15px]" style="color: var(--ink-2)">
+				<input type="checkbox" name="autoComplete" checked class="rounded" /> Record automatically
 			</label>
-
-			<button
-				class="w-full rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition active:scale-[0.98] dark:bg-neutral-50 dark:text-neutral-900"
-			>
-				Create rule
-			</button>
+			<button class="btn btn-accent w-full">Add recurring charge</button>
 		</form>
 	{/if}
 
 	{#if data.rules.length === 0}
-		<div class="rounded-2xl bg-white p-10 text-center shadow-sm dark:bg-neutral-900">
-			<p class="text-3xl">🔁</p>
-			<p class="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
-				No recurring charges yet — rent, subscriptions, utilities.
+		<div class="card-lg card px-6 py-16 text-center">
+			<div
+				class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
+				style="background: color-mix(in oklab, var(--ws-accent) 16%, var(--surface-2))"
+			>
+				<Icon name="repeat" class="h-7 w-7" style="color: var(--ws-accent)" />
+			</div>
+			<p class="text-[18px] font-semibold" style="color: var(--ink)">No recurring charges</p>
+			<p class="mx-auto mt-1 max-w-[28ch] text-[15px] leading-relaxed" style="color: var(--ink-3)">
+				Add subscriptions, bills, and rent so they track themselves.
 			</p>
 		</div>
 	{:else}
-		<ul
-			class="divide-y divide-neutral-100 overflow-hidden rounded-2xl bg-white shadow-sm dark:divide-neutral-800 dark:bg-neutral-900"
-		>
-			{#each data.rules as r (r.id)}
-				<li class="px-4 py-3">
+		<div class="card overflow-hidden">
+			{#each data.rules as r, i (r.id)}
+				<div class="px-4 py-3.5 {i < data.rules.length - 1 ? 'hairline' : ''}">
 					<div class="flex items-center justify-between gap-3">
 						<div class="min-w-0">
-							<p class="truncate font-medium text-neutral-900 dark:text-neutral-50">
-								{r.itemName}{r.status === 'paused' ? ' · paused' : ''}
+							<p class="flex items-center gap-1.5 text-[16px]" style="color: var(--ink)">
+								{r.itemName}
+								{#if r.status === 'paused'}
+									<span class="chip" style="color: var(--ink-3); background: var(--surface-2)"
+										>Paused</span
+									>
+								{/if}
 							</p>
-							<p class="text-sm text-neutral-500 dark:text-neutral-400">
+							<p class="mt-0.5 text-[13px]" style="color: var(--ink-4)">
 								{r.cadence} · next {fmtNext(r.nextAt)}{r.autoComplete ? '' : ' · needs confirming'}
 							</p>
 						</div>
-						<span class="font-medium text-neutral-900 tabular-nums dark:text-neutral-50">
-							{formatMinor(r.amountMinor, r.currency)}
-						</span>
+						<Money
+							minor={r.amountMinor}
+							currency={r.currency}
+							class="shrink-0 text-[16px] font-semibold"
+						/>
 					</div>
 					{#if r.mine}
-						<div class="mt-2 flex items-center gap-4 text-sm">
+						<div class="mt-2.5 flex items-center gap-4 text-[13px]">
 							{#if r.status === 'active'}
 								<form method="POST" action="?/pause" use:enhance>
 									<input type="hidden" name="ruleId" value={r.id} />
-									<button class="text-neutral-400 hover:text-neutral-600">Pause</button>
+									<button class="press inline-flex items-center gap-1" style="color: var(--ink-3)">
+										<Icon name="pause" class="h-3.5 w-3.5" /> Pause
+									</button>
 								</form>
 							{:else}
 								<form method="POST" action="?/resume" use:enhance>
 									<input type="hidden" name="ruleId" value={r.id} />
-									<button class="text-neutral-400 hover:text-neutral-600">Resume</button>
+									<button
+										class="press inline-flex items-center gap-1"
+										style="color: var(--approve)"
+									>
+										<Icon name="play" class="h-3.5 w-3.5" /> Resume
+									</button>
 								</form>
 							{/if}
 							<button
-								onclick={() => (editingPrice = editingPrice === r.id ? null : r.id)}
-								class="text-neutral-400 hover:text-neutral-600"
+								onclick={() => startEdit(r)}
+								class="press inline-flex items-center gap-1"
+								style="color: var(--ink-2)"
 							>
-								Price
+								<Icon name="pencil" class="h-3.5 w-3.5" /> Edit
 							</button>
-							<form method="POST" action="?/end" use:enhance>
+							<form method="POST" action="?/end" use:enhance class="ml-auto">
 								<input type="hidden" name="ruleId" value={r.id} />
-								<button class="text-neutral-400 hover:text-red-600">End</button>
+								<button class="press" style="color: color-mix(in oklab, var(--deny) 80%, white)"
+									>End</button
+								>
 							</form>
 						</div>
-						{#if editingPrice === r.id}
-							<form method="POST" action="?/price" use:enhance class="mt-2 flex items-center gap-2">
+						{#if editing === r.id}
+							{@const f = editFreqFor(r)}
+							<form
+								method="POST"
+								action="?/edit"
+								use:enhance={() => {
+									return async ({ update, result }) => {
+										await update();
+										if (result.type === 'success') editing = null;
+									};
+								}}
+								class="mt-3 space-y-3 rounded-[14px] p-4"
+								style="background: var(--surface-2)"
+							>
 								<input type="hidden" name="ruleId" value={r.id} />
-								<input
-									name="amount"
-									inputmode="decimal"
-									placeholder="New amount"
-									class="w-32 rounded-lg border-neutral-200 bg-white text-sm tabular-nums dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-								/>
-								<button
-									class="rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white dark:bg-neutral-50 dark:text-neutral-900"
-								>
-									Update
-								</button>
-								<span class="text-xs text-neutral-400">Applies to future charges</span>
+								<div class="grid grid-cols-[1fr_auto] gap-3">
+									<input name="itemName" required value={r.itemName} class="field text-[15px]" />
+									<input
+										name="amount"
+										required
+										use:money
+										inputmode="decimal"
+										value={(Number(r.amountMinor) / 100).toFixed(2)}
+										class="field w-28 text-[15px] tabular-nums"
+									/>
+								</div>
+								<div class="grid grid-cols-3 gap-3">
+									<select
+										name="freq"
+										value={f}
+										onchange={(e) => {
+											editFreq = {
+												...editFreq,
+												[r.id]: (e.currentTarget as HTMLSelectElement).value
+											};
+										}}
+										class="field text-[15px]"
+									>
+										<option value="daily">Daily</option>
+										<option value="weekly">Weekly</option>
+										<option value="monthly">Monthly</option>
+										<option value="yearly">Yearly</option>
+									</select>
+									<input
+										name="interval"
+										type="number"
+										min="1"
+										max="52"
+										value={r.interval}
+										class="field text-[15px] tabular-nums"
+									/>
+									<input
+										name="startDate"
+										type="date"
+										value={today}
+										required
+										class="field text-[15px]"
+									/>
+								</div>
+								{#if f === 'weekly'}
+									<div class="flex flex-wrap gap-x-4 gap-y-2">
+										{#each dayNames as name, idx (name)}
+											<label
+												class="flex items-center gap-1.5 text-[15px]"
+												style="color: var(--ink)"
+											>
+												<input
+													type="checkbox"
+													name="weekDay"
+													value={idx + 1}
+													checked={r.byDay.includes(idx + 1)}
+													class="rounded"
+												/>
+												{name}
+											</label>
+										{/each}
+									</div>
+								{:else if f === 'monthly' || f === 'yearly'}
+									<select name="monthDay" class="field text-[15px]">
+										{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}
+											<option value={d} selected={r.monthDay === d}>Day {d}</option>
+										{/each}
+										<option value="-1" selected={r.monthDay === -1}>Last day</option>
+									</select>
+								{/if}
+								<select name="categoryId" class="field text-[15px]">
+									<option value="">No category</option>
+									{#each data.categories as c (c.id)}
+										<option value={c.id} selected={c.id === r.categoryId}>{c.icon} {c.name}</option>
+									{/each}
+								</select>
+								<label class="flex items-center gap-2 text-[15px]" style="color: var(--ink-2)">
+									<input
+										type="checkbox"
+										name="autoComplete"
+										checked={r.autoComplete}
+										class="rounded"
+									/> Record automatically
+								</label>
+								<div class="flex gap-2">
+									<button class="btn btn-accent flex-1 py-2.5 text-[14px]">Save changes</button>
+									<button
+										type="button"
+										onclick={() => (editing = null)}
+										class="btn btn-ghost flex-1 py-2.5 text-[14px]">Cancel</button
+									>
+								</div>
 							</form>
 						{/if}
 					{/if}
-				</li>
+				</div>
 			{/each}
-		</ul>
+		</div>
 	{/if}
 </div>

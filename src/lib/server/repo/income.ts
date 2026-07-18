@@ -61,6 +61,42 @@ export async function deleteIncome(
 	return rows.length > 0;
 }
 
+export async function updateIncome(
+	db: Db,
+	scope: { workspaceId: string; memberId: string },
+	incomeId: string,
+	changes: {
+		source?: string;
+		amountMinor?: bigint;
+		currency?: string;
+		receivedAt?: Date;
+		rrule?: string | null;
+		note?: string | null;
+	}
+): Promise<boolean> {
+	const updates: Record<string, unknown> = {};
+	if (changes.source !== undefined) updates.source = changes.source;
+	if (changes.amountMinor !== undefined) updates.amountMinor = changes.amountMinor;
+	if (changes.currency !== undefined) updates.currency = changes.currency;
+	if (changes.receivedAt !== undefined) updates.receivedAt = changes.receivedAt;
+	if (changes.rrule !== undefined) updates.rrule = changes.rrule;
+	if (changes.note !== undefined) updates.note = changes.note;
+	if (Object.keys(updates).length === 0) return false;
+
+	const rows = await db
+		.update(income)
+		.set(updates)
+		.where(
+			and(
+				eq(income.id, incomeId),
+				eq(income.workspaceId, scope.workspaceId),
+				eq(income.memberId, scope.memberId)
+			)
+		)
+		.returning({ id: income.id });
+	return rows.length > 0;
+}
+
 export async function listIncome(db: Db, workspaceId: string) {
 	return db
 		.select({ entry: income, memberName: user.displayName })

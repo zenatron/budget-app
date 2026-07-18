@@ -1,214 +1,214 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
+	import { money } from '$lib/actions/money';
 	import { formatMinor } from '$lib/money-format';
-
+	import Icon from '$lib/components/Icon.svelte';
 	let { data, form } = $props();
-
+	let slug = $derived(page.params.workspace);
 	let editingPolicy: string | null = $state(null);
+	let copied: string | null = $state(null);
 
 	const roleLabel: Record<string, string> = { owner: 'Owner', member: 'Member' };
 
-	function expiresIn(iso: string): string {
-		const days = Math.max(0, Math.round((Date.parse(iso) - Date.now()) / 86_400_000));
-		return days <= 1 ? 'expires soon' : `expires in ${days} days`;
+	function expiresIn(iso: string) {
+		const ts = Date.parse(iso);
+		if (Number.isNaN(ts)) return 'Invalid date';
+		const d = Math.max(0, Math.round((ts - Date.now()) / 86400000));
+		return d <= 1 ? 'Expires soon' : `Expires in ${d} days`;
 	}
-
-	function policySummary(p: { mode: string; threshold_minor?: number }): string {
+	function policySummary(p: { mode: string; threshold_minor?: number | null }) {
 		if (p.mode === 'none') return 'No approval needed';
 		if (p.mode === 'always') return 'Always needs approval';
-		return `Needs approval from ${formatMinor(BigInt(p.threshold_minor ?? 0), data.workspace.currency)}`;
+		const minor = p.threshold_minor ?? 0;
+		return `Approval above ${formatMinor(BigInt(minor), data.workspace.currency)}`;
+	}
+	async function copyCode(code: string) {
+		try {
+			await navigator.clipboard.writeText(code);
+			copied = code;
+			setTimeout(() => (copied = copied === code ? null : copied), 1400);
+		} catch {
+			/* clipboard may be unavailable */
+		}
 	}
 </script>
 
-<div class="space-y-6">
-	<a
-		href="/w/{data.workspace.slug}/purchases"
-		class="block rounded-2xl bg-white p-5 shadow-sm transition hover:bg-neutral-50 dark:bg-neutral-900 dark:hover:bg-neutral-800/60"
-	>
-		<div class="flex items-center justify-between">
-			<div>
-				<h2 class="font-medium text-neutral-900 dark:text-neutral-50">Purchases</h2>
-				<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-					{data.pendingCount === 0
-						? 'Nothing waiting for approval'
-						: `${data.pendingCount} waiting for approval`}
-				</p>
-			</div>
-			{#if data.pendingCount > 0}
-				<span
-					class="flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-sm font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-				>
-					{data.pendingCount}
-				</span>
-			{/if}
+<div class="space-y-4">
+	<h1 class="px-1 pt-1 text-[28px]">Settings</h1>
+
+	<!-- Profile -->
+	<div class="card flex items-center gap-3.5 p-4">
+		<div
+			class="flex h-12 w-12 items-center justify-center rounded-full font-[family-name:var(--font-display)] text-[22px] font-semibold text-white"
+			style="background: color-mix(in oklab, var(--ws-accent) 80%, black)"
+		>
+			{data.user.displayName.charAt(0)}
 		</div>
-	</a>
-
-	<a
-		href="/w/{data.workspace.slug}/analytics"
-		class="block rounded-2xl bg-white p-5 shadow-sm transition hover:bg-neutral-50 dark:bg-neutral-900 dark:hover:bg-neutral-800/60"
-	>
-		<h2 class="font-medium text-neutral-900 dark:text-neutral-50">📊 Analytics</h2>
-		<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-			This month vs last, categories, budgets
-		</p>
-	</a>
-
-	<div class="grid grid-cols-2 gap-4">
-		<a
-			href="/w/{data.workspace.slug}/recurring"
-			class="block rounded-2xl bg-white p-5 shadow-sm transition hover:bg-neutral-50 dark:bg-neutral-900 dark:hover:bg-neutral-800/60"
-		>
-			<h2 class="font-medium text-neutral-900 dark:text-neutral-50">🔁 Recurring</h2>
-			<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Repeating charges</p>
-		</a>
-		<a
-			href="/w/{data.workspace.slug}/income"
-			class="block rounded-2xl bg-white p-5 shadow-sm transition hover:bg-neutral-50 dark:bg-neutral-900 dark:hover:bg-neutral-800/60"
-		>
-			<h2 class="font-medium text-neutral-900 dark:text-neutral-50">💰 Income</h2>
-			<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Salary and inflows</p>
-		</a>
+		<div class="min-w-0 flex-1">
+			<p class="truncate text-[17px] font-semibold" style="color: var(--ink)">
+				{data.user.displayName}
+			</p>
+			<p class="text-[13px] capitalize" style="color: var(--ink-4)">
+				{data.member.role} · {data.workspace.name}
+			</p>
+		</div>
+		<form method="POST" action="/auth/logout">
+			<button class="btn btn-ghost px-4 py-2 text-[14px]">Sign out</button>
+		</form>
 	</div>
 
-	{#if form?.error}
-		<p
-			class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300"
+	{#if data.pendingCount > 0}
+		<a
+			href="/w/{slug}/purchases"
+			class="press card flex items-center gap-3.5 p-4"
+			style="background: color-mix(in oklab, var(--pending) 12%, var(--surface))"
 		>
-			{form.error}
-		</p>
+			<span
+				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-white"
+				style="background: var(--pending)">{data.pendingCount}</span
+			>
+			<div class="flex-1">
+				<p class="text-[15px] font-semibold" style="color: var(--pending)">
+					{data.pendingCount} awaiting a decision
+				</p>
+				<p class="text-[13px]" style="color: var(--ink-3)">Tap to review in your Wallet</p>
+			</div>
+			<Icon name="chevronRight" class="h-4 w-4" style="color: var(--pending)" />
+		</a>
 	{/if}
 
-	<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
-		<h2 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Members</h2>
-		<ul class="mt-2 divide-y divide-neutral-100 dark:divide-neutral-800">
+	<a href="/w/{slug}/settings/notifications" class="press card flex items-center gap-3.5 p-4">
+		<span
+			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+		>
+			<Icon name="bell" class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+		</span>
+		<div class="flex-1">
+			<p class="text-[15px] font-medium" style="color: var(--ink)">Notifications</p>
+			<p class="text-[13px]" style="color: var(--ink-4)">Push, ntfy, and per-event routing</p>
+		</div>
+		<Icon name="chevronRight" class="h-4 w-4" style="color: var(--ink-4)" />
+	</a>
+
+	{#if form?.error}
+		<div
+			class="card p-4 text-[15px]"
+			style="color: var(--deny); background: color-mix(in oklab, var(--deny) 12%, var(--surface))"
+		>
+			{form.error}
+		</div>
+	{/if}
+
+	<!-- Members -->
+	<div class="card p-5">
+		<p class="section-label">Members</p>
+		<div class="mt-1">
 			{#each data.members as m (m.id)}
-				<li class="py-2.5">
-					<div class="flex items-center justify-between">
-						<div>
-							<span class="font-medium text-neutral-900 dark:text-neutral-50">{m.displayName}</span>
-							<span class="ml-2 text-sm text-neutral-500 dark:text-neutral-400">
-								{roleLabel[m.role] ?? m.role}{m.status !== 'active' ? ` · ${m.status}` : ''}
-							</span>
-							<p class="text-sm text-neutral-400 dark:text-neutral-500">
-								{policySummary(m.policy)}
-							</p>
-						</div>
-						{#if data.member.role === 'owner'}
-							<button
-								onclick={() => (editingPolicy = editingPolicy === m.id ? null : m.id)}
-								class="text-sm text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+				<div class="hairline flex items-center justify-between py-3 last:shadow-none">
+					<div class="min-w-0">
+						<p class="text-[16px]" style="color: var(--ink)">
+							{m.displayName}
+							<span class="ml-1 text-[13px]" style="color: var(--ink-4)"
+								>{roleLabel[m.role]}{m.status !== 'active' ? ` · ${m.status}` : ''}</span
 							>
-								{editingPolicy === m.id ? 'Close' : 'Policy'}
-							</button>
-						{/if}
+						</p>
+						<p class="text-[13px]" style="color: var(--ink-4)">{policySummary(m.policy)}</p>
 					</div>
-					{#if editingPolicy === m.id}
-						<form
-							method="POST"
-							action="?/policy"
-							use:enhance
-							class="mt-3 space-y-3 rounded-xl bg-neutral-50 p-3 dark:bg-neutral-800/60"
+					{#if data.member.role === 'owner'}
+						<button
+							onclick={() => (editingPolicy = editingPolicy === m.id ? null : m.id)}
+							class="press shrink-0 text-[13px] font-medium"
+							style="color: var(--ws-accent)">{editingPolicy === m.id ? 'Done' : 'Policy'}</button
 						>
-							<input type="hidden" name="memberId" value={m.id} />
-							<div class="grid grid-cols-2 gap-3">
-								<label class="block">
-									<span class="text-xs text-neutral-500 dark:text-neutral-400">Approval</span>
-									<select
-										name="mode"
-										value={m.policy.mode}
-										class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-									>
-										<option value="none">Never needed</option>
-										<option value="threshold">Above an amount</option>
-										<option value="always">Always needed</option>
-									</select>
-								</label>
-								<label class="block">
-									<span class="text-xs text-neutral-500 dark:text-neutral-400">
-										Threshold ({data.workspace.currency})
-									</span>
-									<input
-										name="threshold"
-										inputmode="decimal"
-										placeholder="50.00"
-										value={m.policy.threshold_minor !== undefined
-											? (m.policy.threshold_minor / 100).toFixed(2)
-											: ''}
-										class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm tabular-nums dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-									/>
-								</label>
-							</div>
-							<label class="block">
-								<span class="text-xs text-neutral-500 dark:text-neutral-400">Routing</span>
-								<select
-									name="routingMode"
-									value={m.policy.routing.mode}
-									class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-								>
-									<option value="any_of">Any listed approver may decide</option>
-									<option value="specific">Exactly one specific approver</option>
-								</select>
-							</label>
-							<fieldset>
-								<legend class="text-xs text-neutral-500 dark:text-neutral-400">Approvers</legend>
-								<div class="mt-1 flex flex-wrap gap-3">
-									{#each data.members.filter((x) => x.status === 'active') as a (a.id)}
-										<label
-											class="flex items-center gap-1.5 text-sm text-neutral-700 dark:text-neutral-300"
-										>
-											<input
-												type="checkbox"
-												name="approverIds"
-												value={a.id}
-												checked={m.policy.routing.approver_ids.includes(a.id)}
-												class="rounded border-neutral-300 dark:border-neutral-600"
-											/>
-											{a.displayName}
-										</label>
-									{/each}
-								</div>
-							</fieldset>
-							<button
-								class="rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition active:scale-[0.98] dark:bg-neutral-50 dark:text-neutral-900"
-							>
-								Save policy
-							</button>
-						</form>
 					{/if}
-				</li>
+				</div>
+				{#if editingPolicy === m.id}
+					<form
+						method="POST"
+						action="?/policy"
+						use:enhance
+						class="mt-1 mb-2 space-y-3 rounded-[14px] p-4"
+						style="background: var(--surface-2)"
+					>
+						<input type="hidden" name="memberId" value={m.id} />
+						<div class="grid grid-cols-2 gap-3">
+							<select name="mode" value={m.policy.mode} class="field text-[15px]">
+								<option value="none">Never</option>
+								<option value="threshold">Above amount</option>
+								<option value="always">Always</option>
+							</select>
+							<input
+								name="threshold"
+								use:money
+								inputmode="decimal"
+								placeholder="50.00"
+								value={m.policy.threshold_minor !== undefined
+									? (m.policy.threshold_minor / 100).toFixed(2)
+									: ''}
+								class="field text-[15px] tabular-nums"
+							/>
+						</div>
+						<select name="routingMode" value={m.policy.routing.mode} class="field text-[15px]">
+							<option value="any_of">Any approver can decide</option>
+							<option value="specific">One specific approver</option>
+						</select>
+						<div class="flex flex-wrap gap-x-4 gap-y-2">
+							{#each data.members.filter((x: { status: string }) => x.status === 'active') as a (a.id)}
+								<label class="flex items-center gap-1.5 text-[15px]" style="color: var(--ink)">
+									<input
+										type="checkbox"
+										name="approverIds"
+										value={a.id}
+										checked={m.policy.routing.approver_ids.includes(a.id)}
+										class="rounded"
+									/>
+									{a.displayName}
+								</label>
+							{/each}
+						</div>
+						<button class="btn btn-accent px-5 py-2.5 text-[15px]">Save policy</button>
+					</form>
+				{/if}
 			{/each}
-		</ul>
-	</section>
+		</div>
+	</div>
 
 	{#if data.member.role === 'owner'}
-		<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
+		<div class="card p-5">
 			<div class="flex items-center justify-between">
-				<h2 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Invites</h2>
+				<p class="section-label">Invites</p>
 				<form method="POST" action="?/invite" use:enhance>
-					<button
-						class="rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition active:scale-[0.98] dark:bg-neutral-50 dark:text-neutral-900"
-					>
-						New invite
-					</button>
+					<button class="btn btn-tint px-4 py-1.5 text-[13px]">New code</button>
 				</form>
 			</div>
 			{#if data.invites.length === 0}
-				<p class="mt-3 text-sm text-neutral-400 dark:text-neutral-500">
-					No open invites. Create one and share the code.
+				<p class="mt-3 text-[15px]" style="color: var(--ink-4)">
+					No open invites. Create a code to add someone.
 				</p>
 			{:else}
-				<ul class="mt-2 divide-y divide-neutral-100 dark:divide-neutral-800">
+				<div class="mt-1">
 					{#each data.invites as inv (inv.code)}
-						<li class="flex items-center justify-between py-2.5">
-							<code class="font-mono text-sm tracking-widest text-neutral-900 dark:text-neutral-50">
-								{inv.code}
-							</code>
-							<span class="text-sm text-neutral-400">{expiresIn(inv.expiresAt)}</span>
-						</li>
+						<button
+							onclick={() => copyCode(inv.code)}
+							class="press hairline flex w-full items-center justify-between py-3 last:shadow-none"
+						>
+							<code class="font-mono text-[16px] tracking-[0.12em]" style="color: var(--ink)"
+								>{inv.code}</code
+							>
+							<span
+								class="text-[13px]"
+								style="color: {copied === inv.code ? 'var(--approve)' : 'var(--ink-4)'}"
+							>
+								{copied === inv.code ? 'Copied ✓' : expiresIn(inv.expiresAt)}
+							</span>
+						</button>
 					{/each}
-				</ul>
+				</div>
 			{/if}
-		</section>
+		</div>
 	{/if}
+
+	<p class="pt-2 text-center text-[12px]" style="color: var(--ink-4)">Budget v{data.version}</p>
 </div>

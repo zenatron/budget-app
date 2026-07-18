@@ -5,6 +5,9 @@ import { ApprovalRoutingError } from '$lib/domain/approval/evaluate';
 import { PurchaseStateError } from '$lib/domain/purchase/purchase';
 import { SealError } from '$lib/domain/visibility/seal';
 import { submitPurchase } from '$lib/application/purchases';
+import { addPurchaseImage } from '$lib/application/images';
+import { ImageValidationError } from '$lib/infra/images/process';
+import { getBlobStore } from '$lib/server/blobs';
 import { getDb } from '$lib/server/db';
 import { listCategories, listMembers } from '$lib/server/repo/workspaces';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
@@ -51,7 +54,7 @@ export const actions: Actions = {
 		let seal;
 		if (sealMemberIds.length > 0) {
 			if (!f.sealUntil) return fail(400, { error: 'Pick when the seal opens' });
-			const until = new Date(`${f.sealUntil}T12:00:00`);
+			const until = new Date(`${f.sealUntil}T23:59:59`);
 			if (Number.isNaN(until.getTime())) return fail(400, { error: 'Invalid seal date' });
 			seal = { sealedUntil: until, sealedFromMemberIds: sealMemberIds };
 		} else if (f.sealUntil) {
@@ -71,7 +74,8 @@ export const actions: Actions = {
 					categoryId: f.categoryId || null,
 					note: f.note?.trim() || null,
 					intent: f.intent,
-					seal
+					seal,
+					merchantName: form.get('merchantName')?.toString()?.trim() || null
 				}
 			));
 		} catch (e) {
@@ -85,6 +89,24 @@ export const actions: Actions = {
 			}
 			throw e;
 		}
+
+		// Optional photo attached at creation. The purchase already exists, so a
+		// bad image is not fatal — skip it (the detail page can add one later).
+		const photo = form.get('photo');
+		if (photo instanceof File && photo.size > 0) {
+			try {
+				await addPurchaseImage(
+					getDb(),
+					{ clock: systemClock, ids: uuidv7, blobs: getBlobStore() },
+					{ workspaceId: locals.workspace!.id, memberId: locals.member!.id },
+					purchaseId,
+					new Uint8Array(await photo.arrayBuffer())
+				);
+			} catch (e) {
+				if (!(e instanceof ImageValidationError) && !(e instanceof PurchaseStateError)) throw e;
+			}
+		}
+
 		redirect(303, `/w/${locals.workspace!.slug}/purchases/${purchaseId}`);
 	}
 };

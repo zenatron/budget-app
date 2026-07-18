@@ -1,13 +1,14 @@
 /**
- * Dev seed: a demo workspace with two members and a few purchases, matching
- * the fake IdP identities in scripts/dev-oidc.ts (log in as alice or bob).
+ * Dev seed: demo workspace with two members and ~12 months of historical
+ * data — purchases, income, recurring rules, budgets — so every feature
+ * (especially analytics) has rich data.
  *
- *   DATABASE_URL=postgres://root:mysecretpassword@localhost:5432/local bun scripts/seed.ts
+ *   DATABASE_URL=postgres://... bun scripts/seed.ts
  *
- * Idempotent-ish: refuses to run if the demo workspace already exists.
+ * Idempotent: refuses if the demo workspace already exists.
  */
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import * as schema from '../src/lib/server/db/schema';
 
@@ -19,6 +20,7 @@ const db = drizzle(client, { schema });
 const uuid = () => crypto.randomUUID();
 const now = new Date();
 const daysAgo = (n: number) => new Date(now.getTime() - n * 86_400_000);
+const hoursAgo = (n: number) => new Date(now.getTime() - n * 3_600_000);
 
 const existing = await db
 	.select({ id: schema.workspace.id })
@@ -57,6 +59,8 @@ await db.insert(schema.workspace).values({
 	ownerUserId: aliceId,
 	currency: 'USD',
 	timezone: 'America/New_York',
+	maxSealDays: 30,
+	reapprovalThresholdPct: 20,
 	createdAt: now
 });
 
@@ -80,6 +84,7 @@ await db.insert(schema.workspaceMember).values([
 		approvalPolicy: {
 			mode: 'threshold',
 			threshold_minor: 5000,
+			category_overrides: [],
 			routing: { mode: 'any_of', approver_ids: [aliceMember] }
 		},
 		status: 'active',
@@ -88,58 +93,703 @@ await db.insert(schema.workspaceMember).values([
 ]);
 
 const cats = [
-	{ name: 'Groceries', icon: '🛒', color: '#22c55e' },
-	{ name: 'Dining', icon: '🍜', color: '#f97316' },
-	{ name: 'Entertainment', icon: '🎬', color: '#ec4899' },
-	{ name: 'Utilities', icon: '💡', color: '#64748b' }
+	{ name: 'Groceries', icon: '\u{1F6D2}', color: '#22c55e' },
+	{ name: 'Dining', icon: '\u{1F35C}', color: '#f97316' },
+	{ name: 'Entertainment', icon: '\u{1F3AC}', color: '#ec4899' },
+	{ name: 'Utilities', icon: '\u{1F4A1}', color: '#64748b' },
+	{ name: 'Transport', icon: '\u{1F698}', color: '#3b82f6' },
+	{ name: 'Shopping', icon: '\u{1F6CD}', color: '#8b5cf6' },
+	{ name: 'Health', icon: '\u{1F3E5}', color: '#ef4444' },
+	{ name: 'Travel', icon: '\u{2708}', color: '#06b6d4' }
 ].map((c) => ({ id: uuid(), workspaceId: wsId, ...c }));
 await db.insert(schema.category).values(cats);
+const catIds = cats.map((c) => c.id);
 
-const purchases = [
-	{ member: aliceMember, item: 'Weekly groceries', cat: 0, minor: 8734n, day: 6 },
-	{ member: aliceMember, item: 'Takeout ramen', cat: 1, minor: 4250n, day: 4 },
-	{ member: bobMember, item: 'Movie tickets', cat: 2, minor: 3200n, day: 3 },
-	{ member: bobMember, item: 'Groceries top-up', cat: 0, minor: 2915n, day: 1 }
-];
-for (const p of purchases) {
+const catId = (n: number) => catIds[n];
+
+const rng = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+// ── Helpers ──────────────────────────────────────────────────────────
+async function addPurchase(opts: {
+	member: string;
+	state: string;
+	item: string;
+	catIdx: number;
+	minor: bigint;
+	day: number;
+	note?: string | null;
+	finalMinor?: bigint | null;
+	sealedFrom?: string[] | null;
+	sealUntilDay?: number | null;
+	recurringRuleId?: string | null;
+	nudgeCount?: number;
+	lastNudgedAt?: Date | null;
+	approvedMinor?: bigint | null;
+}) {
 	const id = uuid();
-	const at = daysAgo(p.day);
 	await db.insert(schema.purchase).values({
 		id,
 		workspaceId: wsId,
-		memberId: p.member,
-		state: 'completed',
-		itemName: p.item,
-		note: null,
-		categoryId: cats[p.cat].id,
+		memberId: opts.member,
+		state: opts.state as any,
+		itemName: opts.item,
+		note: opts.note ?? null,
+		categoryId: catId(opts.catIdx),
 		merchantId: null,
-		requestedAmountMinor: p.minor,
-		approvedAmountMinor: null,
-		finalAmountMinor: p.minor,
+		requestedAmountMinor: opts.minor,
+		approvedAmountMinor: opts.approvedMinor ?? null,
+		finalAmountMinor:
+			opts.finalMinor ??
+			(opts.state === 'completed' || opts.state === 'refunded' ? opts.minor : null),
 		currency: 'USD',
-		sealedUntil: null,
-		sealedFromMemberIds: [],
-		requestedAt: null,
-		decidedAt: null,
-		completedAt: at,
-		lastNudgedAt: null,
-		nudgeCount: 0,
-		recurringRuleId: null,
+		sealedUntil: opts.sealUntilDay ? daysAgo(opts.sealUntilDay) : null,
+		sealedFromMemberIds: opts.sealedFrom ?? [],
+		requestedAt: opts.state !== 'draft' ? daysAgo(opts.day + 0.5) : null,
+		decidedAt: ['approved', 'denied', 'completed', 'refunded'].includes(opts.state)
+			? daysAgo(opts.day + 0.25)
+			: null,
+		completedAt: ['completed', 'refunded'].includes(opts.state) ? daysAgo(opts.day) : null,
+		lastNudgedAt: opts.lastNudgedAt ?? null,
+		nudgeCount: opts.nudgeCount ?? 0,
+		recurringRuleId: opts.recurringRuleId ?? null,
 		parentPurchaseId: null,
-		createdAt: at,
-		updatedAt: at
+		createdAt: daysAgo(opts.day),
+		updatedAt: daysAgo(opts.day)
 	});
+	return id;
+}
+
+async function addEvent(
+	pId: string,
+	member: string,
+	from: string | null,
+	to: string,
+	at: Date,
+	reason?: string,
+	amount?: bigint
+) {
 	await db.insert(schema.approvalEvent).values({
 		id: uuid(),
-		purchaseId: id,
-		actorMemberId: p.member,
-		fromState: 'draft',
-		toState: 'completed',
-		reason: 'seed',
-		amountSnapshotMinor: p.minor,
+		purchaseId: pId,
+		actorMemberId: member,
+		fromState: from as any,
+		toState: to as any,
+		reason: reason ?? null,
+		amountSnapshotMinor: amount ?? null,
 		createdAt: at
 	});
 }
 
-console.log('seeded: workspace "demo" with alice (owner) + bob (threshold $50) and 4 purchases');
+async function addApprover(pId: string, memberId: string, required: boolean) {
+	await db
+		.insert(schema.purchaseApprover)
+		.values({ purchaseId: pId, memberId, isRequired: required });
+}
+
+// ── Recurring Rules ──────────────────────────────────────────────────
+const recRent = uuid();
+const recNetflix = uuid();
+const recGym = uuid();
+const recInternet = uuid();
+const recPhone = uuid();
+
+await db.insert(schema.recurringRule).values([
+	{
+		id: recRent,
+		workspaceId: wsId,
+		memberId: aliceMember,
+		itemName: 'Rent',
+		categoryId: catId(3),
+		merchantId: null,
+		amountMinor: 1_800_00n,
+		currency: 'USD',
+		rrule: 'DTSTART=2025-07-01;FREQ=MONTHLY;BYMONTHDAY=1',
+		nextOccurrenceAt: daysAgo(-14),
+		lastGeneratedAt: daysAgo(32),
+		status: 'active' as any,
+		autoComplete: false,
+		endedAt: null
+	},
+	{
+		id: recNetflix,
+		workspaceId: wsId,
+		memberId: aliceMember,
+		itemName: 'Netflix',
+		categoryId: catId(2),
+		merchantId: null,
+		amountMinor: 15_49n,
+		currency: 'USD',
+		rrule: 'DTSTART=2025-07-03;FREQ=MONTHLY;BYMONTHDAY=3',
+		nextOccurrenceAt: daysAgo(-12),
+		lastGeneratedAt: daysAgo(33),
+		status: 'active' as any,
+		autoComplete: false,
+		endedAt: null
+	},
+	{
+		id: recGym,
+		workspaceId: wsId,
+		memberId: bobMember,
+		itemName: 'Gym membership',
+		categoryId: catId(6),
+		merchantId: null,
+		amountMinor: 49_99n,
+		currency: 'USD',
+		rrule: 'DTSTART=2025-07-05;FREQ=MONTHLY;BYMONTHDAY=5',
+		nextOccurrenceAt: daysAgo(-10),
+		lastGeneratedAt: daysAgo(36),
+		status: 'active' as any,
+		autoComplete: false,
+		endedAt: null
+	},
+	{
+		id: recInternet,
+		workspaceId: wsId,
+		memberId: aliceMember,
+		itemName: 'Internet',
+		categoryId: catId(3),
+		merchantId: null,
+		amountMinor: 79_99n,
+		currency: 'USD',
+		rrule: 'DTSTART=2025-07-10;FREQ=MONTHLY;BYMONTHDAY=10',
+		nextOccurrenceAt: daysAgo(-5),
+		lastGeneratedAt: daysAgo(40),
+		status: 'active' as any,
+		autoComplete: false,
+		endedAt: null
+	},
+	{
+		id: recPhone,
+		workspaceId: wsId,
+		memberId: bobMember,
+		itemName: 'Phone bill',
+		categoryId: catId(3),
+		merchantId: null,
+		amountMinor: 85_00n,
+		currency: 'USD',
+		rrule: 'DTSTART=2025-07-12;FREQ=MONTHLY;BYMONTHDAY=12',
+		nextOccurrenceAt: daysAgo(-3),
+		lastGeneratedAt: daysAgo(42),
+		status: 'active' as any,
+		autoComplete: false,
+		endedAt: null
+	}
+]);
+
+// ── Generate monthly recurring purchases ─────────────────────────────
+const recurringPatterns: {
+	member: string;
+	item: string;
+	cat: number;
+	minor: bigint;
+	ruleId: string;
+	dayOffset: number;
+}[] = [
+	{ member: aliceMember, item: 'Rent', cat: 3, minor: 1_800_00n, ruleId: recRent, dayOffset: 1 },
+	{ member: aliceMember, item: 'Netflix', cat: 2, minor: 15_49n, ruleId: recNetflix, dayOffset: 3 },
+	{
+		member: bobMember,
+		item: 'Gym membership',
+		cat: 6,
+		minor: 49_99n,
+		ruleId: recGym,
+		dayOffset: 5
+	},
+	{
+		member: aliceMember,
+		item: 'Internet',
+		cat: 3,
+		minor: 79_99n,
+		ruleId: recInternet,
+		dayOffset: 10
+	},
+	{ member: bobMember, item: 'Phone bill', cat: 3, minor: 85_00n, ruleId: recPhone, dayOffset: 12 }
+];
+
+let recCount = 0;
+for (let month = 1; month <= 12; month++) {
+	for (const rp of recurringPatterns) {
+		const day = month * 30 - rp.dayOffset;
+		if (day < 5) continue; // skip very recent ones
+		const id = await addPurchase({
+			member: rp.member,
+			state: 'completed',
+			item: rp.item,
+			catIdx: rp.cat,
+			minor: rp.minor,
+			day,
+			recurringRuleId: rp.ruleId
+		});
+		await addEvent(id, rp.member, 'draft', 'completed', daysAgo(day));
+		recCount++;
+	}
+}
+
+// ── Manual completed purchases across ~360 days ──────────────────────
+const groceriesItems = [
+	'Weekly groceries',
+	'Whole Foods run',
+	"Trader Joe's",
+	"Farmer's market",
+	'Costco bulk',
+	'Aldi run'
+];
+const diningItems = [
+	'Takeout ramen',
+	'Sushi night',
+	'Pizza delivery',
+	'Brunch with friends',
+	'Coffee shop',
+	'Burger joint',
+	'Tacos',
+	'Thai takeout',
+	'Italian dinner'
+];
+const entertainmentItems = [
+	'Movie tickets',
+	'Concert tickets',
+	'Streaming services',
+	'Video game',
+	'Spotify',
+	'Book store',
+	'Board game',
+	'Museum tickets'
+];
+const transportItems = [
+	'Gas station',
+	'Parking garage',
+	'Uber ride',
+	'Subway pass',
+	'Bus fare',
+	'Bike repair'
+];
+const shoppingItems = [
+	'Amazon order',
+	'New shoes',
+	'Clothes shopping',
+	'Home decor',
+	'Kitchen gadget',
+	'Office supplies'
+];
+const healthItems = ['Pharmacy', 'Dentist co-pay', 'Protein powder', 'Vitamins', 'Doctor visit'];
+const travelItems = [
+	'Weekend trip hotel',
+	'Flight booking',
+	'Airbnb',
+	'Rental car',
+	'Travel insurance'
+];
+
+function monthlyPurchases(monthAgo: number, memberId: string) {
+	const baseDay = monthAgo * 30;
+	// Groceries: 4-5 trips per month
+	for (let w = 0; w < rng(3, 5); w++) {
+		const d = baseDay - rng(0, 6) - w * 7;
+		if (d < 5) continue;
+		const minor = BigInt(rng(4000, 18000));
+		addPurchase({
+			member: memberId,
+			state: 'completed',
+			item: pick(groceriesItems),
+			catIdx: 0,
+			minor,
+			day: d
+		}).then((id) => addEvent(id, memberId, 'draft', 'completed', daysAgo(d)));
+	}
+	// Dining: 3-5 times per month
+	for (let w = 0; w < rng(2, 4); w++) {
+		const d = baseDay - rng(0, 8) - w * 7;
+		if (d < 5) continue;
+		const minor = BigInt(rng(800, 9000));
+		addPurchase({
+			member: memberId,
+			state: 'completed',
+			item: pick(diningItems),
+			catIdx: 1,
+			minor,
+			day: d
+		}).then((id) => addEvent(id, memberId, 'draft', 'completed', daysAgo(d)));
+	}
+	// Entertainment: 1-2 per month
+	for (let w = 0; w < rng(1, 2); w++) {
+		const d = baseDay - rng(0, 10) - w * 14;
+		if (d < 5) continue;
+		const minor = BigInt(rng(500, 15000));
+		addPurchase({
+			member: memberId,
+			state: 'completed',
+			item: pick(entertainmentItems),
+			catIdx: 2,
+			minor,
+			day: d
+		}).then((id) => addEvent(id, memberId, 'draft', 'completed', daysAgo(d)));
+	}
+	// Transport: 2-4 per month
+	for (let w = 0; w < rng(1, 3); w++) {
+		const d = baseDay - rng(0, 5) - w * 10;
+		if (d < 5) continue;
+		const minor = BigInt(rng(1000, 7000));
+		addPurchase({
+			member: memberId,
+			state: 'completed',
+			item: pick(transportItems),
+			catIdx: 4,
+			minor,
+			day: d
+		}).then((id) => addEvent(id, memberId, 'draft', 'completed', daysAgo(d)));
+	}
+	// Shopping: 0-2 per month
+	for (let w = 0; w < rng(0, 2); w++) {
+		const d = baseDay - rng(0, 10);
+		if (d < 5) continue;
+		const minor = BigInt(rng(1000, 20000));
+		addPurchase({
+			member: memberId,
+			state: 'completed',
+			item: pick(shoppingItems),
+			catIdx: 5,
+			minor,
+			day: d
+		}).then((id) => addEvent(id, memberId, 'draft', 'completed', daysAgo(d)));
+	}
+	// Health: 0-1 per month
+	if (rng(0, 1)) {
+		const d = baseDay - rng(0, 12);
+		if (d >= 5) {
+			const minor = BigInt(rng(1000, 8000));
+			addPurchase({
+				member: memberId,
+				state: 'completed',
+				item: pick(healthItems),
+				catIdx: 6,
+				minor,
+				day: d
+			}).then((id) => addEvent(id, memberId, 'draft', 'completed', daysAgo(d)));
+		}
+	}
+	// Utilities: monthly
+	if (memberId === aliceMember) {
+		const d = baseDay - rng(1, 5);
+		if (d >= 5) {
+			const elec = BigInt(rng(12000, 18000));
+			addPurchase({
+				member: memberId,
+				state: 'completed',
+				item: 'Electric bill',
+				catIdx: 3,
+				minor: elec,
+				day: d
+			}).then((id) => addEvent(id, memberId, 'draft', 'completed', daysAgo(d)));
+		}
+	}
+}
+
+console.log('Generating historical purchases across 12 months...');
+// Generate for both members, both get their own sets of purchases
+for (let m = 1; m <= 12; m++) {
+	monthlyPurchases(m, aliceMember);
+	monthlyPurchases(m, bobMember);
+}
+// Occasional travel (every 3-4 months)
+for (let m = 3; m <= 12; m += rng(3, 4)) {
+	const d = m * 30 - rng(0, 10);
+	if (d >= 5) {
+		const minor = BigInt(rng(15000, 50000));
+		addPurchase({
+			member: pick([aliceMember, bobMember]),
+			state: 'completed',
+			item: pick(travelItems),
+			catIdx: 7,
+			minor,
+			day: d
+		}).then((id) => addEvent(id, pick([aliceMember, bobMember]), 'draft', 'completed', daysAgo(d)));
+	}
+}
+
+await new Promise((r) => setTimeout(r, 1000)); // let async inserts finish
+
+// ── Special-state purchases (recent days) ───────────────────────────
+await Promise.all([
+	// Pending approval
+	(async () => {
+		const items = [
+			{ member: bobMember, item: 'New monitor', cat: 5, minor: 349_99n, day: 3 },
+			{
+				member: bobMember,
+				item: 'Office chair',
+				cat: 5,
+				minor: 210_00n,
+				day: 6,
+				nudge: 1,
+				nudged: hoursAgo(12)
+			},
+			{
+				member: bobMember,
+				item: 'Standing desk',
+				cat: 5,
+				minor: 499_00n,
+				day: 8,
+				nudge: 3,
+				nudged: hoursAgo(6),
+				note: 'WFH setup upgrade'
+			}
+		];
+		for (const p of items) {
+			const id = await addPurchase({
+				...p,
+				state: 'pending_approval',
+				finalMinor: null,
+				nudgeCount: p.nudge ?? 0,
+				lastNudgedAt: p.nudged ?? null
+			});
+			await addEvent(id, p.member, 'draft', 'pending_approval', daysAgo(p.day));
+			await addApprover(id, aliceMember, true);
+		}
+	})(),
+	// Approved not completed
+	(async () => {
+		const id = await addPurchase({
+			member: bobMember,
+			item: 'New headphones',
+			cat: 5,
+			minor: 179_99n,
+			day: 9,
+			state: 'approved',
+			finalMinor: null,
+			approvedMinor: 180_00n
+		});
+		await addEvent(id, bobMember, 'draft', 'pending_approval', daysAgo(9.1));
+		await addApprover(id, aliceMember, true);
+		await addEvent(
+			id,
+			aliceMember,
+			'pending_approval',
+			'approved',
+			daysAgo(9.2),
+			'Looks good',
+			179_99n
+		);
+	})(),
+	// Denied
+	(async () => {
+		for (const p of [
+			{
+				member: bobMember,
+				item: 'Gaming PC',
+				cat: 2,
+				minor: 2_499_99n,
+				day: 15,
+				reason: 'Overkill for work needs'
+			},
+			{
+				member: bobMember,
+				item: 'Drone',
+				cat: 5,
+				minor: 799_00n,
+				day: 22,
+				reason: 'Not in budget right now'
+			}
+		]) {
+			const id = await addPurchase({ ...p, state: 'denied', finalMinor: null });
+			await addEvent(id, p.member, 'draft', 'pending_approval', daysAgo(p.day + 0.1));
+			await addApprover(id, aliceMember, true);
+			await addEvent(
+				id,
+				aliceMember,
+				'pending_approval',
+				'denied',
+				daysAgo(p.day + 0.3),
+				p.reason,
+				p.minor
+			);
+		}
+	})(),
+	// Cancelled
+	(async () => {
+		const id = await addPurchase({
+			member: bobMember,
+			item: 'VR headset',
+			cat: 2,
+			minor: 399_99n,
+			day: 25,
+			state: 'cancelled',
+			finalMinor: null
+		});
+		await addEvent(id, bobMember, 'draft', 'pending_approval', daysAgo(25.1));
+		await addApprover(id, aliceMember, true);
+		await addEvent(id, bobMember, 'pending_approval', 'cancelled', daysAgo(25.5));
+	})(),
+	// Sealed gift
+	(async () => {
+		const id = await addPurchase({
+			member: bobMember,
+			item: 'Birthday gift for Alice',
+			cat: 5,
+			minor: 150_00n,
+			day: 12,
+			state: 'completed',
+			sealedFrom: [aliceMember],
+			sealUntilDay: -3,
+			note: 'Surprise! 🎁'
+		});
+		await addEvent(id, bobMember, 'draft', 'completed', daysAgo(12));
+	})(),
+	// Over-budget re-approval
+	(async () => {
+		const id = await addPurchase({
+			member: bobMember,
+			item: 'Mechanical keyboard',
+			cat: 5,
+			minor: 150_00n,
+			day: 40,
+			state: 'approved',
+			finalMinor: null,
+			approvedMinor: 150_00n
+		});
+		await addEvent(id, bobMember, 'draft', 'pending_approval', daysAgo(40.1));
+		await addApprover(id, aliceMember, true);
+		await addEvent(id, aliceMember, 'pending_approval', 'approved', daysAgo(40.3), 'OK', 150_00n);
+		const id2 = await addPurchase({
+			member: bobMember,
+			item: 'Mechanical keyboard',
+			cat: 5,
+			minor: 210_00n,
+			day: 35,
+			state: 'completed',
+			finalMinor: 210_00n,
+			approvedMinor: 150_00n,
+			parentPurchaseId: id
+		});
+		await addEvent(
+			id2,
+			bobMember,
+			'approved',
+			'completed',
+			daysAgo(35),
+			'Paid more than planned',
+			210_00n
+		);
+		// Flag as overage
+		await db
+			.update(schema.purchase)
+			.set({ parentPurchaseId: id })
+			.where(eq(schema.purchase.id, id2));
+	})()
+]);
+
+// ── Income (monthly for 12 months) ───────────────────────────────────
+for (let m = 1; m <= 12; m++) {
+	const day = m * 30 - 1;
+	if (day < 5) continue;
+	await db.insert(schema.income).values([
+		{
+			id: uuid(),
+			workspaceId: wsId,
+			memberId: aliceMember,
+			source: 'Salary',
+			amountMinor: 5_000_00n,
+			currency: 'USD',
+			rrule: 'FREQ=MONTHLY;BYMONTHDAY=1',
+			receivedAt: daysAgo(day),
+			note: null
+		},
+		{
+			id: uuid(),
+			workspaceId: wsId,
+			memberId: bobMember,
+			source: 'Salary',
+			amountMinor: 3_800_00n,
+			currency: 'USD',
+			rrule: 'FREQ=MONTHLY;BYMONTHDAY=15',
+			receivedAt: daysAgo(day - 14),
+			note: null
+		}
+	]);
+}
+// Extra income entries
+await db.insert(schema.income).values([
+	{
+		id: uuid(),
+		workspaceId: wsId,
+		memberId: bobMember,
+		source: 'Freelance project',
+		amountMinor: 2_200_00n,
+		currency: 'USD',
+		rrule: null,
+		receivedAt: daysAgo(45),
+		note: 'Logo design'
+	},
+	{
+		id: uuid(),
+		workspaceId: wsId,
+		memberId: aliceMember,
+		source: 'Tax refund',
+		amountMinor: 1_500_00n,
+		currency: 'USD',
+		rrule: null,
+		receivedAt: daysAgo(100),
+		note: '2024 return'
+	},
+	{
+		id: uuid(),
+		workspaceId: wsId,
+		memberId: bobMember,
+		source: 'Side gig',
+		amountMinor: 850_00n,
+		currency: 'USD',
+		rrule: null,
+		receivedAt: daysAgo(160),
+		note: 'Consulting'
+	}
+]);
+
+// ── Budgets (monthly, overall + categories) ──────────────────────────
+const budgetCats: (number | null)[] = [null, 0, 1, 2, 3, 4, 5, 6, 7];
+const monthlyBudgetAmounts: Record<number, bigint> = {
+	null: 4_000_00n // overall
+};
+const catBudgets: [number, bigint][] = [
+	[0, 650_00n],
+	[1, 400_00n],
+	[2, 200_00n],
+	[3, 350_00n],
+	[4, 200_00n],
+	[5, 500_00n],
+	[6, 150_00n],
+	[7, 300_00n]
+];
+
+for (let m = 0; m < 19; m++) {
+	const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+	const nextD = new Date(now.getFullYear(), now.getMonth() - m + 1, 1);
+	const variance = BigInt(rng(-200, 200));
+	for (const c of budgetCats) {
+		const base = c === null ? 4_000_00n : BigInt(catBudgets.find(([ci]) => ci === c)![1]);
+		await db.insert(schema.budget).values({
+			id: uuid(),
+			workspaceId: wsId,
+			categoryId: c !== null ? catId(c) : null,
+			amountMinor: base + variance,
+			period: 'month' as any,
+			effectiveFrom: d.toISOString().slice(0, 10) as any,
+			effectiveTo: nextD.toISOString().slice(0, 10) as any
+		});
+	}
+}
+
+const [countRow] = await db.select({ count: sql`count(*)::int` }).from(schema.purchase);
+
+console.log(
+	[
+		'seeded workspace "demo" with:',
+		'  alice (owner) + bob (member, needs approval >$50)',
+		`  ${countRow?.count ?? '?'} total purchases across ~12 months`,
+		'  3 pending approval, 1 approved, 2 denied, 1 cancelled, 1 sealed',
+		'  5 recurring rules (Rent, Netflix, Gym, Internet, Phone)',
+		`  ${recCount} recurring-generated purchases`,
+		'  12 months of income entries',
+		'  12 months of budgets (overall + 8 categories)'
+	].join('\n')
+);
 await client.end();

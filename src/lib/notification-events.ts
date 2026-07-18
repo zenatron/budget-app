@@ -4,7 +4,8 @@ export const EVENT_TYPES = [
 	{ id: 'approval_decided', label: 'Decisions on my requests' },
 	{ id: 'stale_nudge', label: 'Reminders about waiting requests' },
 	{ id: 'seal_opened', label: 'Sealed purchases being revealed' },
-	{ id: 'recurring_due', label: 'Recurring charges being recorded' }
+	{ id: 'recurring_due', label: 'Recurring charges being recorded' },
+	{ id: 'budget_exceeded', label: 'Budget is met or exceeded' }
 ] as const;
 
 export const CHANNELS = [

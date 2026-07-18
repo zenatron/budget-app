@@ -15,6 +15,11 @@ const EnvSchema = v.object({
 	PUBLIC_ORIGIN: v.optional(v.pipe(v.string(), v.url()), 'http://localhost:5173'),
 	MIGRATIONS_DIR: v.optional(v.pipe(v.string(), v.nonEmpty()), './drizzle'),
 
+	// Dev mode — skips OIDC, auto-creates test user
+	DEV_MODE: v.optional(v.pipe(v.string(), v.transform(JSON.parse), v.boolean()), 'false'),
+	DEV_USER_NAME: v.optional(v.string(), 'Dev User'),
+	DEV_USER_EMAIL: v.optional(v.string(), 'dev@test.local'),
+
 	// Phase 1 — Pocket ID OIDC
 	POCKET_ID_ISSUER: v.optional(v.pipe(v.string(), v.url())),
 	POCKET_ID_CLIENT_ID: v.optional(v.string()),

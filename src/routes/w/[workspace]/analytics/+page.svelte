@@ -1,126 +1,416 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { money } from '$lib/actions/money';
 	import { formatMinor } from '$lib/money-format';
-
-	let { data, form } = $props();
-
+	import Money from '$lib/components/Money.svelte';
+	import CategoryRing from '$lib/components/CategoryRing.svelte';
+	let { data } = $props();
 	let showBudgetForm = $state(false);
-
 	const currency = $derived(data.workspace.currency);
+	const period = $derived(data.period);
+	const isMonth = $derived(period === 'month');
+
 	const maxCategory = $derived(
-		data.categories.reduce((max, c) => (c.totalMinor > max ? c.totalMinor : max), 1n)
+		data.categories.reduce(
+			(max: bigint, c: { totalMinor: bigint }) => (c.totalMinor > max ? c.totalMinor : max),
+			1n
+		)
 	);
-	const maxDay = $derived(
-		data.days.reduce((max, d) => (d.totalMinor > max ? d.totalMinor : max), 1n)
+	const catSegments = $derived(
+		[...data.categories]
+			.sort((a: { totalMinor: bigint }, b: { totalMinor: bigint }) =>
+				Number(b.totalMinor - a.totalMinor)
+			)
+			.map((c: { color: string | null; totalMinor: bigint }) => ({
+				value: c.totalMinor,
+				color: c.color ?? '#8E8E93'
+			}))
 	);
+	const maxBar = $derived(
+		data.buckets.reduce(
+			(max: bigint, b: { totalMinor: bigint }) => (b.totalMinor > max ? b.totalMinor : max),
+			1n
+		)
+	);
+	const overall = $derived(
+		isMonth
+			? (data.budgets.find((b: { categoryId: string | null }) => b.categoryId === null) as
+					{ budgetMinor: bigint; actualMinor: bigint } | undefined)
+			: undefined
+	);
+	const overallPct = $derived(
+		overall && overall.budgetMinor > 0n
+			? Number((overall.actualMinor * 1000n) / overall.budgetMinor) / 1000
+			: null
+	);
+	const overBudget = $derived(isMonth && overallPct !== null && overallPct > 1);
 
 	const comparison = $derived.by(() => {
-		if (data.prevTotalMinor === 0n) return data.totalMinor > 0n ? 'nothing spent last month' : null;
-		const pctX10 = (data.totalMinor * 1000n) / data.prevTotalMinor;
-		const pct = Number(pctX10) / 10;
-		if (pct > 100) return `${(pct - 100).toFixed(0)}% more than last month`;
-		if (pct < 100) return `${(100 - pct).toFixed(0)}% less than last month`;
-		return 'same as last month';
+		if (data.prevTotalMinor === 0n)
+			return data.totalMinor > 0n ? `First ${period} of tracking` : null;
+		const pct = Number((data.totalMinor * 1000n) / data.prevTotalMinor) / 10;
+		const dir = pct > 100 ? 'up' : pct < 100 ? 'down' : 'flat';
+		const diff = Math.abs(pct - 100).toFixed(0);
+		if (dir === 'flat') return `Same as ${data.prevLabel}`;
+		return { dir, text: `${diff}% ${dir === 'up' ? 'more' : 'less'} than ${data.prevLabel}` };
 	});
+
+	const barWidth = $derived(period === 'year' ? 16 : period === 'week' ? 34 : 6);
+	const barGap = $derived(period === 'year' ? 4 : period === 'week' ? 6 : 2);
+	const svgW = $derived(data.buckets.length * (barWidth + barGap));
 
 	function pctOf(part: bigint, whole: bigint): number {
 		if (whole === 0n) return 0;
 		return Math.min(100, Number((part * 1000n) / whole) / 10);
 	}
+
+	function navHref(dir: 'prev' | 'next'): string {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
+		const params = new URLSearchParams();
+		params.set('period', period);
+		if (period === 'day') params.set('day', dir === 'prev' ? data.prevDay : data.nextDay);
+		else if (period === 'week')
+			params.set('wo', String(dir === 'prev' ? data.prevWeekOffset : data.nextWeekOffset));
+		else if (period === 'year') params.set('year', dir === 'prev' ? data.prevYear : data.nextYear);
+		else if (period === 'month')
+			params.set('month', dir === 'prev' ? data.prevMonth : data.nextMonth);
+		return '?' + params.toString();
+	}
 </script>
 
-<div class="space-y-6">
-	<h1 class="text-lg font-semibold text-neutral-900 dark:text-neutral-50">Analytics</h1>
+<div class="space-y-7">
+	<div class="flex items-center justify-between px-1 pt-1">
+		<h1 class="text-[28px]">Activity</h1>
+	</div>
 
-	<section class="rounded-2xl bg-white p-6 shadow-sm dark:bg-neutral-900">
-		<p class="text-sm text-neutral-500 dark:text-neutral-400">{data.monthLabel}</p>
-		<p class="mt-1 text-3xl font-semibold text-neutral-900 tabular-nums dark:text-neutral-50">
-			{formatMinor(data.totalMinor, currency)}
-		</p>
-		{#if comparison}
-			<p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-				{comparison} ({formatMinor(data.prevTotalMinor, currency)})
+	<div class="flex justify-center">
+		<div
+			class="inline-flex rounded-[10px] p-0.5"
+			style="background: var(--surface-2)"
+			role="tablist"
+		>
+			{#each ['day', 'week', 'month', 'year'] as p (p)}
+				{@const active = period === p}
+				<a
+					href="?period={p}"
+					role="tab"
+					aria-selected={active}
+					class="press rounded-[8px] px-3 py-1.5 text-[13px] font-semibold transition-colors"
+					style="color: {active ? 'var(--ink)' : 'var(--ink-3)'}; background: {active
+						? 'var(--surface)'
+						: 'transparent'}; box-shadow: {active
+						? 'var(--shadow-card), inset 0 0 0 0.5px var(--hairline)'
+						: 'none'}"
+				>
+					{p === 'day' ? 'Day' : p === 'week' ? 'Week' : p === 'month' ? 'Month' : 'Year'}
+				</a>
+			{/each}
+		</div>
+	</div>
+
+	<div class="-mx-1 flex items-center justify-between gap-1">
+		{#if data.hasPrev}
+			<a
+				href={navHref('prev')}
+				class="press flex h-9 w-9 items-center justify-center rounded-full"
+				style="color: var(--ink-3)"
+				aria-label="Previous"
+			>
+				<svg
+					width="18"
+					height="18"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.4"
+					stroke-linecap="round"
+					stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg
+				>
+			</a>
+		{:else}
+			<div class="h-9 w-9"></div>
+		{/if}
+		<span class="text-[17px] font-semibold" style="color: var(--ink)">{data.label}</span>
+		{#if data.hasNext}
+			<a
+				href={navHref('next')}
+				class="press flex h-9 w-9 items-center justify-center rounded-full"
+				style="color: var(--ink-3)"
+				aria-label="Next"
+			>
+				<svg
+					width="18"
+					height="18"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.4"
+					stroke-linecap="round"
+					stroke-linejoin="round"><path d="M9 18l6-6-6-6" /></svg
+				>
+			</a>
+		{:else}
+			<div class="h-9 w-9"></div>
+		{/if}
+	</div>
+
+	<div
+		class="card-lg grain relative overflow-hidden p-6"
+		style="background: radial-gradient(120% 80% at 85% -10%, color-mix(in oklab, var(--ws-accent) 24%, transparent), transparent 60%), var(--surface)"
+	>
+		<p class="section-label text-center">{data.label}</p>
+		<div class="mt-4 flex justify-center">
+			<CategoryRing
+				segments={catSegments}
+				cap={isMonth && overall ? overall.budgetMinor : 0n}
+				size={200}
+				stroke={14}
+			>
+				<div class="px-2" style="color: {overBudget ? 'var(--deny)' : 'inherit'}">
+					<Money
+						minor={data.totalMinor}
+						{currency}
+						block
+						class="font-[family-name:var(--font-display)] text-[24px] leading-none font-semibold"
+					/>
+					{#if isMonth && overallPct !== null}
+						<p class="num mt-1 text-[11px]" style="color: var(--ink-4)">
+							of {formatMinor(overall!.budgetMinor, currency)}
+						</p>
+					{/if}
+				</div>
+			</CategoryRing>
+		</div>
+		{#if isMonth && overallPct !== null}
+			<p
+				class="mt-5 text-center text-[13px] font-medium"
+				style="color: {overBudget ? 'var(--deny)' : 'var(--ink-3)'}"
+			>
+				{overBudget
+					? `${((overallPct - 1) * 100).toFixed(0)}% over budget`
+					: `${(overallPct * 100).toFixed(0)}% of budget used`}
+			</p>
+		{:else if comparison}
+			<p
+				class="mt-5 text-center text-[13px] font-medium"
+				style="color: {typeof comparison === 'object' && comparison.dir === 'up'
+					? 'var(--deny)'
+					: typeof comparison === 'object' && comparison.dir === 'down'
+						? 'var(--approve)'
+						: 'var(--ink-3)'}"
+			>
+				{typeof comparison === 'string' ? comparison : comparison.text}
 			</p>
 		{/if}
 
-		<!-- daily bars, hand-built SVG -->
-		<svg viewBox="0 0 {data.days.length * 8} 48" class="mt-4 h-12 w-full" aria-hidden="true">
-			{#each data.days as d, i (i)}
-				{@const h = Number((d.totalMinor * 44n) / maxDay)}
-				<rect
-					x={i * 8 + 1}
-					y={46 - h}
-					width="6"
-					height={Math.max(h, d.totalMinor > 0n ? 2 : 0)}
-					rx="1.5"
-					class={d.day <= data.todayDay
-						? 'fill-neutral-800 dark:fill-neutral-200'
-						: 'fill-neutral-200 dark:fill-neutral-700'}
-				/>
-			{/each}
-		</svg>
-	</section>
+		{#if period !== 'day'}
+			<svg viewBox="0 0 {svgW} 44" class="mt-6 h-11 w-full">
+				{#each data.buckets as b, i (b.key)}
+					{@const totalH = Math.max(
+						Number((b.totalMinor * 38n) / maxBar),
+						b.totalMinor > 0n ? 3 : 0
+					)}
+					{@const x = i * (barWidth + barGap) + 1}
+					{@const y = 41 - totalH}
+					<!-- Stacked category segments -->
+					{#if b.segments && b.segments.length > 0}
+						{@const segTotal = b.segments.reduce(
+							(s: bigint, seg: { value: bigint }) => s + seg.value,
+							0n
+						)}
+						{@const stacked = b.segments.reduce(
+							(
+								arr: { color: string; y: number; h: number }[],
+								seg: { value: bigint; color: string }
+							) => {
+								const segH = (Number(seg.value) * totalH) / Math.max(1, Number(segTotal));
+								const segY = arr.length === 0 ? y : arr[arr.length - 1].y + arr[arr.length - 1].h;
+								arr.push({ color: seg.color, y: segY, h: Math.max(1, segH) });
+								return arr;
+							},
+							[]
+						)}
+						{#each stacked as seg (seg.color)}
+							{#if b.href}
+								<a
+									href={b.href}
+									class="block"
+									style="opacity: {b.today ? '1' : '0.7'}"
+									aria-label="{b.label}: {formatMinor(b.totalMinor, currency)} in {b.segments
+										.length} categories"
+								>
+									<rect {x} y={seg.y} width={barWidth} height={seg.h} fill={seg.color} />
+								</a>
+							{:else}
+								<rect
+									{x}
+									y={seg.y}
+									width={barWidth}
+									height={seg.h}
+									fill={seg.color}
+									opacity={b.today ? '1' : '0.7'}
+								/>
+							{/if}
+						{/each}
+						<!-- Rounded top -->
+						<rect
+							{x}
+							{y}
+							width={barWidth}
+							height={totalH}
+							rx={barWidth / 2}
+							fill="none"
+							stroke="transparent"
+						/>
+					{:else if b.href}
+						<a
+							href={b.href}
+							class="block"
+							style="opacity: {b.today ? '1' : '0.7'}"
+							aria-label="{b.label}: {formatMinor(b.totalMinor, currency)}"
+						>
+							<rect
+								{x}
+								{y}
+								width={barWidth}
+								height={totalH}
+								rx={barWidth / 2}
+								fill={b.today ? 'var(--ws-accent)' : 'var(--surface-hi)'}
+							/>
+						</a>
+					{:else}
+						<rect
+							{x}
+							{y}
+							width={barWidth}
+							height={totalH}
+							rx={barWidth / 2}
+							fill={b.today ? 'var(--ws-accent)' : 'var(--surface-hi)'}
+							opacity={b.today ? '1' : '0.7'}
+						/>
+					{/if}
+				{/each}
+			</svg>
+
+			<!-- Bar labels -->
+			{#if period === 'year'}
+				<div class="relative mt-1" style="height: 16px">
+					{#each data.buckets as b, i (b.key)}
+						<a
+							href={b.href}
+							class="absolute top-0 block text-center text-[10px] font-medium hover:opacity-70"
+							style="left: {i * (barWidth + barGap) + 1}px; width: {barWidth - 2}px; color: {b.today
+								? 'var(--ink)'
+								: 'var(--ink-4)'}">{b.label}</a
+						>
+					{/each}
+				</div>
+			{:else if period === 'month'}
+				<div class="mt-1.5 flex justify-between" style="padding-left: 1px; padding-right: 0">
+					{#each data.buckets as b (b.key)}
+						{#if b.weekLabel}
+							<span class="text-[9px] font-medium" style="color: var(--ink-4)">{b.weekLabel}</span>
+						{/if}
+					{/each}
+				</div>
+			{:else if period === 'week'}
+				<div class="mt-1 flex" style="gap: {barGap}px; padding-left: 1px">
+					{#each data.buckets as b (b.key)}
+						<span
+							class="block text-center text-[9px] font-medium"
+							style="width: {barWidth}px; color: {b.today ? 'var(--ink)' : 'var(--ink-3)'}"
+							>{b.label}</span
+						>
+					{/each}
+				</div>
+			{/if}
+		{/if}
+	</div>
 
 	{#if data.incomeMinor > 0n}
-		{@const net = data.incomeMinor - data.totalMinor}
-		{@const savingsPct =
-			Number(((data.incomeMinor - data.totalMinor) * 1000n) / data.incomeMinor) / 10}
-		<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
-			<h2 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Net position</h2>
-			<div class="mt-2 grid grid-cols-3 gap-3 text-center">
-				<div>
-					<p class="text-xs text-neutral-400">In</p>
-					<p class="font-medium text-green-700 tabular-nums dark:text-green-400">
-						{formatMinor(data.incomeMinor, currency)}
-					</p>
+		{@const savings = data.savingsMinor ?? 0n}
+		{@const net = data.incomeMinor - data.totalMinor - savings}
+		{@const prevNet = data.prevIncomeMinor ? data.prevIncomeMinor - data.prevTotalMinor : 0n}
+		{@const netChange = prevNet !== 0n ? Number(((net - prevNet) * 1000n) / (prevNet < 0n ? -prevNet : prevNet === 0n ? 1n : prevNet)) / 10 : 0
+		}
+		{@const sp = data.incomeMinor > 0n ? Number((net * 1000n) / data.incomeMinor) / 10 : 0}
+		<div>
+			<p class="section-label mb-3 px-1">Net position</p>
+			<div class="grid grid-cols-2 gap-2.5">
+				<div class="card overflow-hidden py-1">
+					<div class="flex items-center justify-between px-3.5 py-1.5">
+						<span class="text-[13px] font-medium" style="color: var(--approve)">In</span>
+						<Money minor={data.incomeMinor} {currency} sign class="text-[16px] font-semibold" />
+					</div>
+					<div class="hairline flex items-center justify-between px-3.5 py-1.5">
+						<span class="text-[13px] font-medium" style="color: var(--ink-3)">Out</span>
+						<Money minor={data.totalMinor} {currency} class="text-[16px] font-semibold" />
+					</div>
+					{#if savings > 0n}
+						<div class="flex items-center justify-between px-3.5 py-1.5">
+							<span class="text-[13px] font-medium" style="color: var(--seal)">Saved</span>
+							<Money minor={savings} {currency} sign class="text-[16px] font-semibold" />
+						</div>
+					{/if}
 				</div>
-				<div>
-					<p class="text-xs text-neutral-400">Out</p>
-					<p class="font-medium text-neutral-900 tabular-nums dark:text-neutral-50">
-						{formatMinor(data.totalMinor, currency)}
-					</p>
-				</div>
-				<div>
-					<p class="text-xs text-neutral-400">Net</p>
+				<div
+					class="card flex flex-col items-center justify-center p-4"
+					style="background: {net < 0n
+						? 'color-mix(in oklab, var(--deny) 8%, var(--surface))'
+						: 'color-mix(in oklab, var(--approve) 8%, var(--surface))'}"
+				>
 					<p
-						class="font-medium tabular-nums {net < 0n
-							? 'text-red-600 dark:text-red-400'
-							: 'text-green-700 dark:text-green-400'}"
+						class="text-[11px] font-semibold tracking-[0.08em] uppercase"
+						style="color: {net < 0n ? 'var(--deny)' : 'var(--approve)'}"
 					>
-						{net < 0n ? '−' : '+'}{formatMinor(net < 0n ? -net : net, currency)}
+						Net
 					</p>
+					<span style="color: {net < 0n ? 'var(--deny)' : 'var(--approve)'}">
+						<Money minor={net} {currency} sign block class="mt-0.5 text-[18px] font-semibold" />
+					</span>
+					{#if prevNet !== 0n}
+						<span class="mt-1 inline-flex items-center gap-0.5 text-[11px] font-semibold" style="color: {netChange >= 0 ? 'var(--approve)' : 'var(--deny)'}">
+							<svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+								{#if netChange >= 0}
+									<path d="M2 8 C3 6, 5 2, 7 5 C8 7, 10 3, 10 2 M10 2 L8 3 M10 2 L10.5 4" />
+								{:else}
+									<path d="M2 2 C3 4, 5 8, 7 5 C8 3, 10 7, 10 8 M10 8 L8 7 M10 8 L10.5 6" />
+								{/if}
+							</svg>
+							{Math.abs(netChange).toFixed(0)}% vs {data.prevLabel}
+						</span>
+					{/if}
 				</div>
 			</div>
-			<p class="mt-2 text-center text-sm text-neutral-500 dark:text-neutral-400">
-				{savingsPct >= 0
-					? `Saving ${savingsPct.toFixed(0)}% of income`
-					: 'Spending more than comes in'}
+			<p class="mt-2.5 px-1 text-[13px]" style="color: var(--ink-3)">
+				{savings > 0n
+					? `${formatMinor(savings, currency)} in buckets · ${sp >= 0 ? `${sp.toFixed(0)}% free` : 'over budget'}`
+					: sp >= 0
+						? `Saving ${sp.toFixed(0)}% of what came in`
+						: `Spending more than income this ${period}`}
 			</p>
-		</section>
+		</div>
 	{/if}
 
-	{#if data.budgets.length > 0 || data.isOwner}
-		<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
-			<div class="flex items-center justify-between">
-				<h2 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Budgets</h2>
+	{#if isMonth && (data.budgets.length > 0 || data.isOwner)}
+		<div>
+			<div class="mb-3 flex items-center justify-between px-1">
+				<p class="section-label">Budgets</p>
 				{#if data.isOwner}
 					<button
 						onclick={() => (showBudgetForm = !showBudgetForm)}
-						class="text-sm text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+						class="press text-[13px] font-semibold"
+						style="color: var(--ws-accent)"
 					>
-						{showBudgetForm ? 'Close' : 'Set budget'}
+						{showBudgetForm ? 'Done' : 'Set budget'}
 					</button>
 				{/if}
 			</div>
-
 			{#if showBudgetForm}
-				<form method="POST" action="?/setBudget" use:enhance class="mt-3 flex items-end gap-2">
+				<form method="POST" action="?/setBudget" use:enhance class="mb-3 flex items-end gap-2">
 					<label class="flex-1">
-						<span class="text-xs text-neutral-500 dark:text-neutral-400">Scope</span>
-						<select
-							name="categoryId"
-							class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-						>
+						<span class="text-[11px]" style="color: var(--ink-4)">Scope</span>
+						<select name="categoryId" class="field mt-1 text-[15px]">
 							<option value="">Everything</option>
 							{#each data.allCategories as c (c.id)}
 								<option value={c.id}>{c.icon} {c.name}</option>
@@ -128,116 +418,100 @@
 						</select>
 					</label>
 					<label class="w-28">
-						<span class="text-xs text-neutral-500 dark:text-neutral-400">
-							Monthly ({currency})
-						</span>
+						<span class="text-[11px]" style="color: var(--ink-4)">{currency}</span>
 						<input
 							name="amount"
+							use:money
 							inputmode="decimal"
 							placeholder="500"
-							class="mt-1 w-full rounded-lg border-neutral-200 bg-white text-sm tabular-nums dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+							class="field num mt-1 text-[15px]"
 						/>
 					</label>
-					<button
-						class="rounded-lg bg-neutral-900 px-3 py-2 text-sm font-medium text-white dark:bg-neutral-50 dark:text-neutral-900"
-					>
-						Save
-					</button>
+					<button class="btn btn-accent shrink-0 px-4 py-3 text-[15px]">Save</button>
 				</form>
-				{#if form?.error}
-					<p class="mt-2 text-sm text-red-600 dark:text-red-400">{form.error}</p>
-				{/if}
 			{/if}
-
-			{#if data.budgets.length === 0}
-				<p class="mt-3 text-sm text-neutral-400 dark:text-neutral-500">No budgets yet.</p>
-			{:else}
-				<ul class="mt-3 space-y-3">
+			{#if data.budgets.length > 0}
+				<div class="space-y-4">
 					{#each data.budgets as b (b.budgetId)}
 						{@const pct = pctOf(b.actualMinor, b.budgetMinor)}
 						{@const over = b.actualMinor > b.budgetMinor}
-						<li>
-							<div class="flex items-baseline justify-between text-sm">
-								<span class="text-neutral-700 dark:text-neutral-300">
-									{b.categoryIcon ?? ''}
-									{b.categoryName}
-								</span>
-								<span
-									class="tabular-nums {over
-										? 'font-medium text-red-600 dark:text-red-400'
-										: 'text-neutral-500 dark:text-neutral-400'}"
-								>
+						<div>
+							<div class="flex items-baseline justify-between px-1 text-[15px]">
+								<span style="color: var(--ink)">{b.categoryIcon ?? ''} {b.categoryName}</span>
+								<span class="num" style="color: {over ? 'var(--deny)' : 'var(--ink-3)'}">
 									{formatMinor(b.actualMinor, currency)} / {formatMinor(b.budgetMinor, currency)}
 								</span>
 							</div>
-							<div class="mt-1 flex items-center gap-2">
+							<div
+								class="mt-2 h-2.5 overflow-hidden rounded-full"
+								style="background: var(--surface-2)"
+							>
 								<div
-									class="h-2 flex-1 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800"
-								>
-									<div
-										class="h-full rounded-full {over ? 'bg-red-500' : 'bg-green-500'}"
-										style="width: {pct}%"
-									></div>
-								</div>
-								{#if data.isOwner}
-									<form method="POST" action="?/deleteBudget" use:enhance>
-										<input type="hidden" name="budgetId" value={b.budgetId} />
-										<button
-											class="text-xs text-neutral-300 hover:text-red-600"
-											aria-label="Remove budget">✕</button
-										>
-									</form>
-								{/if}
+									class="h-full rounded-full"
+									style="width: {Math.min(pct, 100)}%; background: {over
+										? 'var(--deny)'
+										: 'var(--approve)'}; transition: width 800ms var(--ease-out)"
+								></div>
 							</div>
-						</li>
+						</div>
 					{/each}
-				</ul>
+				</div>
 			{/if}
-		</section>
+		</div>
 	{/if}
 
-	<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
-		<h2 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">By category</h2>
+	<div>
+		<p class="section-label mb-3.5 px-1">By category</p>
 		{#if data.categories.length === 0}
-			<p class="mt-3 text-sm text-neutral-400 dark:text-neutral-500">Nothing this month yet.</p>
+			<p class="px-1 text-[15px]" style="color: var(--ink-4)">Nothing spent this {period}.</p>
 		{:else}
-			<ul class="mt-3 space-y-3">
-				{#each data.categories as c (c.categoryId ?? 'none')}
-					<li>
-						<div class="flex items-baseline justify-between text-sm">
-							<span class="text-neutral-700 dark:text-neutral-300">{c.icon ?? '•'} {c.name}</span>
-							<span class="text-neutral-900 tabular-nums dark:text-neutral-50">
+			<div class="space-y-4">
+				{#each data.categories as c (c.categoryId)}
+					{@const pct = pctOf(c.totalMinor, data.totalMinor)}
+					<div>
+						<div class="flex items-baseline justify-between px-1 text-[15px]">
+							<span style="color: var(--ink)">
+								<span
+									class="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle"
+									style="background: {c.color ?? '#8E8E93'}"
+								></span>{c.name}
+							</span>
+							<span class="num" style="color: var(--ink-2)">
 								{formatMinor(c.totalMinor, currency)}
+								<span class="ml-1 text-[12px]" style="color: var(--ink-4)">{pct.toFixed(0)}%</span>
 							</span>
 						</div>
-						<div class="mt-1 h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
+						<div
+							class="mt-2 h-2.5 overflow-hidden rounded-full"
+							style="background: var(--surface-2)"
+						>
 							<div
 								class="h-full rounded-full"
-								style="width: {pctOf(c.totalMinor, maxCategory)}%; background-color: {c.color ??
-									'#a3a3a3'}"
+								style="width: {pctOf(c.totalMinor, maxCategory)}%; background: {c.color ??
+									'#8E8E93'}; transition: width 800ms var(--ease-out)"
 							></div>
 						</div>
-					</li>
+					</div>
 				{/each}
-			</ul>
+			</div>
 		{/if}
-	</section>
+	</div>
 
-	<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
-		<h2 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">By member</h2>
+	<div>
+		<p class="section-label mb-2 px-1">By member</p>
 		{#if data.members.length === 0}
-			<p class="mt-3 text-sm text-neutral-400 dark:text-neutral-500">Nothing this month yet.</p>
+			<p class="px-1 text-[15px]" style="color: var(--ink-4)">Nothing spent this {period}.</p>
 		{:else}
-			<ul class="mt-2 divide-y divide-neutral-100 dark:divide-neutral-800">
+			<div style="border-top: 0.5px solid var(--hairline)">
 				{#each data.members as m (m.memberId)}
-					<li class="flex items-center justify-between py-2.5">
-						<span class="text-neutral-700 dark:text-neutral-300">{m.name}</span>
-						<span class="font-medium text-neutral-900 tabular-nums dark:text-neutral-50">
-							{formatMinor(m.totalMinor, currency)}
-						</span>
-					</li>
+					<div class="hairline flex items-baseline justify-between py-3.5">
+						<span class="text-[15px]" style="color: var(--ink)">{m.name}</span>
+						<span class="num text-[15px] font-medium" style="color: var(--ink)"
+							>{formatMinor(m.totalMinor, currency)}</span
+						>
+					</div>
 				{/each}
-			</ul>
+			</div>
 		{/if}
-	</section>
+	</div>
 </div>

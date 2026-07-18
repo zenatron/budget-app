@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
+import { and, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db';
 import { budget, category, purchase, user, workspaceMember } from '$lib/server/db/schema';
 import type { Period } from '$lib/domain/analytics/period';
@@ -126,10 +126,52 @@ export async function dailyTrend(
 		.select({ day, total: sql<string>`sum(${purchase.finalAmountMinor})` })
 		.from(purchase)
 		.where(spentInPeriod(scope, period, now))
-		// Group by ordinal: repeating the expression would bind the timezone
-		// twice and Postgres would no longer see it as the same expression.
 		.groupBy(sql`1`);
 	return new Map(rows.map((r) => [r.day, BigInt(r.total)]));
+}
+
+/** Monthly totals for year view, keyed 'YYYY-MM'. */
+export async function monthlyTrend(
+	db: Db,
+	scope: AnalyticsScope,
+	period: Period,
+	now: Date
+): Promise<Map<string, bigint>> {
+	const mon = sql<string>`to_char(${purchase.completedAt} at time zone ${scope.timezone}, 'YYYY-MM')`;
+	const rows = await db
+		.select({ mon, total: sql<string>`sum(${purchase.finalAmountMinor})` })
+		.from(purchase)
+		.where(spentInPeriod(scope, period, now))
+		.groupBy(sql`1`);
+	return new Map(rows.map((r) => [r.mon, BigInt(r.total)]));
+}
+
+/** Per-bucket category breakdown: map of "bucketKey:categoryId" → total. */
+export async function bucketCategoryTrend(
+	db: Db,
+	scope: AnalyticsScope,
+	period: Period,
+	now: Date,
+	granularity: 'day' | 'month'
+): Promise<Map<string, bigint>> {
+	const bucketCol =
+		granularity === 'month'
+			? sql<string>`to_char(${purchase.completedAt} at time zone ${scope.timezone}, 'YYYY-MM')`
+			: sql<string>`to_char(${purchase.completedAt} at time zone ${scope.timezone}, 'YYYY-MM-DD')`;
+	const rows = await db
+		.select({
+			bucket: bucketCol,
+			categoryId: purchase.categoryId,
+			total: sql<string>`sum(${purchase.finalAmountMinor})`
+		})
+		.from(purchase)
+		.where(spentInPeriod(scope, period, now))
+		.groupBy(sql`1`, purchase.categoryId);
+	const result = new Map<string, bigint>();
+	for (const r of rows) {
+		result.set(`${r.bucket}:${r.categoryId ?? '__none__'}`, BigInt(r.total));
+	}
+	return result;
 }
 
 export interface BudgetLine {
@@ -165,7 +207,7 @@ export async function budgetVsActual(
 				eq(budget.workspaceId, scope.workspaceId),
 				eq(budget.period, 'month'),
 				lte(budget.effectiveFrom, fromStr),
-				or(isNull(budget.effectiveTo), gte(budget.effectiveTo, fromStr))
+				or(isNull(budget.effectiveTo), gt(budget.effectiveTo, fromStr))
 			)
 		);
 	if (budgets.length === 0) return [];

@@ -1,0 +1,1 @@
+ALTER TABLE "budget" ADD COLUMN "last_alerted_at" timestamp with time zone;

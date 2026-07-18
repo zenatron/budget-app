@@ -1,315 +1,442 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
 	import { formatMinor } from '$lib/money-format';
+	import Icon from '$lib/components/Icon.svelte';
+	import Money from '$lib/components/Money.svelte';
+	import { money } from '$lib/actions/money';
 
 	let { data, form } = $props();
-
+	let slug = $derived(page.params.workspace);
 	let editing = $state(false);
-
+	let deciding = $state<'approve' | 'deny' | null>(null);
+	let showDeny = $state(false);
 	const p = $derived(data.purchase);
 
-	const stateCopy: Record<string, string> = {
+	function fmtDate(iso: string) {
+		return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+	}
+	function fmtDateLong(iso: string) {
+		return new Date(iso).toLocaleDateString(undefined, {
+			weekday: 'long',
+			month: 'long',
+			day: 'numeric'
+		});
+	}
+
+	const displayAmount = $derived(p.finalAmountMinor ?? p.requestedAmountMinor);
+	const isPending = $derived(p.state === 'pending_approval');
+	const img = $derived(data.images[0]);
+
+	const stateLabel: Record<string, string> = {
 		draft: 'Draft',
-		pending_approval: 'Waiting for approval',
-		approved: 'Approved — not yet bought',
+		pending_approval: 'Waiting',
+		approved: 'Approved',
 		denied: 'Denied',
 		cancelled: 'Cancelled',
 		completed: 'Completed',
 		refunded: 'Refunded'
 	};
-
-	function fmtDate(iso: string): string {
-		return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-	}
+	const stateVar: Record<string, string> = {
+		pending_approval: '--pending',
+		approved: '--approve',
+		denied: '--deny',
+		refunded: '--info',
+		completed: '--approve',
+		draft: '--ink-3',
+		cancelled: '--ink-3'
+	};
 </script>
 
-<div class="mx-auto max-w-md space-y-4">
+<div class="mx-auto max-w-lg">
 	<a
-		href="/w/{data.workspace.slug}/purchases"
-		class="text-sm text-neutral-500 hover:text-neutral-700 dark:text-neutral-400"
+		href="/w/{slug}/purchases"
+		class="press mb-4 -ml-1 inline-flex items-center gap-0.5 text-[14px] font-medium"
+		style="color: var(--ink-3)"
 	>
-		← Purchases
+		<Icon name="chevronLeft" class="h-4 w-4" /> Wallet
 	</a>
 
-	{#if data.images.length > 0}
-		<div class="grid grid-cols-2 gap-2">
-			{#each data.images as img (img.id)}
-				<a href="/w/{data.workspace.slug}/blobs/{img.blobId}" target="_blank">
-					<img
-						src="/w/{data.workspace.slug}/blobs/{img.thumbBlobId}"
-						alt={p.itemName}
-						width={img.width}
-						height={img.height}
-						class="w-full rounded-xl object-cover shadow-sm"
-						loading="lazy"
-					/>
-				</a>
-			{/each}
+	<!-- Editorial masthead: the amount as a magazine headline -->
+	<div style="view-transition-name: vt-card-{p.id}">
+		<span
+			class="chip"
+			style="color: var({stateVar[p.state] ??
+				'--ink-4'}); background: color-mix(in oklab, var({stateVar[p.state] ??
+				'--ink-4'}) 14%, transparent)"
+		>
+			{stateLabel[p.state]}{p.stale ? ' — stale' : ''}{isPending && p.waitingDays > 0
+				? ` · ${p.waitingDays}d`
+				: ''}
+		</span>
+		<Money
+			minor={displayAmount}
+			currency={p.currency}
+			block
+			class="mt-3 font-[family-name:var(--font-display)] text-[length:var(--fs-mega)] leading-[0.92] font-semibold"
+		/>
+		<p class="mt-4 text-[18px] leading-tight font-medium" style="color: var(--ink-2)">
+			{p.itemName}
+		</p>
+		<p class="mt-2 text-[14px]" style="color: var(--ink-3)">
+			Requested by {p.requesterName}{p.completedAt ? ` · ${fmtDateLong(p.completedAt)}` : ''}
+		</p>
+	</div>
+
+	{#if img}
+		<div
+			class="mt-5 overflow-hidden rounded-[14px]"
+			style="box-shadow: var(--shadow-card), inset 0 0 0 1px var(--hairline)"
+		>
+			<img
+				src="/w/{slug}/blobs/{img.blobId}"
+				alt={p.itemName}
+				class="aspect-[4/3] w-full object-cover"
+				loading="eager"
+			/>
 		</div>
 	{/if}
 
-	<section class="rounded-2xl bg-white p-6 shadow-sm dark:bg-neutral-900">
-		<p class="text-sm text-neutral-500 dark:text-neutral-400">{stateCopy[p.state]}</p>
-		<h1 class="mt-1 text-xl font-semibold text-neutral-900 dark:text-neutral-50">{p.itemName}</h1>
-		<p class="mt-2 text-3xl font-semibold text-neutral-900 tabular-nums dark:text-neutral-50">
-			{formatMinor(p.finalAmountMinor ?? p.requestedAmountMinor, p.currency)}
-		</p>
-
-		{#if p.isOverageReapproval && p.approvedAmountMinor !== null}
-			<p
-				class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+	{#if data.can.addPhoto && data.images.length === 0}
+		<form method="POST" action="?/addImage" enctype="multipart/form-data" class="mt-5">
+			<label
+				class="press flex cursor-pointer items-center gap-3 rounded-[14px] px-4 py-4"
+				style="box-shadow: inset 0 0 0 1px var(--hairline); background: var(--surface)"
 			>
-				Spent {formatMinor(p.finalAmountMinor!, p.currency)} against an approved
-				{formatMinor(p.approvedAmountMinor, p.currency)} — needs re-approval.
-			</p>
-		{/if}
-
-		<dl class="mt-4 space-y-1 text-sm">
-			<div class="flex justify-between">
-				<dt class="text-neutral-500 dark:text-neutral-400">Requested by</dt>
-				<dd class="text-neutral-900 dark:text-neutral-50">{p.requesterName}</dd>
-			</div>
-			{#if p.state === 'pending_approval'}
-				<div class="flex justify-between">
-					<dt class="text-neutral-500 dark:text-neutral-400">Waiting on</dt>
-					<dd class="text-neutral-900 dark:text-neutral-50">
-						{p.approverNames.join(' or ')}{p.waitingDays > 0 ? ` · ${p.waitingDays}d` : ''}
-						{p.stale ? ' ⏳' : ''}
-					</dd>
-				</div>
-			{/if}
-			{#if p.approvedAmountMinor !== null && !p.isOverageReapproval}
-				<div class="flex justify-between">
-					<dt class="text-neutral-500 dark:text-neutral-400">Approved amount</dt>
-					<dd class="text-neutral-900 tabular-nums dark:text-neutral-50">
-						{formatMinor(p.approvedAmountMinor, p.currency)}
-					</dd>
-				</div>
-			{/if}
-			{#if p.completedAt}
-				<div class="flex justify-between">
-					<dt class="text-neutral-500 dark:text-neutral-400">Bought</dt>
-					<dd class="text-neutral-900 dark:text-neutral-50">{fmtDate(p.completedAt)}</dd>
-				</div>
-			{/if}
-			{#if p.note}
-				<div class="pt-2">
-					<dd class="text-neutral-700 dark:text-neutral-300">{p.note}</dd>
-				</div>
-			{/if}
-		</dl>
-	</section>
-
-	{#if p.sealed}
-		<section
-			class="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-900/60"
-		>
-			<p class="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-				🔒 Hidden from {p.sealedFromNames.join(' and ')} until {fmtDate(p.sealedUntil!)}
-			</p>
-			<p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-				They can't see this purchase anywhere — including totals — until then.
-			</p>
-			{#if data.can.unseal}
-				<form method="POST" action="?/unseal" use:enhance class="mt-3">
-					<button class="text-sm font-medium text-neutral-500 underline hover:text-neutral-700">
-						Reveal now
-					</button>
-				</form>
-			{/if}
-		</section>
-	{/if}
-
-	{#if form?.error}
-		<p
-			class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300"
-		>
-			{form.error}
-		</p>
-	{/if}
-
-	{#if data.can.decide}
-		<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
-			<div class="grid grid-cols-2 gap-3">
-				<form method="POST" action="?/approve" use:enhance>
-					<button
-						class="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white transition active:scale-[0.98]"
-					>
-						Approve
-					</button>
-				</form>
-				<form method="POST" action="?/deny" use:enhance class="space-y-2">
-					<button
-						class="w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition active:scale-[0.98]"
-					>
-						Deny
-					</button>
-					<input
-						name="reason"
-						placeholder="Reason (optional)"
-						class="w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-					/>
-				</form>
-			</div>
-		</section>
-	{/if}
-
-	{#if data.can.complete}
-		<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
-			<h2 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Mark as bought</h2>
-			<form method="POST" action="?/complete" use:enhance class="mt-3 space-y-3">
-				<div class="grid grid-cols-2 gap-3">
-					<input
-						name="finalAmount"
-						required
-						inputmode="decimal"
-						placeholder="Final amount"
-						value={formatMinor(p.approvedAmountMinor ?? p.requestedAmountMinor, p.currency).replace(
-							/[^0-9.]/g,
-							''
-						)}
-						class="rounded-lg border-neutral-200 bg-white text-sm tabular-nums dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-					/>
-					<input
-						name="finalDate"
-						type="date"
-						class="rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-					/>
-				</div>
-				<button
-					class="w-full rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition active:scale-[0.98] dark:bg-neutral-50 dark:text-neutral-900"
-				>
-					Complete purchase
-				</button>
-			</form>
-		</section>
-	{/if}
-
-	{#if data.can.edit}
-		<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
-			<button
-				onclick={() => (editing = !editing)}
-				class="text-sm font-medium text-neutral-500 hover:text-neutral-700 dark:text-neutral-400"
-			>
-				{editing ? 'Close edit' : 'Edit'}
-			</button>
-			{#if editing}
-				{#if p.state === 'approved'}
-					<p class="mt-2 text-sm text-amber-700 dark:text-amber-400">
-						Changing the item, amount, or category sends this back for approval.
-					</p>
-				{/if}
-				<form method="POST" action="?/edit" use:enhance class="mt-3 space-y-3">
-					<input
-						name="itemName"
-						required
-						value={p.itemName}
-						class="w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-					/>
-					<div class="grid grid-cols-2 gap-3">
-						<input
-							name="amount"
-							required
-							inputmode="decimal"
-							value={formatMinor(p.requestedAmountMinor, p.currency).replace(/[^0-9.]/g, '')}
-							class="rounded-lg border-neutral-200 bg-white text-sm tabular-nums dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-						/>
-						<select
-							name="categoryId"
-							class="rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-						>
-							<option value="">No category</option>
-							{#each data.categories as c (c.id)}
-								<option value={c.id} selected={c.id === p.categoryId}>{c.icon} {c.name}</option>
-							{/each}
-						</select>
-					</div>
-					<textarea
-						name="note"
-						rows="2"
-						class="w-full rounded-lg border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-						>{p.note ?? ''}</textarea
-					>
-					<button
-						class="w-full rounded-xl border border-neutral-200 px-4 py-2.5 text-sm font-medium text-neutral-900 transition active:scale-[0.98] dark:border-neutral-700 dark:text-neutral-50"
-					>
-						Save changes
-					</button>
-				</form>
-			{/if}
-		</section>
-	{/if}
-
-	{#if data.can.edit}
-		<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
-			<h2 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Add a photo</h2>
-			<form
-				method="POST"
-				action="?/addImage"
-				enctype="multipart/form-data"
-				use:enhance
-				class="mt-3 flex items-center gap-3"
-			>
+				<Icon name="camera" class="h-5 w-5" style="color: var(--ink-3)" />
+				<span class="text-[15px]" style="color: var(--ink-3)">Add a photo of what you bought</span>
 				<input
 					type="file"
 					name="photo"
 					accept="image/jpeg,image/png,image/webp"
 					required
-					class="flex-1 text-sm text-neutral-600 file:mr-3 file:rounded-lg file:border-0 file:bg-neutral-100 file:px-3 file:py-1.5 file:text-sm file:font-medium dark:text-neutral-400 dark:file:bg-neutral-800"
+					class="sr-only"
+					onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
 				/>
-				<button
-					class="rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition active:scale-[0.98] dark:bg-neutral-50 dark:text-neutral-900"
-				>
-					Upload
-				</button>
-			</form>
-		</section>
-	{/if}
-
-	{#if data.can.refund}
-		<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
-			<h2 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">Record a refund</h2>
-			<form method="POST" action="?/refund" use:enhance class="mt-3 flex items-center gap-2">
-				<input
-					name="refundAmount"
-					required
-					inputmode="decimal"
-					placeholder="Amount returned"
-					class="flex-1 rounded-lg border-neutral-200 bg-white text-sm tabular-nums dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-				/>
-				<button
-					class="rounded-lg border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-900 dark:border-neutral-700 dark:text-neutral-50"
-				>
-					Record refund
-				</button>
-			</form>
-			<p class="mt-2 text-xs text-neutral-400">Adds a negative entry — history is never deleted.</p>
-		</section>
-	{/if}
-
-	{#if data.can.cancel}
-		<form method="POST" action="?/cancel" use:enhance class="text-center">
-			<button class="text-sm text-neutral-400 hover:text-red-600">Cancel this purchase</button>
+			</label>
 		</form>
 	{/if}
 
-	<section class="rounded-2xl bg-white p-5 shadow-sm dark:bg-neutral-900">
-		<h2 class="text-sm font-medium text-neutral-500 dark:text-neutral-400">History</h2>
-		<ol class="mt-2 space-y-2">
-			{#each data.events as e, i (i)}
-				<li class="flex items-baseline justify-between text-sm">
-					<span class="text-neutral-700 dark:text-neutral-300">
-						{stateCopy[e.toState]}{e.actorName ? ` — ${e.actorName}` : ''}{e.reason
-							? ` (${e.reason})`
-							: ''}
+	<div class="mt-6 space-y-4">
+		{#if p.isOverageReapproval && p.approvedAmountMinor !== null}
+			<div
+				class="rounded-[12px] p-4"
+				style="background: color-mix(in oklab, var(--pending) 14%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--pending) 26%, transparent)"
+			>
+				<p
+					class="flex items-center gap-1.5 text-[14px] font-semibold"
+					style="color: var(--pending)"
+				>
+					<Icon name="exclamation" class="h-4 w-4" /> Over budget — needs re-approval
+				</p>
+				<p class="num mt-1 text-[13px]" style="color: var(--ink-2)">
+					Approved {formatMinor(p.approvedAmountMinor, p.currency)}, spent {formatMinor(
+						p.finalAmountMinor!,
+						p.currency
+					)}
+				</p>
+			</div>
+		{/if}
+
+		{#if form?.error}
+			<div
+				class="rounded-[12px] p-4 text-[15px]"
+				style="color: var(--deny); background: color-mix(in oklab, var(--deny) 12%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--deny) 26%, transparent)"
+			>
+				{form.error}
+			</div>
+		{/if}
+
+		<!-- The centerpiece: decide. -->
+		{#if data.can.decide}
+			<div class="space-y-2.5">
+				<form
+					method="POST"
+					action="?/approve"
+					use:enhance={() => {
+						deciding = 'approve';
+						return async ({ update }) => {
+							await update();
+							deciding = null;
+						};
+					}}
+				>
+					<button class="btn btn-accent w-full py-4 text-[18px]" disabled={deciding !== null}>
+						{#if deciding === 'approve'}
+							<span class="spin h-5 w-5"></span>
+						{:else}
+							<Icon name="checkmark" class="h-5 w-5" /> Approve {formatMinor(
+								displayAmount,
+								p.currency
+							)}
+						{/if}
+					</button>
+				</form>
+
+				{#if showDeny}
+					<form
+						method="POST"
+						action="?/deny"
+						use:enhance={() => {
+							deciding = 'deny';
+							return async ({ update }) => {
+								await update();
+								deciding = null;
+							};
+						}}
+						class="space-y-2.5"
+					>
+						<input name="reason" placeholder="Reason (optional)" class="field text-[15px]" />
+						<button
+							class="btn w-full py-3.5 text-[16px]"
+							style="color: var(--deny); background: color-mix(in oklab, var(--deny) 12%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--deny) 30%, transparent)"
+							disabled={deciding !== null}
+						>
+							{#if deciding === 'deny'}<span class="spin h-4 w-4"></span>{:else}Deny request{/if}
+						</button>
+					</form>
+				{:else}
+					<button
+						onclick={() => (showDeny = true)}
+						class="btn btn-plain w-full"
+						style="color: var(--deny)">Deny…</button
+					>
+				{/if}
+			</div>
+		{/if}
+
+		<!-- Details as a printed ledger -->
+		<div>
+			<p class="section-label mb-1">Details</p>
+			<div class="rule">
+				<div class="hairline flex items-center justify-between py-3.5">
+					<span class="text-[15px]" style="color: var(--ink-3)">Requested by</span>
+					<span class="text-[15px] font-medium" style="color: var(--ink)">{p.requesterName}</span>
+				</div>
+				{#if p.merchantName}
+					<div class="hairline flex items-center justify-between py-3.5">
+						<span class="text-[15px]" style="color: var(--ink-3)">Where</span>
+						<span class="text-[15px] font-medium" style="color: var(--ink)">{p.merchantName}</span>
+					</div>
+				{/if}
+				{#if isPending}
+					<div class="hairline flex items-center justify-between py-3.5">
+						<span class="text-[15px]" style="color: var(--ink-3)">Waiting on</span>
+						<span class="text-[15px] font-medium" style="color: var(--ink)"
+							>{p.approverNames.join(' or ')}</span
+						>
+					</div>
+				{/if}
+				{#if p.approvedAmountMinor !== null && !p.isOverageReapproval}
+					<div class="hairline flex items-center justify-between py-3.5">
+						<span class="text-[15px]" style="color: var(--ink-3)">Approved</span>
+						<span class="num text-[15px] font-semibold" style="color: var(--approve)"
+							>{formatMinor(p.approvedAmountMinor, p.currency)}</span
+						>
+					</div>
+				{/if}
+				{#if p.completedAt}
+					<div class="hairline flex items-center justify-between py-3.5">
+						<span class="text-[15px]" style="color: var(--ink-3)">Date</span>
+						<span class="text-[15px] font-medium" style="color: var(--ink)"
+							>{fmtDateLong(p.completedAt)}</span
+						>
+					</div>
+				{/if}
+				{#if p.note}
+					<p class="hairline py-3.5 text-[15px] leading-relaxed" style="color: var(--ink-2)">
+						{p.note}
+					</p>
+				{/if}
+				{#if data.can.addPhoto && data.images.length > 0}
+					<form method="POST" action="?/addImage" enctype="multipart/form-data" class="py-3">
+						<label
+							class="press inline-flex cursor-pointer items-center gap-1.5 text-[14px] font-medium"
+							style="color: color-mix(in oklab, var(--accent) 72%, black)"
+						>
+							<Icon name="plus" class="h-4 w-4" /> Add another photo
+							<input
+								type="file"
+								name="photo"
+								accept="image/jpeg,image/png,image/webp"
+								required
+								class="sr-only"
+								onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
+							/>
+						</label>
+					</form>
+				{/if}
+			</div>
+		</div>
+
+		{#if p.sealed}
+			<div
+				class="rounded-[14px] p-4"
+				style="background: color-mix(in oklab, var(--seal) 10%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--seal) 30%, transparent)"
+			>
+				<div class="flex items-start gap-3">
+					<span
+						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+						style="background: color-mix(in oklab, var(--seal) 18%, transparent)"
+					>
+						<Icon name="lock" class="h-4 w-4" style="color: var(--seal)" />
 					</span>
-					<span class="shrink-0 pl-3 text-neutral-400 tabular-nums">
-						{fmtDate(e.at)}{e.amountMinor !== null
-							? ` · ${formatMinor(e.amountMinor, p.currency)}`
-							: ''}
-					</span>
-				</li>
-			{/each}
-		</ol>
-	</section>
+					<div class="min-w-0 flex-1">
+						<p class="text-[15px] font-semibold" style="color: var(--seal)">
+							Hidden from {p.sealedFromNames.join(' and ')}
+						</p>
+						<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
+							Until {fmtDate(p.sealedUntil!)} — invisible everywhere, including totals.
+						</p>
+						{#if data.can.unseal}
+							<form method="POST" action="?/unseal" use:enhance class="mt-2.5">
+								<button
+									class="btn py-2 text-[13px]"
+									style="color: var(--seal); background: color-mix(in oklab, var(--seal) 14%, transparent)"
+									>Reveal now</button
+								>
+							</form>
+						{/if}
+					</div>
+				</div>
+			</div>
+		{/if}
+
+		{#if data.can.complete}
+			<div class="card p-5">
+				<p class="text-[15px] font-semibold" style="color: var(--ink)">Mark as bought</p>
+				<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
+					Enter what you actually spent — a large overage triggers re-approval.
+				</p>
+				<form method="POST" action="?/complete" use:enhance class="mt-3.5 space-y-3">
+					<div class="grid grid-cols-2 gap-3">
+						<input
+							name="finalAmount"
+							use:money
+							required
+							inputmode="decimal"
+							placeholder="Final amount"
+							value={formatMinor(
+								p.approvedAmountMinor ?? p.requestedAmountMinor,
+								p.currency
+							).replace(/[^0-9.]/g, '')}
+							class="field num text-[17px]"
+						/>
+						<input name="finalDate" type="date" class="field text-[15px]" />
+					</div>
+					<button class="btn btn-accent w-full">Complete purchase</button>
+				</form>
+			</div>
+		{/if}
+
+		{#if data.can.edit}
+			<div class="card p-5">
+				<button
+					onclick={() => (editing = !editing)}
+					class="press flex w-full items-center justify-between text-[15px]"
+					style="color: var(--ink)"
+				>
+					<span class="font-medium">Edit details</span>
+					<Icon
+						name="chevronDown"
+						class="h-4 w-4 transition-transform duration-200 {editing ? 'rotate-180' : ''}"
+						style="color: var(--ink-4)"
+					/>
+				</button>
+				{#if editing}
+					{#if p.state === 'approved'}
+						<p class="mt-3 text-[13px]" style="color: var(--pending)">
+							Changing item, amount, or category sends this back for approval.
+						</p>
+					{/if}
+					<form method="POST" action="?/edit" use:enhance class="mt-3 space-y-3">
+						<input name="itemName" required value={p.itemName} class="field text-[15px]" />
+						<div class="grid grid-cols-2 gap-3">
+							<input
+								name="amount"
+								use:money
+								required
+								inputmode="decimal"
+								value={formatMinor(p.requestedAmountMinor, p.currency).replace(/[^0-9.]/g, '')}
+								class="field num text-[15px]"
+							/>
+							<select name="categoryId" class="field text-[15px]">
+								<option value="">None</option>
+								{#each data.categories as c (c.id)}
+									<option value={c.id} selected={c.id === p.categoryId}>{c.icon} {c.name}</option>
+								{/each}
+							</select>
+						</div>
+						<textarea name="note" rows="2" class="field text-[15px]">{p.note ?? ''}</textarea>
+						<button class="btn btn-ghost w-full">Save changes</button>
+					</form>
+				{/if}
+			</div>
+		{/if}
+
+		{#if data.can.refund}
+			<div class="card p-5">
+				<p class="text-[15px] font-semibold" style="color: var(--ink)">Record a refund</p>
+				<form method="POST" action="?/refund" use:enhance class="mt-3 flex gap-2.5">
+					<input
+						name="refundAmount"
+						use:money
+						required
+						inputmode="decimal"
+						placeholder="Amount"
+						class="field num flex-1 text-[15px]"
+					/>
+					<button class="btn btn-ghost shrink-0">Record</button>
+				</form>
+			</div>
+		{/if}
+
+		{#if data.can.cancel}
+			<form method="POST" action="?/cancel" use:enhance class="pt-1 text-center">
+				<button class="btn btn-plain" style="color: var(--ink-4)">Cancel this purchase</button>
+			</form>
+		{/if}
+
+		{#if data.events.length > 0}
+			<div>
+				<p class="section-label mb-3">History</p>
+				<div class="space-y-4">
+					{#each data.events as e, i (e.at + i)}
+						<div class="flex items-baseline gap-3">
+							<span
+								class="mt-1 h-2 w-2 shrink-0 rounded-full"
+								style="background: var({stateVar[e.toState] ?? '--ink-4'})"
+							></span>
+							<div class="flex min-w-0 flex-1 items-baseline justify-between gap-3">
+								<span class="text-[13px]" style="color: var(--ink-2)">
+									{stateLabel[e.toState] ?? e.toState}{e.actorName
+										? ` · ${e.actorName}`
+										: ''}{e.reason ? ` — ${e.reason}` : ''}
+								</span>
+								<span class="num shrink-0 text-[12px]" style="color: var(--ink-4)">
+									{fmtDate(e.at)}{e.amountMinor !== null
+										? ` · ${formatMinor(e.amountMinor, p.currency)}`
+										: ''}
+								</span>
+							</div>
+						</div>
+					{/each}
+				</div>
+			</div>
+		{/if}
+	</div>
 </div>
+
+<style>
+	.spin {
+		border-radius: 999px;
+		border: 2.5px solid color-mix(in oklab, var(--paper) 40%, transparent);
+		border-top-color: var(--paper);
+		animation: spin 0.6s linear infinite;
+	}
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+</style>

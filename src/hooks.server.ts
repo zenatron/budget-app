@@ -6,6 +6,7 @@ import { getEnv } from '$lib/server/env';
 import {
 	SESSION_COOKIE,
 	clearSessionCookie,
+	createSession,
 	setActiveWorkspace,
 	setSessionCookie,
 	validateSession
@@ -15,9 +16,13 @@ import { rateLimitOk } from '$lib/server/rate-limit';
 import { unsealDuePurchases } from '$lib/application/unseal-due';
 import { nudgeStaleRequests } from '$lib/application/nudge-stale';
 import { materializeDueRules } from '$lib/application/recurring';
+import { checkBudgetAlerts } from '$lib/application/budget-alerts';
+import { materializeBucketAccruals } from '$lib/application/buckets';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { getNotifier } from '$lib/server/notify';
+import { user } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -65,9 +70,42 @@ export const init: ServerInit = async () => {
 				JSON.stringify({ level: 'error', msg: 'sweep: nudge failed', err: (e as Error).message })
 			);
 		}
+		try {
+			const alerts = await checkBudgetAlerts(getDb(), deps);
+			if (alerts > 0) {
+				console.log(
+					JSON.stringify({ level: 'info', msg: 'sweep: budget alerts sent', count: alerts })
+				);
+			}
+		} catch (e) {
+			console.log(
+				JSON.stringify({
+					level: 'error',
+					msg: 'sweep: budget alerts failed',
+					err: (e as Error).message
+				})
+			);
+		}
+		try {
+			const accrued = await materializeBucketAccruals(getDb(), deps);
+			if (accrued > 0) {
+				console.log(
+					JSON.stringify({ level: 'info', msg: 'sweep: bucket accruals', count: accrued })
+				);
+			}
+		} catch (e) {
+			console.log(
+				JSON.stringify({
+					level: 'error',
+					msg: 'sweep: bucket accrual failed',
+					err: (e as Error).message
+				})
+			);
+		}
 	};
 	await sweep();
-	setInterval(sweep, SWEEP_INTERVAL_MS);
+	const schedule = () => setTimeout(() => sweep().finally(schedule), SWEEP_INTERVAL_MS);
+	schedule();
 };
 
 const WORKSPACE_PATH = /^\/w\/([^/]+)(?:\/|$)/;
@@ -106,6 +144,44 @@ export const handle: Handle = async ({ event, resolve }) => {
 		} else {
 			clearSessionCookie(event.cookies);
 		}
+	}
+
+	// Dev mode bypass: auto-create user + session when Pocket ID isn't running.
+	const env = getEnv();
+	if (env.DEV_MODE && !event.locals.user) {
+		const devSub = 'dev-user';
+		const now = systemClock.now();
+		const [existing] = await getDb()
+			.select()
+			.from(user)
+			.where(eq(user.oidcSubject, devSub))
+			.limit(1);
+		let devUser;
+		if (existing) {
+			devUser = existing;
+			await getDb().update(user).set({ lastLoginAt: now }).where(eq(user.id, existing.id));
+		} else {
+			[devUser] = await getDb()
+				.insert(user)
+				.values({
+					id: uuidv7.newId(),
+					oidcSubject: devSub,
+					email: env.DEV_USER_EMAIL,
+					displayName: env.DEV_USER_NAME,
+					createdAt: now,
+					lastLoginAt: now
+				})
+				.returning();
+		}
+		const sess = await createSession(getDb(), devUser.id, {
+			userAgent: event.request.headers.get('user-agent'),
+			ip: event.getClientAddress()
+		});
+		event.locals.user = devUser;
+		event.locals.session = sess;
+		setSessionCookie(event.cookies, sess.id, sess.expiresAt);
+		// If on the landing page, redirect to welcome so the user can set up.
+		if (event.url.pathname === '/') redirect(303, '/welcome');
 	}
 
 	const match = WORKSPACE_PATH.exec(event.url.pathname);

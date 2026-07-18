@@ -1,3 +1,345 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
+
+@theme {
+	--font-sans:
+		'Hanken Grotesk Variable', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial,
+		sans-serif;
+	--font-display: 'Atkinson Hyperlegible', Georgia, 'Times New Roman', serif;
+	--font-mono: 'SF Mono', ui-monospace, 'Menlo', 'Monaco', 'Consolas', monospace;
+}
+
+/* ───────────────────────── Design tokens ─────────────────────────
+   "Paper Statement" — warm printed paper, espresso ink, a didone masthead.
+   Editorial like a bank statement crossed with a magazine. Light, always.
+   OKLCH; neutrals warm (hue ~85). One accent per workspace (--ws-accent). */
+:root {
+	/* Paper & panels — light, warm, tactile */
+	--paper: oklch(0.965 0.013 88);
+	--canvas: var(--paper);
+	--surface: oklch(0.995 0.004 90);
+	--surface-2: oklch(0.94 0.012 86);
+	--surface-hi: oklch(0.915 0.014 84);
+	--hairline: oklch(0.28 0.02 65 / 0.16);
+	--hairline-strong: oklch(0.28 0.02 65 / 0.3);
+
+	/* Ink — espresso near-black; lighter = less important on light paper */
+	--ink: oklch(0.245 0.021 62);
+	--ink-2: oklch(0.4 0.021 62);
+	--ink-3: oklch(0.52 0.016 64);
+	--ink-4: oklch(0.63 0.012 66);
+
+	/* Semantic — deepened so they read on paper */
+	--approve: oklch(0.52 0.15 150);
+	--deny: oklch(0.53 0.2 27);
+	--pending: oklch(0.56 0.13 64);
+	--seal: oklch(0.5 0.19 305);
+	--info: oklch(0.52 0.16 250);
+
+	/* Accent — default; workspace layout sets a literal on its wrapper. */
+	--accent: oklch(0.55 0.2 25);
+
+	/* Editorial type scale */
+	--fs-mega: clamp(3.6rem, 3rem + 3vw, 4.6rem);
+	--fs-hero: 3rem;
+	--fs-h1: 2.25rem;
+	--fs-h2: 1.4rem;
+
+	--space-2xs: 4px;
+	--space-xs: 8px;
+	--space-sm: 12px;
+	--space-md: 16px;
+	--space-lg: 24px;
+	--space-xl: 32px;
+
+	--r-sm: 10px;
+	--r-md: 14px;
+	--r-lg: 20px;
+	--r-full: 999px;
+
+	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-out-soft: cubic-bezier(0.33, 1, 0.68, 1);
+	--dur-fast: 140ms;
+	--dur: 240ms;
+	--dur-slow: 420ms;
+
+	--shadow-card: 0 1px 2px oklch(0.28 0.03 65 / 0.06), 0 8px 24px -14px oklch(0.28 0.05 60 / 0.28);
+	--shadow-float:
+		0 12px 40px -12px oklch(0.28 0.05 60 / 0.35), 0 2px 6px oklch(0.28 0.05 60 / 0.14);
+}
+
+@layer base {
+	html {
+		font-family: var(--font-sans);
+		background: var(--paper);
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		-webkit-tap-highlight-color: transparent;
+		touch-action: manipulation;
+		overscroll-behavior: none;
+		text-rendering: optimizeLegibility;
+	}
+
+	body {
+		background: var(--paper);
+		color: var(--ink);
+		padding-top: env(safe-area-inset-top, 0px);
+		padding-bottom: env(safe-area-inset-bottom, 0px);
+		padding-left: env(safe-area-inset-left, 0px);
+		padding-right: env(safe-area-inset-right, 0px);
+		letter-spacing: -0.006em;
+	}
+
+	/* Numbers: tabular, tight. Font inherited from context (serif in heroes,
+	   grotesque in lists) — set on the surrounding element, not here. */
+	[data-tabular],
+	.tabular-nums,
+	.num {
+		font-variant-numeric: tabular-nums lining-nums;
+		font-feature-settings: 'tnum' 1;
+	}
+	.num {
+		letter-spacing: -0.01em;
+	}
+	input[inputmode='decimal'],
+	input[type='number'] {
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* Mastheads — the didone doing editorial work */
+	h1,
+	h2 {
+		font-family: var(--font-display);
+		font-optical-sizing: auto;
+		letter-spacing: -0.01em;
+		line-height: 1.02;
+		color: var(--ink);
+	}
+	h1 {
+		font-weight: 600;
+		font-size: var(--fs-h1);
+	}
+	h2 {
+		font-weight: 600;
+		font-size: var(--fs-h2);
+	}
+
+	::selection {
+		background: color-mix(in oklab, var(--accent) 28%, transparent);
+	}
+
+	:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 32%, transparent);
+	}
+}
+
+@layer components {
+	/* White panel on paper — soft shadow, faint rule. Used sparingly. */
+	.card {
+		background: var(--surface);
+		border-radius: var(--r-md);
+		box-shadow:
+			var(--shadow-card),
+			inset 0 0 0 0.5px var(--hairline);
+	}
+	.card-lg {
+		border-radius: var(--r-lg);
+	}
+
+	/* Printed-ledger rule */
+	.hairline {
+		box-shadow: inset 0 -1px 0 var(--hairline);
+	}
+	.rule {
+		border-top: 1px solid var(--hairline);
+	}
+
+	.row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: 14px 0;
+		position: relative;
+		transition: background var(--dur-fast) var(--ease-out);
+	}
+	.row-tap {
+		cursor: pointer;
+	}
+	@media (hover: hover) {
+		.row-tap:hover {
+			background: oklch(0.28 0.03 65 / 0.03);
+		}
+	}
+	.row-tap:active {
+		background: oklch(0.28 0.03 65 / 0.055);
+	}
+
+	/* Overline — tracked-out caps, the statement's section markers */
+	.section-label {
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		color: var(--ink-4);
+	}
+
+	.field {
+		width: 100%;
+		background: var(--surface);
+		color: var(--ink);
+		border: none;
+		border-radius: var(--r-sm);
+		box-shadow: inset 0 0 0 1px var(--hairline);
+		padding: 13px 15px;
+		font-size: 17px;
+		transition:
+			box-shadow var(--dur-fast) var(--ease-out),
+			background var(--dur-fast) var(--ease-out);
+	}
+	.field::placeholder {
+		color: var(--ink-4);
+	}
+	.field:focus {
+		background: var(--surface);
+		box-shadow:
+			inset 0 0 0 1.5px color-mix(in oklab, var(--accent) 70%, transparent),
+			0 0 0 3px color-mix(in oklab, var(--accent) 15%, transparent);
+	}
+	select.field {
+		appearance: none;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 12px center;
+		background-size: 16px;
+		padding-right: 40px;
+	}
+
+	.btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		border-radius: var(--r-full);
+		font-size: 17px;
+		font-weight: 600;
+		padding: 14px 24px;
+		color: var(--ink);
+		transition:
+			transform var(--dur-fast) var(--ease-out),
+			filter var(--dur-fast) var(--ease-out);
+		will-change: transform;
+	}
+	.btn:active {
+		transform: scale(0.965);
+	}
+	.btn-accent {
+		background: var(--ink);
+		color: var(--paper);
+	}
+	.btn-accent:active {
+		filter: brightness(1.4);
+	}
+	.btn-tint {
+		background: color-mix(in oklab, var(--accent) 16%, var(--surface));
+		color: color-mix(in oklab, var(--accent) 72%, black);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 22%, transparent);
+	}
+	.btn-ghost {
+		background: var(--surface);
+		box-shadow: inset 0 0 0 1px var(--hairline-strong);
+	}
+	.btn-plain {
+		background: transparent;
+		color: var(--ink-3);
+		padding: 8px 4px;
+		font-size: 15px;
+	}
+
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		border-radius: var(--r-full);
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		padding: 4px 10px;
+	}
+
+	/* Frosted paper — headers, tab bar, switcher */
+	.material {
+		background: color-mix(in oklab, var(--paper) 82%, transparent);
+		backdrop-filter: saturate(1.2) blur(20px);
+		-webkit-backdrop-filter: saturate(1.2) blur(20px);
+	}
+}
+
+/* Faint printed-paper tooth — dark grain, multiply, barely there */
+.grain {
+	position: relative;
+	isolation: isolate;
+}
+.grain::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+	border-radius: inherit;
+	opacity: 0.06;
+	mix-blend-mode: multiply;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.grain > * {
+	position: relative;
+	z-index: 1;
+}
+
+.press {
+	transition: transform var(--dur-fast) var(--ease-out);
+	will-change: transform;
+}
+.press:active {
+	transform: scale(0.97);
+}
+
+@view-transition {
+	navigation: auto;
+}
+::view-transition-group(*) {
+	animation-duration: var(--dur);
+	animation-timing-function: var(--ease-out);
+}
+::view-transition-old(root) {
+	animation: vt-fade-out var(--dur-fast) var(--ease-out) both;
+}
+::view-transition-new(root) {
+	animation: vt-fade-in var(--dur) var(--ease-out) both;
+}
+@keyframes vt-fade-out {
+	to {
+		opacity: 0;
+	}
+}
+@keyframes vt-fade-in {
+	from {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
+	::view-transition-group(*),
+	::view-transition-old(*),
+	::view-transition-new(*) {
+		animation: none !important;
+	}
+}

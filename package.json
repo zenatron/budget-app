@@ -1,7 +1,7 @@
 {
 	"name": "budget-app",
 	"private": true,
-	"version": "0.0.1",
+	"version": "0.7.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -24,6 +24,9 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
+		"@fontsource-variable/bodoni-moda": "^5.2.7",
+		"@fontsource-variable/hanken-grotesk": "^5.2.8",
+		"@fontsource/atkinson-hyperlegible": "^5.2.8",
 		"@playwright/test": "^1.61.1",
 		"@sveltejs/adapter-node": "^5.5.7",
 		"@sveltejs/kit": "^2.63.0",

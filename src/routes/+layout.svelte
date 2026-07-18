@@ -1,4 +1,6 @@
 <script lang="ts">
+	import '@fontsource-variable/hanken-grotesk';
+	import '@fontsource/atkinson-hyperlegible';
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 

@@ -14,6 +14,7 @@ import {
 import { Money, InvalidMoneyError } from '$lib/domain/money/money';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
+import pkg from '../../../../package.json';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -41,7 +42,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			status: m.member.status,
 			policy: m.member.approvalPolicy as ApprovalPolicy
 		})),
-		invites: invites.map((i) => ({ code: i.code, expiresAt: i.expiresAt.toISOString() }))
+		invites: invites.map((i) => ({ code: i.code, expiresAt: i.expiresAt.toISOString() })),
+		version: pkg.version
 	};
 };
 
