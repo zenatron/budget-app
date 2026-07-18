@@ -1,0 +1,10 @@
+{
+	"permissions": {
+		"allow": [
+			"Bash(bun --version)",
+			"Bash(docker --version)",
+			"Bash(bun add *)",
+			"Bash(bun remove *)"
+		]
+	}
+}

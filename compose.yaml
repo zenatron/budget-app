@@ -1,0 +1,48 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: postgres://root:mysecretpassword@db:5432/local
+      BLOB_DIR: /data/blobs
+      MIGRATIONS_DIR: /app/drizzle
+      # adapter-node request body cap; image uploads are validated to 15M in-app.
+      BODY_SIZE_LIMIT: 20M
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:3000}
+      POCKET_ID_ISSUER: ${POCKET_ID_ISSUER:-}
+      POCKET_ID_CLIENT_ID: ${POCKET_ID_CLIENT_ID:-}
+      POCKET_ID_CLIENT_SECRET: ${POCKET_ID_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      NTFY_SERVER_URL: ${NTFY_SERVER_URL:-}
+      NTFY_DEFAULT_TOKEN: ${NTFY_DEFAULT_TOKEN:-}
+    volumes:
+      - blobs:/data/blobs
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: local
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U root -d local']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
+  blobs:

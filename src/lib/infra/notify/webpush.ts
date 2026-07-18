@@ -1,0 +1,56 @@
+import webpush from 'web-push';
+import type { NotificationMessage } from '$lib/ports/notifier';
+
+export interface WebPushConfig {
+	publicKey: string;
+	privateKey: string;
+	subject: string;
+}
+
+export interface WebPushTarget {
+	endpoint: string;
+	p256dh: string;
+	auth: string;
+}
+
+export type WebPushResult = 'ok' | 'gone' | 'failed';
+
+/**
+ * One send per subscription. 404/410 mean the subscription is dead ('gone') —
+ * normal lifecycle, the caller prunes the row. Payloads stay minimal: title,
+ * body, deep-link path, collapse tag.
+ */
+export async function sendWebPush(
+	config: WebPushConfig,
+	target: WebPushTarget,
+	msg: NotificationMessage & { origin: string }
+): Promise<WebPushResult> {
+	try {
+		await webpush.sendNotification(
+			{ endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } },
+			JSON.stringify({
+				title: msg.title,
+				body: msg.body,
+				url: msg.origin + msg.path,
+				tag: msg.tag
+			}),
+			{
+				vapidDetails: {
+					subject: config.subject,
+					publicKey: config.publicKey,
+					privateKey: config.privateKey
+				},
+				TTL: 24 * 3600,
+				urgency: 'high'
+			}
+		);
+		return 'ok';
+	} catch (e) {
+		const status = (e as { statusCode?: number }).statusCode;
+		if (status === 404 || status === 410) return 'gone';
+		console.log(
+			JSON.stringify({ level: 'warn', msg: 'webpush: send failed', status: status ?? null })
+		);
+		return 'failed';
+	}
+}

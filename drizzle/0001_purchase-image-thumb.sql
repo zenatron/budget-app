@@ -1,0 +1,1 @@
+ALTER TABLE "purchase_image" ADD COLUMN "thumb_blob_id" text NOT NULL;
