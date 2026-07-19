@@ -49,6 +49,14 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		listImages(db, scope, p.id, now)
 	]);
 
+	// A refund owns no photo; borrow the original's. listImages applies the seal
+	// predicate to the parent, so an unreadable parent yields nothing rather than
+	// leaking through the child.
+	const inheritedImages =
+		images.length === 0 && p.parentPurchaseId
+			? await listImages(db, scope, p.parentPurchaseId, now)
+			: [];
+
 	let merchantName: string | null = null;
 	if (p.merchantId) {
 		const [m] = await db
@@ -105,6 +113,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			width: i.width,
 			height: i.height
 		})),
+		// Shown under a reversal arrow, and not editable here — it belongs to the
+		// original purchase, which has its own detail page.
+		inheritedImage: inheritedImages[0]?.blobId ?? null,
+		isRefund: p.parentPurchaseId !== null,
+		parentId: p.parentPurchaseId,
 		events: events.map((e) => ({
 			toState: e.toState,
 			actorName: e.actorName,

@@ -84,7 +84,56 @@
 		</p>
 	</div>
 
-	{#if img}
+	{#if data.isRefund && !img}
+		<!--
+			A refund reverses a purchase, so it shows that purchase: the original's
+			photo, dimmed under a reversal arrow. Tapping goes to the original. No
+			photo controls — the image belongs to the parent, and is edited there.
+		-->
+		<a
+			href="/w/{slug}/purchases/{data.parentId}"
+			class="press relative mt-5 block overflow-hidden rounded-[14px]"
+			style="box-shadow: var(--shadow-card), inset 0 0 0 1px var(--hairline)"
+		>
+			{#if data.inheritedImage}
+				<!--
+					Desaturated enough to read as past tense, light enough to still
+					recognize the item — dimming it into a slab would defeat the point
+					of showing the photo at all. Contrast for the label comes from a
+					scrim behind it, not from crushing the image.
+				-->
+				<img
+					src="/w/{slug}/blobs/{data.inheritedImage}"
+					alt=""
+					class="aspect-[4/3] w-full object-cover"
+					style="filter: grayscale(0.45) brightness(0.92)"
+					loading="eager"
+				/>
+				<span
+					class="absolute inset-0"
+					style="background: radial-gradient(60% 50% at 50% 50%, oklch(0 0 0 / 0.5), oklch(0 0 0 / 0.12))"
+				></span>
+			{:else}
+				<div class="aspect-[4/3] w-full" style="background: var(--surface-2)"></div>
+			{/if}
+			<span class="absolute inset-0 flex flex-col items-center justify-center gap-2">
+				<span
+					class="flex h-14 w-14 items-center justify-center rounded-full backdrop-blur"
+					style="background: {data.inheritedImage
+						? 'oklch(0 0 0 / 0.45)'
+						: 'var(--surface)'}; color: {data.inheritedImage ? 'white' : 'var(--ink-3)'}"
+				>
+					<Icon name="reverse" class="h-6 w-6" />
+				</span>
+				<span
+					class="text-[13px] font-semibold"
+					style="color: {data.inheritedImage ? 'white' : 'var(--ink-3)'}"
+				>
+					Reverses this purchase
+				</span>
+			</span>
+		</a>
+	{:else if img}
 		<div class="relative mt-5">
 			<div
 				class="overflow-hidden rounded-[14px]"
@@ -145,7 +194,11 @@
 				style="box-shadow: inset 0 0 0 1px var(--hairline); background: var(--surface)"
 			>
 				<Icon name="camera" class="h-5 w-5" style="color: var(--ink-3)" />
-				<span class="text-[15px]" style="color: var(--ink-3)">Add a photo of what you bought</span>
+				<span class="text-[15px]" style="color: var(--ink-3)"
+					>{data.isRefund
+						? 'Add a photo of the return receipt'
+						: 'Add a photo of what you bought'}</span
+				>
 				<input
 					type="file"
 					name="photo"

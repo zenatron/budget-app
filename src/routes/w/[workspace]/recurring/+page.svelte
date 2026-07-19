@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
+	import RecurrencePicker from '$lib/components/RecurrencePicker.svelte';
+	import { calDateInZone } from '$lib/domain/time/zoned';
 	import { money } from '$lib/actions/money';
 	import Icon from '$lib/components/Icon.svelte';
 	import Money from '$lib/components/Money.svelte';
@@ -8,75 +10,51 @@
 	let freq = $state('monthly');
 	let showNew = $state(false);
 	let editing: string | null = $state(null);
-	let editFreq: Record<string, string> = $state({});
-	let patternInput = $state('');
-	// The pattern box writes into these; the fields below are bound to them.
-	// Reaching for the DOM instead meant the parsed value and the component's
-	// idea of the form disagreed the moment either one changed.
+	// Only one rule is open for editing at a time, so these are single slots
+	// rather than a map keyed by rule id.
+	let editFreq = $state('monthly');
+	let editInterval = $state(1);
+	let editWeekDays = $state<number[]>([]);
+	let editMonthDay = $state('1');
+	let editStart = $state('');
+	// Bound straight into RecurrencePicker, which emits the same field names the
+	// server already parses.
 	let interval = $state(1);
 	let weekDays = $state<number[]>([]);
 	let monthDay = $state('1');
-	const today = new Date().toISOString().slice(0, 10);
-	const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+	// Today in the *workspace* timezone. toISOString() is UTC, so after ~8pm in
+	// the Americas these forms defaulted to tomorrow's date.
+	const today = $derived.by(() => {
+		const t = calDateInZone(new Date(), data.workspace.timezone);
+		return `${t.y}-${String(t.m).padStart(2, '0')}-${String(t.d).padStart(2, '0')}`;
+	});
+	// Intentionally a snapshot: this seeds the field's default, and the user
+	// edits it from there. The page remounts per workspace, so it can't go stale.
+	// svelte-ignore state_referenced_locally
+	let startDate = $state(today);
 
 	function fmtNext(iso: string | null): string {
 		if (!iso) return '—';
 		return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 
-	function editFreqFor(r: (typeof data.rules)[number]): string {
-		return editFreq[r.id] ?? r.freq;
-	}
-
 	function startEdit(r: (typeof data.rules)[number]) {
 		editing = editing === r.id ? null : r.id;
-		editFreq = { ...editFreq, [r.id]: r.freq };
-	}
-
-	function parsePattern(text: string) {
-		const t = text.toLowerCase().trim();
-		if (!t) return;
-		if (/\b(every\s+)?day\b/.test(t) || /\bdaily\b/.test(t)) freq = 'daily';
-		else if (/\b(every\s+)?week\b/.test(t) || /\bweekly\b/.test(t)) freq = 'weekly';
-		else if (/\b(every\s+)?month\b/.test(t) || /\bmonthly\b/.test(t)) freq = 'monthly';
-		else if (/\b(every\s+)?year\b/.test(t) || /\byearly\b/.test(t)) freq = 'yearly';
-
-		const intervalMatch = t.match(/every\s+(\d+)/);
-		if (intervalMatch) {
-			const intv = parseInt(intervalMatch[1]);
-			if (intv >= 1 && intv <= 52) interval = intv;
-		}
-
-		const foundDays: number[] = [];
-		const dayMap: Record<string, number> = {
-			sun: 7,
-			mon: 1,
-			tue: 2,
-			wed: 3,
-			thu: 4,
-			fri: 5,
-			sat: 6
-		};
-		for (const [name, idx] of Object.entries(dayMap)) {
-			if (t.includes(name)) foundDays.push(idx);
-		}
-		if (foundDays.length > 0) weekDays = foundDays;
-
-		const monthDayMatch = t.match(/\b(\d+)(?:st|nd|rd|th)?\b/);
-		if (monthDayMatch && (freq === 'monthly' || freq === 'yearly')) {
-			const day = parseInt(monthDayMatch[1]);
-			if (day >= 1 && day <= 28) monthDay = String(day);
-		}
-		if (/\blast\s+day\b/.test(t)) monthDay = '-1';
+		if (editing === null) return;
+		editFreq = r.freq;
+		editInterval = r.interval;
+		editWeekDays = [...r.byDay];
+		editMonthDay = String(r.monthDay ?? 1);
+		editStart = r.startDate ?? today;
 	}
 
 	function resetNewForm() {
 		showNew = false;
-		patternInput = '';
 		freq = 'monthly';
 		interval = 1;
 		weekDays = [];
 		monthDay = '1';
+		startDate = today;
 	}
 </script>
 
@@ -118,59 +96,8 @@
 					class="field w-28 text-[16px] tabular-nums"
 				/>
 			</div>
-			<div class="relative">
-				<input
-					name="pattern"
-					bind:value={patternInput}
-					oninput={() => parsePattern(patternInput)}
-					placeholder="e.g. every month on the 1st, or every 2 weeks on Mon and Thu"
-					class="field pr-8 text-[15px]"
-				/>
-				<span
-					class="absolute top-1/2 right-3 -translate-y-1/2 text-[12px]"
-					style="color: var(--ink-4)">?</span
-				>
-			</div>
-			<div class="grid grid-cols-3 gap-3">
-				<select name="freq" bind:value={freq} class="field text-[16px]">
-					<option value="daily">Daily</option>
-					<option value="weekly">Weekly</option>
-					<option value="monthly">Monthly</option>
-					<option value="yearly">Yearly</option>
-				</select>
-				<input
-					name="interval"
-					type="number"
-					min="1"
-					max="52"
-					bind:value={interval}
-					class="field text-[16px] tabular-nums"
-				/>
-				<input name="startDate" type="date" value={today} required class="field text-[16px]" />
-			</div>
-			{#if freq === 'weekly'}
-				<div class="flex flex-wrap gap-x-4 gap-y-2">
-					{#each dayNames as name, i (name)}
-						<label class="flex items-center gap-1.5 text-[15px]" style="color: var(--ink)">
-							<input
-								type="checkbox"
-								name="weekDay"
-								value={i + 1}
-								bind:group={weekDays}
-								class="rounded"
-							/>
-							{name}
-						</label>
-					{/each}
-				</div>
-			{:else if freq === 'monthly' || freq === 'yearly'}
-				<select name="monthDay" bind:value={monthDay} class="field text-[16px]">
-					{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}<option value={String(d)}
-							>Day {d}</option
-						>{/each}
-					<option value="-1">Last day</option>
-				</select>
-			{/if}
+			<RecurrencePicker bind:freq bind:interval bind:weekDays bind:monthDay bind:startDate />
+
 			<select name="categoryId" class="field text-[16px]">
 				<option value="">No category</option>
 				{#each data.categories as c (c.id)}<option value={c.id}>{c.icon} {c.name}</option>{/each}
@@ -262,7 +189,6 @@
 							</form>
 						</div>
 						{#if editing === r.id}
-							{@const f = editFreqFor(r)}
 							<form
 								method="POST"
 								action="?/edit"
@@ -282,65 +208,13 @@
 										class="field w-28 text-[16px] tabular-nums"
 									/>
 								</div>
-								<div class="grid grid-cols-3 gap-3">
-									<select
-										name="freq"
-										value={f}
-										onchange={(e) => {
-											editFreq = {
-												...editFreq,
-												[r.id]: (e.currentTarget as HTMLSelectElement).value
-											};
-										}}
-										class="field text-[15px]"
-									>
-										<option value="daily">Daily</option>
-										<option value="weekly">Weekly</option>
-										<option value="monthly">Monthly</option>
-										<option value="yearly">Yearly</option>
-									</select>
-									<input
-										name="interval"
-										type="number"
-										min="1"
-										max="52"
-										value={r.interval}
-										class="field text-[16px] tabular-nums"
-									/>
-									<input
-										name="startDate"
-										type="date"
-										value={today}
-										required
-										class="field text-[16px]"
-									/>
-								</div>
-								{#if f === 'weekly'}
-									<div class="flex flex-wrap gap-x-4 gap-y-2">
-										{#each dayNames as name, idx (name)}
-											<label
-												class="flex items-center gap-1.5 text-[15px]"
-												style="color: var(--ink)"
-											>
-												<input
-													type="checkbox"
-													name="weekDay"
-													value={idx + 1}
-													checked={r.byDay.includes(idx + 1)}
-													class="rounded"
-												/>
-												{name}
-											</label>
-										{/each}
-									</div>
-								{:else if f === 'monthly' || f === 'yearly'}
-									<select name="monthDay" bind:value={monthDay} class="field text-[16px]">
-										{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}
-											<option value={d} selected={r.monthDay === d}>Day {d}</option>
-										{/each}
-										<option value="-1" selected={r.monthDay === -1}>Last day</option>
-									</select>
-								{/if}
+								<RecurrencePicker
+									bind:freq={editFreq}
+									bind:interval={editInterval}
+									bind:weekDays={editWeekDays}
+									bind:monthDay={editMonthDay}
+									bind:startDate={editStart}
+								/>
 								<select name="categoryId" class="field text-[16px]">
 									<option value="">No category</option>
 									{#each data.categories as c (c.id)}

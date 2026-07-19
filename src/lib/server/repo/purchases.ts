@@ -1,4 +1,5 @@
 import { and, desc, eq, ilike, inArray, lte, or, sql, type SQL } from 'drizzle-orm';
+import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { Db } from '$lib/server/db';
 import {
 	approvalEvent,
@@ -22,9 +23,27 @@ import type { IdGenerator } from '$lib/ports/id-generator';
  * enforcement point; add it to every new purchase query.
  */
 export function visibleTo(viewerId: string, now: Date): SQL {
+	return sealOpenTo(purchase, viewerId, now);
+}
+
+/**
+ * The seal predicate, against any alias of the purchase table. Refund rows
+ * borrow their parent's photo, and the parent has to pass this check on its own
+ * — inheriting an image must not become a way to see a concealed purchase.
+ */
+function sealOpenTo(
+	// AnyPgColumn, not `typeof purchase`: an alias bakes its own table name into
+	// the column types, so the concrete table type won't accept one.
+	t: { sealedFromMemberIds: AnyPgColumn; sealedUntil: AnyPgColumn },
+	viewerId: string,
+	now: Date
+): SQL {
 	return or(
-		sql`not (${purchase.sealedFromMemberIds} @> array[${viewerId}]::uuid[])`,
-		lte(purchase.sealedUntil, now)
+		sql`not (${t.sealedFromMemberIds} @> array[${viewerId}]::uuid[])`,
+		// lte, not raw sql: it binds through the column's timestamptz mapping.
+		// Interpolating the Date directly sends Date.toString(), which Postgres
+		// cannot parse — that broke every seal-filtered read.
+		lte(t.sealedUntil, now)
 	)!;
 }
 
@@ -221,6 +240,8 @@ export interface PurchaseListItem {
 	sealed: boolean;
 	sealedUntil: Date | null;
 	recurring: boolean;
+	/** Child row reversing a completed purchase; its photo is the original's. */
+	isRefund: boolean;
 }
 
 /** Workspace purchase feed, seal-filtered, pending first then newest. */
@@ -237,6 +258,10 @@ export async function listPurchases(
 	if (opts?.search) conditions.push(ilike(purchase.itemName, `%${opts.search}%`));
 	if (opts?.categoryId) conditions.push(eq(purchase.categoryId, opts.categoryId));
 
+	// A refund is a child row with no photo of its own; show the original's.
+	const parentPurchase = alias(purchase, 'parent_purchase');
+	const parentImage = alias(purchaseImage, 'parent_image');
+
 	const rows = await db
 		.select({
 			p: purchase,
@@ -245,7 +270,9 @@ export async function listPurchases(
 			categoryIcon: category.icon,
 			categoryColor: category.color,
 			merchantName: merchant.name,
-			thumbBlobId: purchaseImage.thumbBlobId,
+			thumbBlobId: sql<
+				string | null
+			>`coalesce(${purchaseImage.thumbBlobId}, ${parentImage.thumbBlobId})`,
 			canDecide: sql<boolean>`exists (
 				select 1 from ${purchaseApprover}
 				where ${purchaseApprover.purchaseId} = ${purchase.id}
@@ -260,6 +287,17 @@ export async function listPurchases(
 		.leftJoin(
 			purchaseImage,
 			and(eq(purchaseImage.purchaseId, purchase.id), eq(purchaseImage.position, 0))
+		)
+		.leftJoin(
+			parentPurchase,
+			and(
+				eq(purchase.parentPurchaseId, parentPurchase.id),
+				sealOpenTo(parentPurchase, scope.viewerId, now)
+			)
+		)
+		.leftJoin(
+			parentImage,
+			and(eq(parentImage.purchaseId, parentPurchase.id), eq(parentImage.position, 0))
 		)
 		.where(and(...conditions))
 		.orderBy(
@@ -291,6 +329,7 @@ export async function listPurchases(
 			r.p.sealedUntil !== null &&
 			r.p.sealedUntil.getTime() > now.getTime(),
 		sealedUntil: r.p.sealedUntil,
+		isRefund: r.p.parentPurchaseId !== null,
 		recurring: r.p.recurringRuleId !== null
 	}));
 }

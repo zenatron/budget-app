@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
+	import { tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { money } from '$lib/actions/money';
 	import { formatMinor } from '$lib/money-format';
@@ -73,6 +74,11 @@
 	async function navigate(dir: 'prev' | 'next') {
 		const href = navHref(dir);
 		if (!href) return;
+
+		// onTouchEnd sets swipeOffset = 0 and calls straight into here, but Svelte
+		// flushes the DOM asynchronously — without this the snapshot captures the
+		// card still translated under the finger, and it visibly jumps.
+		await tick();
 
 		const root = document.documentElement;
 		const start = (
@@ -283,7 +289,7 @@
 		class="card-lg grain relative overflow-hidden p-6"
 		style="background: radial-gradient(120% 80% at 85% -10%, color-mix(in oklab, var(--ws-accent) 24%, transparent), transparent 60%), var(--surface); view-transition-name: vt-period-card; transform: translateX({swipeOffset}px); transition: transform {swiping
 			? '0s'
-			: 'var(--dur) var(--ease-out)'}"
+			: 'var(--dur) var(--ease-out)'}; will-change: {swiping ? 'transform' : 'auto'}"
 	>
 		<p class="section-label text-center">{data.label}</p>
 		<div class="mt-4 flex justify-center">

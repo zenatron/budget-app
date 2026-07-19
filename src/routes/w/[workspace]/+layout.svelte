@@ -180,9 +180,20 @@
 			</div>
 		</header>
 
+		<!--
+			overflow-x: clip contains anything that translates sideways — the Activity
+			swipe moves its card right, which otherwise added ~74px of document width.
+			On a phone that widens the layout viewport and the PWA zooms out to fit,
+			so dragging back in time visibly shrank the whole app.
+
+			Applied here rather than on <html>: overflow on the root element is
+			propagated to the viewport, and there `clip` still let the page pan.
+			`clip` not `hidden`, so overflow-y stays visible and the page keeps
+			scrolling normally.
+		-->
 		<main
 			class="mx-auto w-full max-w-3xl flex-1 px-4 pt-3"
-			style="padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px))"
+			style="overflow-x: clip; padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px))"
 		>
 			{@render children()}
 		</main>

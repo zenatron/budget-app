@@ -92,19 +92,38 @@
 		class="press flex items-center gap-3 px-1 py-3 {last ? '' : 'hairline'}"
 		style="view-transition-name: vt-card-{p.id}"
 	>
+		<!--
+			A refund borrows the original purchase's photo and dims it under a
+			reversal arrow: you recognize the item at a glance, and it can't be
+			mistaken for a second purchase of the same thing. With no original
+			photo, the arrow stands in for the generic bag.
+		-->
 		{#if p.thumbBlobId}
-			<img
-				src="/w/{slug}/blobs/{p.thumbBlobId}"
-				alt=""
-				class="h-10 w-10 shrink-0 rounded-[12px] object-cover"
-				style="box-shadow: inset 0 0 0 0.5px var(--hairline)"
-			/>
+			<span class="relative h-10 w-10 shrink-0">
+				<img
+					src="/w/{slug}/blobs/{p.thumbBlobId}"
+					alt=""
+					class="h-10 w-10 rounded-[12px] object-cover"
+					style="box-shadow: inset 0 0 0 0.5px var(--hairline); {p.isRefund
+						? 'filter: grayscale(0.45) brightness(0.82)'
+						: ''}"
+				/>
+				{#if p.isRefund}
+					<span class="absolute inset-0 flex items-center justify-center">
+						<Icon name="reverse" class="h-[18px] w-[18px] text-white drop-shadow" />
+					</span>
+				{/if}
+			</span>
 		{:else}
 			<span
 				class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] text-[18px]"
 				style="background: var(--surface-2); box-shadow: inset 0 0 0 0.5px var(--hairline)"
 			>
-				<Icon name="bag" class="h-[18px] w-[18px]" style="color: var(--ink-4)" />
+				<Icon
+					name={p.isRefund ? 'reverse' : 'bag'}
+					class="h-[18px] w-[18px]"
+					style="color: var(--ink-4)"
+				/>
 			</span>
 		{/if}
 		<div class="min-w-0 flex-1">

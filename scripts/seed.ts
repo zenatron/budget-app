@@ -659,8 +659,7 @@ await Promise.all([
 			day: 35,
 			state: 'completed',
 			finalMinor: 210_00n,
-			approvedMinor: 150_00n,
-			parentPurchaseId: id
+			approvedMinor: 150_00n
 		});
 		await addEvent(
 			id2,
@@ -671,11 +670,9 @@ await Promise.all([
 			'Paid more than planned',
 			210_00n
 		);
-		// Flag as overage
-		await db
-			.update(schema.purchase)
-			.set({ parentPurchaseId: id })
-			.where(eq(schema.purchase.id, id2));
+		// NB: overage is derived (pending + a final amount), not stored.
+		// parent_purchase_id means "refund child" — see the schema comment — and
+		// setting it here made this row look like a refund and blocked can.refund.
 	})()
 ]);
 

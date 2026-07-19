@@ -3,17 +3,41 @@
 	import { money } from '$lib/actions/money';
 	import Icon from '$lib/components/Icon.svelte';
 	import Money from '$lib/components/Money.svelte';
+	import IncomeSchedule from '$lib/components/IncomeSchedule.svelte';
+	import { calDateInZone } from '$lib/domain/time/zoned';
 	let { data, form } = $props();
 	let showNew = $state(false);
+	// Today in the *workspace* timezone. toISOString() is UTC, so after ~8pm in
+	// the Americas these forms defaulted to tomorrow's date.
+	const today = $derived.by(() => {
+		const t = calDateInZone(new Date(), data.workspace.timezone);
+		return `${t.y}-${String(t.m).padStart(2, '0')}-${String(t.d).padStart(2, '0')}`;
+	});
+
+	// New-entry schedule. `today` seeds the defaults and the user edits from
+	// there; the page remounts per workspace so the snapshot can't go stale.
 	let repeat = $state('once');
+	// svelte-ignore state_referenced_locally
+	let date = $state(today);
+	let monthDay = $state('1');
+
+	// Only one entry is open for editing at a time, so single slots suffice.
 	let editing: string | null = $state(null);
-	let editRepeat: Record<string, string> = $state({});
-	const today = new Date().toISOString().slice(0, 10);
+	let editRepeatVal = $state('once');
+	// svelte-ignore state_referenced_locally
+	let editDate = $state(today);
+	let editMonthDay = $state('1');
+
 	function fmtDate(iso: string): string {
 		return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
-	function repeatFor(e: (typeof data.entries)[number]): string {
-		return editRepeat[e.id] ?? (e.freq === 'monthly' ? 'monthly' : 'once');
+
+	function startEdit(e: (typeof data.entries)[number]) {
+		editing = editing === e.id ? null : e.id;
+		if (editing === null) return;
+		editRepeatVal = e.freq === 'monthly' ? 'monthly' : 'once';
+		editDate = e.receivedDate;
+		editMonthDay = String(e.monthDay ?? 1);
 	}
 </script>
 
@@ -55,21 +79,8 @@
 					class="field w-32 text-[16px] tabular-nums"
 				/>
 			</div>
-			<div class="grid grid-cols-2 gap-3">
-				<select name="repeat" bind:value={repeat} class="field text-[16px]">
-					<option value="once">One-off</option>
-					<option value="monthly">Monthly</option>
-				</select>
-				<input name="date" type="date" value={today} required class="field text-[16px]" />
-			</div>
-			{#if repeat === 'monthly'}
-				<select name="monthDay" class="field text-[16px]">
-					{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}<option value={d}
-							>Day {d}</option
-						>{/each}
-					<option value="-1">Last day</option>
-				</select>
-			{/if}
+			<IncomeSchedule bind:repeat bind:date bind:monthDay />
+
 			<button class="btn btn-accent w-full">Add income</button>
 		</form>
 	{/if}
@@ -114,10 +125,7 @@
 						</span>
 						{#if e.mine}
 							<button
-								onclick={() => {
-									editing = editing === e.id ? null : e.id;
-									editRepeat = { ...editRepeat, [e.id]: e.freq === 'monthly' ? 'monthly' : 'once' };
-								}}
+								onclick={() => startEdit(e)}
 								class="press ml-1 inline-flex items-center gap-1"
 								style="color: var(--ink-2)"
 								aria-label="Edit"
@@ -137,7 +145,6 @@
 						{/if}
 					</div>
 					{#if editing === e.id}
-						{@const r = repeatFor(e)}
 						<form
 							method="POST"
 							action="?/edit"
@@ -157,37 +164,11 @@
 									class="field w-28 text-[16px] tabular-nums"
 								/>
 							</div>
-							<div class="grid grid-cols-2 gap-3">
-								<select
-									name="repeat"
-									value={r}
-									onchange={(ev) => {
-										editRepeat = {
-											...editRepeat,
-											[e.id]: (ev.currentTarget as HTMLSelectElement).value
-										};
-									}}
-									class="field text-[15px]"
-								>
-									<option value="once">One-off</option>
-									<option value="monthly">Monthly</option>
-								</select>
-								<input
-									name="date"
-									type="date"
-									value={e.receivedDate}
-									required
-									class="field text-[16px]"
-								/>
-							</div>
-							{#if r === 'monthly'}
-								<select name="monthDay" class="field text-[16px]">
-									{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}
-										<option value={d} selected={e.monthDay === d}>Day {d}</option>
-									{/each}
-									<option value="-1" selected={e.monthDay === -1}>Last day</option>
-								</select>
-							{/if}
+							<IncomeSchedule
+								bind:repeat={editRepeatVal}
+								bind:date={editDate}
+								bind:monthDay={editMonthDay}
+							/>
 							<div class="flex gap-2">
 								<button class="btn btn-accent flex-1 py-2.5 text-[14px]">Save changes</button>
 								<button

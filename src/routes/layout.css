@@ -107,6 +107,22 @@
 		font-variant-numeric: tabular-nums;
 	}
 
+	/* Checkboxes shipped as the browser default blue, which is the one thing on
+	   screen that belongs to no palette. */
+	input[type='checkbox'],
+	input[type='radio'] {
+		accent-color: var(--ink);
+	}
+
+	/* Native date/time fields render the picker glyph in the UA's own color. */
+	input[type='date'] {
+		color-scheme: light;
+	}
+	input[type='date']::-webkit-calendar-picker-indicator {
+		opacity: 0.45;
+		cursor: pointer;
+	}
+
 	/* Mastheads — the didone doing editorial work */
 	h1,
 	h2 {
@@ -366,8 +382,18 @@ form[data-submitting] button:not([type])::after {
  * Period stepping on Activity. The slide is scoped to the card that carries the
  * ring — the surrounding chrome (heading, period tabs, prev/next) is identical
  * between the two states, so sliding it just made the page look like it was
- * being replaced. The root keeps its default cross-fade for the figures below.
+ * being replaced.
+ *
+ * The root opts out of the snapshot entirely. Leaving it in produced two
+ * artifacts on device: ::view-transition-old/new(root) cross-fading read as the
+ * screen dimming, and because two months rarely have the same content height,
+ * ::view-transition-group(root) animated its size and the browser scaled both
+ * snapshots to fit — the whole app appeared to zoom out and back. With root
+ * unnamed, only the card is captured; everything else swaps instantly.
  */
+html[data-vt-slide] {
+	view-transition-name: none;
+}
 html[data-vt-slide='right']::view-transition-old(vt-period-card) {
 	animation: vt-slide-out-right var(--dur) var(--ease-out) both;
 }

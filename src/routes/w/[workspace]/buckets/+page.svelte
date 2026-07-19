@@ -5,6 +5,7 @@
 	import { formatPct } from '$lib/format';
 	import Icon from '$lib/components/Icon.svelte';
 	import Money from '$lib/components/Money.svelte';
+	import DayOfMonthPicker from '$lib/components/DayOfMonthPicker.svelte';
 
 	let { data, form } = $props();
 
@@ -21,8 +22,10 @@
 
 	let showNew = $state(false);
 	let createColor = $state<string | null>(null);
+	let createDay = $state('1');
 	let editing: string | null = $state(null);
 	let editColor: Record<string, string | null> = $state({});
+	let editDay = $state('1');
 	let adjusting: string | null = $state(null);
 
 	function colorFor(b: (typeof data.buckets)[number]): string {
@@ -77,6 +80,7 @@
 				onSuccess: () => {
 					showNew = false;
 					createColor = null;
+					createDay = '1';
 				}
 			}}
 			class="card space-y-3.5 p-5"
@@ -92,15 +96,8 @@
 					class="field w-28 text-[16px] tabular-nums"
 				/>
 			</div>
-			<div class="flex items-center gap-2">
-				<label class="shrink-0 text-[14px]" style="color: var(--ink-3)" for="createDayOfMonth"
-					>Accrues on day</label
-				>
-				<select id="createDayOfMonth" name="dayOfMonth" class="field text-[16px]">
-					{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}
-						<option value={d}>{d}</option>
-					{/each}
-				</select>
+			<div>
+				<DayOfMonthPicker bind:value={createDay} name="dayOfMonth" label="Accrues on" />
 			</div>
 			<input
 				name="goalCap"
@@ -198,6 +195,7 @@
 								onclick={() => {
 									editing = editing === b.id ? null : b.id;
 									editColor = { ...editColor, [b.id]: b.color };
+									editDay = String(b.dayOfMonth);
 								}}
 								class="press inline-flex items-center gap-1"
 								style="color: var(--ink-2)"
@@ -267,17 +265,8 @@
 										class="field w-28 text-[16px] tabular-nums"
 									/>
 								</div>
-								<div class="flex items-center gap-2">
-									<label
-										class="shrink-0 text-[13px]"
-										style="color: var(--ink-3)"
-										for="editDayOfMonth-{b.id}">Accrues on day</label
-									>
-									<select id="editDayOfMonth-{b.id}" name="dayOfMonth" class="field text-[16px]">
-										{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}
-											<option value={d} selected={d === b.dayOfMonth}>{d}</option>
-										{/each}
-									</select>
+								<div>
+									<DayOfMonthPicker bind:value={editDay} name="dayOfMonth" label="Accrues on" />
 								</div>
 								<input
 									name="goalCap"

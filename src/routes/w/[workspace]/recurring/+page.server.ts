@@ -63,7 +63,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 					freq: parsed?.freq ?? 'monthly',
 					interval: parsed?.interval ?? 1,
 					monthDay: parsed?.byMonthDay ?? null,
-					byDay: parsed?.byDay ?? []
+					byDay: parsed?.byDay ?? [],
+					// The rule's real anchor. The edit form used to default this to
+					// today, which silently re-anchored the schedule on every save —
+					// enough to move a weekly rule onto a different weekday.
+					startDate: parsed
+						? `${parsed.start.y}-${String(parsed.start.m).padStart(2, '0')}-${String(parsed.start.d).padStart(2, '0')}`
+						: null
 				};
 			}),
 		categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon }))
