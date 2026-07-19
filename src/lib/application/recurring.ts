@@ -215,22 +215,24 @@ export async function materializeDueRules(db: Db, deps: Deps): Promise<number> {
 
 	let generated = 0;
 	for (const { ruleId, tz } of due) {
-		const results = await db.transaction(async (tx) => {
-			// Re-check under lock; a concurrent sweep may have handled this rule.
-			const locked = await tx
-				.select()
-				.from(recurringRule)
-				.where(eq(recurringRule.id, ruleId))
-				.for('update')
-				.limit(1);
-			const r = locked[0];
-			if (!r || r.status !== 'active' || !r.nextOccurrenceAt || r.nextOccurrenceAt > now) {
-				return [];
-			}
-			const rec = parseRRule(r.rrule);
-			const out: { purchase: Purchase; event: TransitionEvent }[] = [];
-			let occurrenceAt = r.nextOccurrenceAt;
-			for (let i = 0; i < MAX_CATCHUP && occurrenceAt <= now; i++) {
+		// One transaction per occurrence, not per catch-up batch: a failure on the
+		// 30th missed occurrence must not roll back the 29 already generated and
+		// leave next_occurrence_at unadvanced (which would replay them forever).
+		for (let i = 0; i < MAX_CATCHUP; i++) {
+			const made = await db.transaction(async (tx) => {
+				// Re-check under lock; a concurrent sweep may have handled this rule.
+				const locked = await tx
+					.select()
+					.from(recurringRule)
+					.where(eq(recurringRule.id, ruleId))
+					.for('update')
+					.limit(1);
+				const r = locked[0];
+				if (!r || r.status !== 'active' || !r.nextOccurrenceAt || r.nextOccurrenceAt > now) {
+					return null;
+				}
+				const rec = parseRRule(r.rrule);
+				const occurrenceAt = r.nextOccurrenceAt;
 				const amount = Money.of(r.amountMinor, r.currency);
 				const p: Purchase = {
 					id: deps.ids.newId(),
@@ -265,21 +267,22 @@ export async function materializeDueRules(db: Db, deps: Deps): Promise<number> {
 					at: occurrenceAt
 				};
 				await insertPurchase(tx, deps, p, event);
-				out.push({ purchase: p, event });
 
 				const next = nextOccurrence(rec, calDateInZone(occurrenceAt, tz));
-				occurrenceAt = zonedTimeToUtc(next, MATERIALIZE_HOUR, 0, tz);
-			}
-			await tx
-				.update(recurringRule)
-				.set({ lastGeneratedAt: now, nextOccurrenceAt: occurrenceAt })
-				.where(eq(recurringRule.id, r.id));
-			return out;
-		});
+				await tx
+					.update(recurringRule)
+					.set({
+						lastGeneratedAt: now,
+						nextOccurrenceAt: zonedTimeToUtc(next, MATERIALIZE_HOUR, 0, tz)
+					})
+					.where(eq(recurringRule.id, r.id));
+				return { purchase: p, event };
+			});
 
-		for (const { purchase: p, event } of results) {
-			await announcePurchaseChange(db, deps.notifier, p, event);
-			await notifyRuleOwner(db, deps.notifier, p);
+			if (!made) break;
+
+			await announcePurchaseChange(db, deps.notifier, made.purchase, made.event);
+			await notifyRuleOwner(db, deps.notifier, made.purchase);
 			generated += 1;
 		}
 	}

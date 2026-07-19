@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { submit } from '$lib/actions/submit';
 	import { goto } from '$app/navigation';
 	import { money } from '$lib/actions/money';
 	import { formatMinor } from '$lib/money-format';
@@ -28,12 +28,18 @@
 		if (!swiping) return;
 		const dx = e.touches[0].clientX - touchStartX;
 		const dy = e.touches[0].clientY - touchStartY;
-		if (Math.abs(dy) > Math.abs(dx)) { swiping = false; return; }
+		if (Math.abs(dy) > Math.abs(dx)) {
+			swiping = false;
+			return;
+		}
 		swipeOffset = dx;
 	}
 
 	function onTouchEnd(e: TouchEvent) {
-		if (!swiping) { swipeOffset = 0; return; }
+		if (!swiping) {
+			swipeOffset = 0;
+			return;
+		}
 		swiping = false;
 		const dx = e.changedTouches[0].clientX - touchStartX;
 		swipeOffset = 0;
@@ -93,11 +99,13 @@
 	const netChange = $derived(
 		data.incomeMinor > 0n
 			? Number(((net - prevNet) * 1000n) / data.incomeMinor) / 10
-			: net !== prevNet ? (net > prevNet ? Infinity : -Infinity) : 0
+			: net !== prevNet
+				? net > prevNet
+					? Infinity
+					: -Infinity
+				: 0
 	);
-	const sp = $derived(
-		data.incomeMinor > 0n ? Number((net * 1000n) / data.incomeMinor) / 10 : 0
-	);
+	const sp = $derived(data.incomeMinor > 0n ? Number((net * 1000n) / data.incomeMinor) / 10 : 0);
 
 	const comparison = $derived.by(() => {
 		if (data.prevTotalMinor === 0n)
@@ -106,7 +114,10 @@
 		const dir = pct > 100 ? 'up' : pct < 100 ? 'down' : 'flat';
 		const diff = Math.abs(pct - 100);
 		if (dir === 'flat') return `Same as ${data.prevLabel}`;
-		return { dir, text: `${formatPct(diff)} ${dir === 'up' ? 'more' : 'less'} than ${data.prevLabel}` };
+		return {
+			dir,
+			text: `${formatPct(diff)} ${dir === 'up' ? 'more' : 'less'} than ${data.prevLabel}`
+		};
 	});
 
 	const barWidth = $derived(period === 'year' ? 16 : period === 'week' ? 34 : 6);
@@ -141,7 +152,9 @@
 	ontouchstart={onTouchStart}
 	ontouchmove={onTouchMove}
 	ontouchend={onTouchEnd}
-	style="transform: translateX({swiping ? swipeOffset : 0}px); transition: transform {swiping ? '0s' : 'var(--dur) var(--ease-out)'}; touch-action: pan-y"
+	style="transform: translateX({swiping ? swipeOffset : 0}px); transition: transform {swiping
+		? '0s'
+		: 'var(--dur) var(--ease-out)'}; touch-action: pan-y"
 >
 	<div class="flex items-center justify-between px-1 pt-1">
 		<h1 class="text-[28px]">Activity</h1>
@@ -424,8 +437,20 @@
 					<Money minor={net} {currency} sign block class="mt-0.5 text-[18px] font-semibold" />
 				</span>
 				{#if prevNet !== 0n && net !== prevNet}
-					<span class="mt-1 inline-flex items-center gap-0.5 text-[11px] font-semibold" style="color: {netChange >= 0 ? 'var(--approve)' : 'var(--deny)'}">
-						<svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+					<span
+						class="mt-1 inline-flex items-center gap-0.5 text-[11px] font-semibold"
+						style="color: {netChange >= 0 ? 'var(--approve)' : 'var(--deny)'}"
+					>
+						<svg
+							width="12"
+							height="10"
+							viewBox="0 0 12 10"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.6"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
 							{#if netChange >= 0}
 								<path d="M2 8 C3 6, 5 2, 7 5 C8 7, 10 3, 10 2 M10 2 L8 3 M10 2 L10.5 4" />
 							{:else}
@@ -445,7 +470,9 @@
 			{#if data.incomeMinor === 0n}
 				No income recorded this {period}
 			{:else if savings > 0n}
-				{formatMinor(savings, currency)} in buckets · {sp >= 0 ? `${formatPct(sp)} free` : 'over budget'}
+				{formatMinor(savings, currency)} in buckets · {sp >= 0
+					? `${formatPct(sp)} free`
+					: 'over budget'}
 			{:else if sp >= 0}
 				Saving {formatPct(sp)} of what came in
 			{:else}
@@ -469,7 +496,12 @@
 				{/if}
 			</div>
 			{#if showBudgetForm}
-				<form method="POST" action="?/setBudget" use:enhance class="mb-3 flex items-end gap-2">
+				<form
+					method="POST"
+					action="?/setBudget"
+					use:submit={{ success: 'Budget saved' }}
+					class="mb-3 flex items-end gap-2"
+				>
 					<label class="flex-1">
 						<span class="text-[11px]" style="color: var(--ink-4)">Scope</span>
 						<select name="categoryId" class="field mt-1 text-[15px]">

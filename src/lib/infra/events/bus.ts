@@ -42,7 +42,11 @@ export function publish(workspaceId: string, event: WorkspaceEvent, now: Date): 
 		try {
 			sub.send(payload);
 		} catch {
-			// Dead stream; its abort handler will unsubscribe it.
+			// Dead stream. The abort handler normally unsubscribes, but it may
+			// never fire (aborted socket, no close event) — drop it here too so
+			// the set can't grow without bound.
+			set.delete(sub);
 		}
 	}
+	if (set.size === 0) subscribers.delete(workspaceId);
 }

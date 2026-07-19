@@ -17,6 +17,10 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 			accentColor: workspace!.accentColor
 		},
 		member: { id: member!.id, role: member!.role },
-		workspaces: memberships.map((m) => ({ slug: m.workspace.slug, name: m.workspace.name, accentColor: m.workspace.accentColor }))
+		workspaces: memberships.map((m) => ({
+			slug: m.workspace.slug,
+			name: m.workspace.name,
+			accentColor: m.workspace.accentColor
+		}))
 	};
 };

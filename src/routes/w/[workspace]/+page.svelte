@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
 	import { money } from '$lib/actions/money';
 	import { formatMinor } from '$lib/money-format';
@@ -128,7 +128,7 @@
 					<form
 						method="POST"
 						action="?/policy"
-						use:enhance
+						use:submit={{ success: 'Policy updated' }}
 						class="mt-1 mb-2 space-y-3 rounded-[14px] p-4"
 						style="background: var(--surface-2)"
 					>
@@ -178,9 +178,11 @@
 	<div class="card flex items-center justify-between p-4">
 		<div>
 			<p class="text-[15px] font-medium" style="color: var(--ink)">Bucket charges</p>
-			<p class="text-[13px]" style="color: var(--ink-4)">Skip approval for purchases charged to a bucket</p>
+			<p class="text-[13px]" style="color: var(--ink-4)">
+				Skip approval for purchases charged to a bucket
+			</p>
 		</div>
-		<form method="POST" action="?/bucketSkipApproval" use:enhance>
+		<form method="POST" action="?/bucketSkipApproval" use:submit={{ success: 'Setting saved' }}>
 			<button
 				name="enabled"
 				value={data.bucketChargesSkipApproval ? 'false' : 'true'}
@@ -202,7 +204,7 @@
 		<div class="card p-5">
 			<div class="flex items-center justify-between">
 				<p class="section-label">Invites</p>
-				<form method="POST" action="?/invite" use:enhance>
+				<form method="POST" action="?/invite" use:submit={{ success: 'Invite created' }}>
 					<button class="btn btn-tint px-4 py-1.5 text-[13px]">New code</button>
 				</form>
 			</div>

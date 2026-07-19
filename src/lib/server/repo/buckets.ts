@@ -104,7 +104,8 @@ export interface UpdateBucketCmd {
 	icon?: string | null;
 }
 
-async function loadOwnBucket(
+/** Owner-scoped load. Every mutation goes through this, not `loadBucket`. */
+export async function loadOwnBucket(
 	db: Db,
 	scope: { workspaceId: string; memberId: string },
 	bucketId: string

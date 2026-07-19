@@ -11,6 +11,13 @@ services:
       # adapter-node request body cap; image uploads are validated to 15M in-app.
       BODY_SIZE_LIMIT: 20M
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:3000}
+      # adapter-node can't infer the external URL behind a reverse proxy, and
+      # without it SvelteKit rejects every form action as cross-origin (403).
+      ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:3000}
+      # Otherwise getClientAddress() returns the proxy's IP and the rate limiter
+      # collapses every user into one bucket. Depth 1 = trust exactly one hop.
+      ADDRESS_HEADER: X-Forwarded-For
+      XFF_DEPTH: '1'
       POCKET_ID_ISSUER: ${POCKET_ID_ISSUER:-}
       POCKET_ID_CLIENT_ID: ${POCKET_ID_CLIENT_ID:-}
       POCKET_ID_CLIENT_SECRET: ${POCKET_ID_CLIENT_SECRET:-}
@@ -30,7 +37,9 @@ services:
     image: postgres:17
     restart: unless-stopped
     ports:
-      - '5432:5432'
+      # Loopback only — the app reaches the db over the compose network. Publishing
+      # on 0.0.0.0 would expose Postgres (with this default password) to the LAN.
+      - '127.0.0.1:5432:5432'
     environment:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: mysecretpassword

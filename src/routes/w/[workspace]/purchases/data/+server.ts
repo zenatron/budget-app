@@ -1,4 +1,3 @@
-import { json } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
 import { listPurchases } from '$lib/server/repo/purchases';
 import { isStale, waitingDays } from '$lib/domain/approval/staleness';

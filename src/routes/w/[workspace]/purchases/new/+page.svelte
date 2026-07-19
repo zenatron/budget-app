@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
 	import Icon from '$lib/components/Icon.svelte';
 	import { money } from '$lib/actions/money';
@@ -35,7 +35,7 @@
 		<Icon name="chevronLeft" class="h-4 w-4" /> Wallet
 	</a>
 
-	<form method="POST" enctype="multipart/form-data" use:enhance class="space-y-4">
+	<form method="POST" enctype="multipart/form-data" use:submit class="space-y-4">
 		<!-- Amount: the focal point -->
 		<div class="card-lg card px-6 py-8 text-center">
 			<label class="block">

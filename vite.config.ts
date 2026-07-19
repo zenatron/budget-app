@@ -20,8 +20,13 @@ export default defineConfig({
 					'default-src': ['self'],
 					// Kit nonces its own inline scripts when script-src is set.
 					'script-src': ['self'],
-					// Style attributes are used for category colors and bar widths.
-					'style-src': ['self', 'unsafe-inline'],
+					// Split so unsafe-inline covers only `style=` attributes (category
+					// colors, bar widths) — an injected <style> element stays blocked.
+					// Vite serves HMR styles as inline <style> elements, so dev keeps
+					// the loose form.
+					'style-src-elem':
+						process.env.NODE_ENV === 'production' ? ['self'] : ['self', 'unsafe-inline'],
+					'style-src-attr': ['unsafe-inline'],
 					'img-src': ['self', 'data:', 'blob:'],
 					'connect-src': ['self'],
 					'worker-src': ['self'],

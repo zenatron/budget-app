@@ -31,7 +31,7 @@ import {
 	periodTotal
 } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
-import { totalSaved, savingsInPeriod } from '$lib/server/repo/buckets';
+import { savingsInPeriod } from '$lib/server/repo/buckets';
 import { listCategories } from '$lib/server/repo/workspaces';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
@@ -284,7 +284,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		allCategories,
 		periodIncome,
 		prevIncome,
-		savingsTotal,
 		periodSavings,
 		barCats
 	] = await Promise.all([
@@ -296,7 +295,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		listCategories(db, ws.id),
 		incomeInPeriod(db, ws.id, cfg.queryPeriod, ws.timezone, today),
 		incomeInPeriod(db, ws.id, cfg.prevPeriod, ws.timezone, today),
-		totalSaved(db, ws.id),
 		savingsInPeriod(db, ws.id, cfg.queryPeriod, ws.timezone),
 		period !== 'day'
 			? bucketCategoryTrend(db, scope, cfg.queryPeriod, now, period === 'year' ? 'month' : 'day')

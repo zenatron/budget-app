@@ -95,7 +95,12 @@ export async function loadPurchase(
 	);
 }
 
-/** Insert a freshly created purchase plus its approver snapshot and first event. */
+/**
+ * Insert a freshly created purchase plus its approver snapshot and first event.
+ *
+ * Writes three tables and does not open its own transaction — pass a `tx`. A
+ * bare `Db` here can leave a purchase with no approvers or no opening event.
+ */
 export async function insertPurchase(
 	db: Db,
 	deps: { ids: IdGenerator; clock: Clock },

@@ -164,7 +164,8 @@ export async function submitPurchase(
 				.where(and(eq(bucket.id, cmd.bucketId), eq(bucket.workspaceId, scope.workspaceId)))
 				.limit(1);
 			if (!bkt) throw new PurchaseStateError('Bucket not found');
-			if (bkt.status !== 'active') throw new PurchaseStateError('Cannot charge to a paused or archived bucket');
+			if (bkt.status !== 'active')
+				throw new PurchaseStateError('Cannot charge to a paused or archived bucket');
 		}
 
 		const isLog = cmd.intent === 'log';
@@ -194,9 +195,10 @@ export async function submitPurchase(
 			merchantId
 		};
 
-		const needed = cmd.bucketId && ws.bucketChargesSkipApproval
-			? false
-			: approvalRequired(policy, cmd.amount, cmd.categoryId);
+		const needed =
+			cmd.bucketId && ws.bucketChargesSkipApproval
+				? false
+				: approvalRequired(policy, cmd.amount, cmd.categoryId);
 		let result;
 		if (needed) {
 			const approvers = resolveApprovers(
@@ -466,9 +468,14 @@ export async function completePurchase(
 	purchaseId: string,
 	final: { amount: Money; at: Date }
 ) {
-	await withPurchase(db, deps, scope, purchaseId, (p, pct) =>
-		complete(p, scope.memberId, final, pct, deps.clock.now())
-	, withdrawFromBucket);
+	await withPurchase(
+		db,
+		deps,
+		scope,
+		purchaseId,
+		(p, pct) => complete(p, scope.memberId, final, pct, deps.clock.now()),
+		withdrawFromBucket
+	);
 }
 
 export async function editPurchase(
@@ -483,11 +490,7 @@ export async function editPurchase(
 	);
 }
 
-async function withdrawFromBucket(
-	tx: Db,
-	deps: Deps,
-	p: Purchase
-): Promise<void> {
+async function withdrawFromBucket(tx: Db, deps: Deps, p: Purchase): Promise<void> {
 	if (!p.bucketId || !p.finalAmount) return;
 	const amountMinor = -p.finalAmount.minor;
 	if (amountMinor >= 0n) return;

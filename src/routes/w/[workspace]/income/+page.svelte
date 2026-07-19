@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { submit } from '$lib/actions/submit';
 	import { money } from '$lib/actions/money';
 	import Icon from '$lib/components/Icon.svelte';
 	import Money from '$lib/components/Money.svelte';
@@ -41,12 +41,7 @@
 		<form
 			method="POST"
 			action="?/add"
-			use:enhance={() => {
-				return async ({ update, result }) => {
-					await update();
-					if (result.type === 'success') showNew = false;
-				};
-			}}
+			use:submit={{ success: 'Income added', onSuccess: () => (showNew = false) }}
 			class="card space-y-3.5 p-5"
 		>
 			<div class="grid grid-cols-[1fr_auto] gap-3">
@@ -129,7 +124,11 @@
 							>
 								<Icon name="pencil" class="h-3.5 w-3.5" />
 							</button>
-							<form method="POST" action="?/remove" use:enhance>
+							<form
+								method="POST"
+								action="?/remove"
+								use:submit={{ confirm: 'Remove this income entry?', success: 'Income removed' }}
+							>
 								<input type="hidden" name="incomeId" value={e.id} />
 								<button class="press ml-0.5" style="color: var(--ink-4)" aria-label="Remove">
 									<Icon name="trash" class="h-4 w-4" />
@@ -142,12 +141,7 @@
 						<form
 							method="POST"
 							action="?/edit"
-							use:enhance={() => {
-								return async ({ update, result }) => {
-									await update();
-									if (result.type === 'success') editing = null;
-								};
-							}}
+							use:submit={{ success: 'Changes saved', onSuccess: () => (editing = null) }}
 							class="mt-3 space-y-3 rounded-[14px] p-4"
 							style="background: var(--surface-2)"
 						>

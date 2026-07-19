@@ -5,7 +5,7 @@ import { Money, InvalidMoneyError } from '$lib/domain/money/money';
 import {
 	createBucket,
 	listBuckets,
-	loadBucket,
+	loadOwnBucket,
 	updateBucket,
 	pauseBucket,
 	resumeBucket,
@@ -186,7 +186,13 @@ export const actions: Actions = {
 			return fail(400, { error: 'Type must be withdrawal or adjustment' });
 		}
 
-		const b = await loadBucket(getDb(), locals.workspace!.id, bucketId);
+		// Owner-scoped, like every other bucket mutation: a workspace-scoped load
+		// would let any member withdraw from someone else's bucket.
+		const b = await loadOwnBucket(
+			getDb(),
+			{ workspaceId: locals.workspace!.id, memberId: locals.member!.id },
+			bucketId
+		);
 		if (!b) return fail(400, { error: 'Bucket not found' });
 
 		try {

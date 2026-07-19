@@ -1,0 +1,1 @@
+CREATE INDEX "purchase_bucket_idx" ON "purchase" USING btree ("bucket_id");

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { submit } from '$lib/actions/submit';
 	import { money } from '$lib/actions/money';
 	import Icon from '$lib/components/Icon.svelte';
 	import Money from '$lib/components/Money.svelte';
@@ -10,6 +10,12 @@
 	let editing: string | null = $state(null);
 	let editFreq: Record<string, string> = $state({});
 	let patternInput = $state('');
+	// The pattern box writes into these; the fields below are bound to them.
+	// Reaching for the DOM instead meant the parsed value and the component's
+	// idea of the form disagreed the moment either one changed.
+	let interval = $state(1);
+	let weekDays = $state<number[]>([]);
+	let monthDay = $state('1');
 	const today = new Date().toISOString().slice(0, 10);
 	const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -38,10 +44,7 @@
 		const intervalMatch = t.match(/every\s+(\d+)/);
 		if (intervalMatch) {
 			const intv = parseInt(intervalMatch[1]);
-			if (intv >= 1 && intv <= 52) {
-				patternInput = t;
-				(document.querySelector('[name="interval"]') as HTMLInputElement).value = String(intv);
-			}
+			if (intv >= 1 && intv <= 52) interval = intv;
 		}
 
 		const foundDays: number[] = [];
@@ -57,25 +60,23 @@
 		for (const [name, idx] of Object.entries(dayMap)) {
 			if (t.includes(name)) foundDays.push(idx);
 		}
-		if (foundDays.length > 0) {
-			const checkboxes = document.querySelectorAll(
-				'[name="weekDay"]'
-			) as NodeListOf<HTMLInputElement>;
-			checkboxes.forEach((cb) => (cb.checked = foundDays.includes(parseInt(cb.value))));
-		}
+		if (foundDays.length > 0) weekDays = foundDays;
 
 		const monthDayMatch = t.match(/\b(\d+)(?:st|nd|rd|th)?\b/);
 		if (monthDayMatch && (freq === 'monthly' || freq === 'yearly')) {
 			const day = parseInt(monthDayMatch[1]);
-			if (day >= 1 && day <= 28) {
-				const select = document.querySelector('[name="monthDay"]') as HTMLSelectElement;
-				if (select) select.value = String(day);
-			}
+			if (day >= 1 && day <= 28) monthDay = String(day);
 		}
-		if (/\blast\s+day\b/.test(t)) {
-			const select = document.querySelector('[name="monthDay"]') as HTMLSelectElement;
-			if (select) select.value = '-1';
-		}
+		if (/\blast\s+day\b/.test(t)) monthDay = '-1';
+	}
+
+	function resetNewForm() {
+		showNew = false;
+		patternInput = '';
+		freq = 'monthly';
+		interval = 1;
+		weekDays = [];
+		monthDay = '1';
 	}
 </script>
 
@@ -103,12 +104,7 @@
 		<form
 			method="POST"
 			action="?/create"
-			use:enhance={() => {
-				return async ({ update, result }) => {
-					await update();
-					if (result.type === 'success') showNew = false;
-				};
-			}}
+			use:submit={{ success: 'Recurring charge added', onSuccess: resetNewForm }}
 			class="card space-y-3.5 p-5"
 		>
 			<div class="grid grid-cols-[1fr_auto] gap-3">
@@ -147,7 +143,7 @@
 					type="number"
 					min="1"
 					max="52"
-					value="1"
+					bind:value={interval}
 					class="field text-[15px] tabular-nums"
 				/>
 				<input name="startDate" type="date" value={today} required class="field text-[15px]" />
@@ -156,14 +152,20 @@
 				<div class="flex flex-wrap gap-x-4 gap-y-2">
 					{#each dayNames as name, i (name)}
 						<label class="flex items-center gap-1.5 text-[15px]" style="color: var(--ink)">
-							<input type="checkbox" name="weekDay" value={i + 1} class="rounded" />
+							<input
+								type="checkbox"
+								name="weekDay"
+								value={i + 1}
+								bind:group={weekDays}
+								class="rounded"
+							/>
 							{name}
 						</label>
 					{/each}
 				</div>
 			{:else if freq === 'monthly' || freq === 'yearly'}
-				<select name="monthDay" class="field text-[15px]">
-					{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}<option value={d}
+				<select name="monthDay" bind:value={monthDay} class="field text-[15px]">
+					{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}<option value={String(d)}
 							>Day {d}</option
 						>{/each}
 					<option value="-1">Last day</option>
@@ -220,14 +222,14 @@
 					{#if r.mine}
 						<div class="mt-2.5 flex items-center gap-4 text-[13px]">
 							{#if r.status === 'active'}
-								<form method="POST" action="?/pause" use:enhance>
+								<form method="POST" action="?/pause" use:submit={{ success: 'Paused' }}>
 									<input type="hidden" name="ruleId" value={r.id} />
 									<button class="press inline-flex items-center gap-1" style="color: var(--ink-3)">
 										<Icon name="pause" class="h-3.5 w-3.5" /> Pause
 									</button>
 								</form>
 							{:else}
-								<form method="POST" action="?/resume" use:enhance>
+								<form method="POST" action="?/resume" use:submit={{ success: 'Resumed' }}>
 									<input type="hidden" name="ruleId" value={r.id} />
 									<button
 										class="press inline-flex items-center gap-1"
@@ -244,7 +246,15 @@
 							>
 								<Icon name="pencil" class="h-3.5 w-3.5" /> Edit
 							</button>
-							<form method="POST" action="?/end" use:enhance class="ml-auto">
+							<form
+								method="POST"
+								action="?/end"
+								use:submit={{
+									confirm: 'End this recurring charge? It stops generating new purchases.',
+									success: 'Recurring charge ended'
+								}}
+								class="ml-auto"
+							>
 								<input type="hidden" name="ruleId" value={r.id} />
 								<button class="press" style="color: color-mix(in oklab, var(--deny) 80%, white)"
 									>End</button
@@ -256,12 +266,7 @@
 							<form
 								method="POST"
 								action="?/edit"
-								use:enhance={() => {
-									return async ({ update, result }) => {
-										await update();
-										if (result.type === 'success') editing = null;
-									};
-								}}
+								use:submit={{ success: 'Changes saved', onSuccess: () => (editing = null) }}
 								class="mt-3 space-y-3 rounded-[14px] p-4"
 								style="background: var(--surface-2)"
 							>
@@ -329,7 +334,7 @@
 										{/each}
 									</div>
 								{:else if f === 'monthly' || f === 'yearly'}
-									<select name="monthDay" class="field text-[15px]">
+									<select name="monthDay" bind:value={monthDay} class="field text-[15px]">
 										{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}
 											<option value={d} selected={r.monthDay === d}>Day {d}</option>
 										{/each}

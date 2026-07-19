@@ -2,7 +2,13 @@ import { and, eq, gte, isNotNull, isNull, lt } from 'drizzle-orm';
 import type { Db } from '$lib/server/db';
 import { income, user, workspaceMember } from '$lib/server/db/schema';
 import type { Period } from '$lib/domain/analytics/period';
-import { compareDates, nextOccurrence, parseRRule, addDays, type CalDate } from '$lib/domain/recurrence/rrule';
+import {
+	compareDates,
+	nextOccurrence,
+	parseRRule,
+	addDays,
+	type CalDate
+} from '$lib/domain/recurrence/rrule';
 import { zonedTimeToUtc } from '$lib/domain/time/zoned';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
@@ -135,7 +141,7 @@ export async function incomeInPeriod(
 				)
 			),
 		db
-			.select({ amountMinor: income.amountMinor, rrule: income.rrule })
+			.select({ id: income.id, amountMinor: income.amountMinor, rrule: income.rrule })
 			.from(income)
 			.where(and(eq(income.workspaceId, workspaceId), isNotNull(income.rrule)))
 	]);
@@ -153,8 +159,17 @@ export async function incomeInPeriod(
 				total += r.amountMinor;
 				cursor = occ;
 			}
-		} catch {
-			// Malformed rule: skip rather than break the whole page.
+		} catch (e) {
+			// Malformed rule: skip rather than break the whole page — but say so,
+			// otherwise the income total is silently wrong and nothing surfaces it.
+			console.log(
+				JSON.stringify({
+					level: 'warn',
+					msg: 'income: malformed rrule skipped',
+					incomeSourceId: r.id,
+					err: (e as Error).message
+				})
+			);
 		}
 	}
 	return total;

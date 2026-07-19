@@ -4,8 +4,12 @@ import { page } from '$app/state';
 function createBoxedState<T>(initial: T) {
 	let value = $state(initial);
 	return {
-		get value() { return value; },
-		set value(v: T) { value = v; }
+		get value() {
+			return value;
+		},
+		set value(v: T) {
+			value = v;
+		}
 	};
 }
 
@@ -37,7 +41,7 @@ export function close() {
 
 export function pickExample(prompt: string) {
 	paletteQuery.value = prompt;
-	submit();
+	void submit();
 }
 
 export async function submit() {
@@ -56,7 +60,7 @@ export async function submit() {
 		if (data.target) {
 			setTimeout(() => {
 				close();
-				goto(`/w/${page.params.workspace}/${data.target}`);
+				void goto(`/w/${page.params.workspace}/${data.target}`);
 			}, 600);
 		}
 	} catch {

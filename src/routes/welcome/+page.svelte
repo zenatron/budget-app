@@ -1,12 +1,20 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { submit } from '$lib/actions/submit';
+	import { dismiss } from '$lib/actions/dismiss';
 	import Icon from '$lib/components/Icon.svelte';
 	let { data, form } = $props();
 	const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 	const accents = [
-		'#FF9F0A', '#FF375F', '#30D158', '#0A84FF',
-		'#BF5AF2', '#FF453A', '#40C8E0', '#FFD60A', '#B4472B'
+		'#FF9F0A',
+		'#FF375F',
+		'#30D158',
+		'#0A84FF',
+		'#BF5AF2',
+		'#FF453A',
+		'#40C8E0',
+		'#FFD60A',
+		'#B4472B'
 	];
 
 	let selectedColor = $state(accents[0]);
@@ -68,7 +76,7 @@
 		{/if}
 
 		<div class="card space-y-4 p-5">
-			<form method="POST" action="?/create" use:enhance class="space-y-4">
+			<form method="POST" action="?/create" use:submit class="space-y-4">
 				<div class="flex items-start gap-3">
 					<div class="relative">
 						<button
@@ -81,17 +89,12 @@
 							<Icon name="plus" class="h-4 w-4" />
 						</button>
 						{#if showPicker}
-							<!-- svelte-ignore a11y_no_static_element_interactions -->
-							<div
-								class="fixed inset-0 z-40"
-								onclick={() => (showPicker = false)}
-								onkeydown={() => {}}
-							></div>
+							<div class="fixed inset-0 z-40" use:dismiss={() => (showPicker = false)}></div>
 							<div
 								class="card absolute top-full left-0 z-50 mt-2 grid grid-cols-5 gap-2 p-2.5"
 								style="box-shadow: var(--shadow-float)"
 							>
-								{#each accents as c}
+								{#each accents as c (c)}
 									<button
 										type="button"
 										onclick={() => selectColor(c)}
@@ -107,16 +110,23 @@
 					</div>
 					<div class="flex-1 space-y-1">
 						<p class="text-[17px] font-semibold" style="color: var(--ink)">Create a workspace</p>
-						<input name="name" required maxlength="60" placeholder="Our household" class="field text-[15px]" />
+						<input
+							name="name"
+							required
+							maxlength="60"
+							placeholder="Our household"
+							class="field text-[15px]"
+						/>
 					</div>
 				</div>
 				<input type="hidden" name="accentColor" value={selectedColor} />
 				<div class="grid grid-cols-2 gap-3">
 					<select name="currency" class="field text-[15px]">
-						{#each data.currencies as c}<option value={c} selected={c === 'USD'}>{c}</option>{/each}
+						{#each data.currencies as c (c)}<option value={c} selected={c === 'USD'}>{c}</option
+							>{/each}
 					</select>
 					<select name="timezone" class="field text-[15px]">
-						{#each data.timezones as t}<option value={t} selected={t === tz}>{t}</option>{/each}
+						{#each data.timezones as t (t)}<option value={t} selected={t === tz}>{t}</option>{/each}
 					</select>
 				</div>
 				{#if form?.action === 'create' && form?.error}
@@ -135,7 +145,7 @@
 			<p class="text-[13px] font-semibold tracking-[0.06em] uppercase" style="color: var(--ink-4)">
 				Join with invite code
 			</p>
-			<form method="POST" action="?/join" use:enhance class="space-y-3.5">
+			<form method="POST" action="?/join" use:submit class="space-y-3.5">
 				<input
 					name="code"
 					required

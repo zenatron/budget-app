@@ -29,16 +29,29 @@ export async function materializeBucketAccruals(db: Db, deps: Deps): Promise<num
 
 		if (today.d < b.dayOfMonth) continue;
 
-		const alreadyAccrued = await hasAccrualForMonth(db, b.id, today.y, today.m);
-		if (alreadyAccrued) continue;
+		// Check-then-insert must be atomic: two overlapping sweeps would otherwise
+		// both see "no accrual yet" and each write one. Lock the bucket row first.
+		const didAccrue = await db.transaction(async (tx) => {
+			const locked = await tx
+				.select({ id: bucket.id, status: bucket.status })
+				.from(bucket)
+				.where(eq(bucket.id, b.id))
+				.for('update')
+				.limit(1);
+			if (!locked[0] || locked[0].status !== 'active') return false;
 
-		await addTransaction(db, deps, {
-			bucketId: b.id,
-			amountMinor: b.monthlyAmountMinor,
-			currency: b.currency,
-			type: 'accrual'
+			if (await hasAccrualForMonth(tx, b.id, today.y, today.m)) return false;
+
+			await addTransaction(tx, deps, {
+				bucketId: b.id,
+				amountMinor: b.monthlyAmountMinor,
+				currency: b.currency,
+				type: 'accrual'
+			});
+			return true;
 		});
-		accrued += 1;
+
+		if (didAccrue) accrued += 1;
 	}
 
 	return accrued;

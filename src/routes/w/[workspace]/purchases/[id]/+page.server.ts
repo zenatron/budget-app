@@ -46,7 +46,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		listEvents(db, p.id),
 		memberNames(db, [p.memberId, ...p.approverMemberIds, ...p.sealedFromMemberIds]),
 		listCategories(db, locals.workspace!.id),
-		listImages(db, p.id)
+		listImages(db, scope, p.id, now)
 	]);
 
 	let merchantName: string | null = null;

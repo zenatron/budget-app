@@ -1,4 +1,6 @@
 import { subscribe } from '$lib/infra/events/bus';
+import { getDb } from '$lib/server/db';
+import { findWorkspaceForMember } from '$lib/server/repo/workspaces';
 import type { RequestHandler } from './$types';
 
 const PING_INTERVAL_MS = 30_000;
@@ -7,10 +9,16 @@ const PING_INTERVAL_MS = 30_000;
  * Workspace-scoped SSE stream (server→client only). Membership is enforced by
  * hooks; seal filtering is per-subscriber inside the bus. Clients treat any
  * message as an invalidation signal.
+ *
+ * Hooks authorize once, at connect. A stream is long-lived, so membership is
+ * re-checked on each ping — otherwise a removed member keeps receiving
+ * workspace events until they happen to reconnect.
  */
 export const GET: RequestHandler = ({ locals, request }) => {
 	const workspaceId = locals.workspace!.id;
 	const memberId = locals.member!.id;
+	const slug = locals.workspace!.slug;
+	const userId = locals.user!.id;
 
 	const stream = new ReadableStream({
 		start(controller) {
@@ -27,8 +35,7 @@ export const GET: RequestHandler = ({ locals, request }) => {
 				memberId,
 				send: (json) => write(`data: ${json}\n\n`)
 			});
-			const ping = setInterval(() => write(`: ping\n\n`), PING_INTERVAL_MS);
-			request.signal.addEventListener('abort', () => {
+			const teardown = () => {
 				clearInterval(ping);
 				unsubscribe();
 				try {
@@ -36,7 +43,20 @@ export const GET: RequestHandler = ({ locals, request }) => {
 				} catch {
 					// already closed
 				}
-			});
+			};
+
+			const ping = setInterval(() => {
+				void (async () => {
+					const ctx = await findWorkspaceForMember(getDb(), slug, userId);
+					if (!ctx || ctx.member.id !== memberId) {
+						teardown();
+						return;
+					}
+					write(`: ping\n\n`);
+				})();
+			}, PING_INTERVAL_MS);
+
+			request.signal.addEventListener('abort', teardown);
 		}
 	});
 

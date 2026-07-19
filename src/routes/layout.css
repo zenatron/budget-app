@@ -306,6 +306,39 @@
 	transform: scale(0.97);
 }
 
+/* In-flight form state, driven by use:submit. The button is already disabled;
+   this is the visible half, so a slow round trip doesn't look like a dead tap. */
+form[data-submitting] button[type='submit'],
+form[data-submitting] button:not([type]) {
+	opacity: 0.55;
+	cursor: progress;
+}
+form[data-submitting] button[type='submit']::after,
+form[data-submitting] button:not([type])::after {
+	content: '';
+	display: inline-block;
+	vertical-align: -0.125em;
+	margin-inline-start: 0.5em;
+	width: 0.85em;
+	height: 0.85em;
+	border-radius: 50%;
+	border: 1.5px solid currentColor;
+	border-top-color: transparent;
+	animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	form[data-submitting] button::after {
+		animation-duration: 2s;
+	}
+}
+
 @view-transition {
 	navigation: auto;
 }
@@ -319,16 +352,16 @@
 ::view-transition-new(root) {
 	animation: vt-fade-in var(--dur) var(--ease-out) both;
 }
-html[data-vt-slide="right"]::view-transition-old(root) {
+html[data-vt-slide='right']::view-transition-old(root) {
 	animation: vt-slide-out-right var(--dur) var(--ease-out) both;
 }
-html[data-vt-slide="right"]::view-transition-new(root) {
+html[data-vt-slide='right']::view-transition-new(root) {
 	animation: vt-slide-in-right var(--dur) var(--ease-out) both;
 }
-html[data-vt-slide="left"]::view-transition-old(root) {
+html[data-vt-slide='left']::view-transition-old(root) {
 	animation: vt-slide-out-left var(--dur) var(--ease-out) both;
 }
-html[data-vt-slide="left"]::view-transition-new(root) {
+html[data-vt-slide='left']::view-transition-new(root) {
 	animation: vt-slide-in-left var(--dur) var(--ease-out) both;
 }
 @keyframes vt-fade-out {

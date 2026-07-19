@@ -1,22 +1,11 @@
-import { json } from '@sveltejs/kit';
-import { eq, ilike, and } from 'drizzle-orm';
-
-function jsonSafe(data: unknown) {
-	return new Response(
-		JSON.stringify(data, (_, v) => (typeof v === 'bigint' ? v.toString() : v)),
-		{
-			headers: { 'content-type': 'application/json' }
-		}
-	);
-}
+import { error } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
-import { purchase, workspaceMember, user as userTable } from '$lib/server/db/schema';
-import { createBucket, listBuckets } from '$lib/server/repo/buckets';
+import { getEnv } from '$lib/server/env';
+import { createBucket, savingsInPeriod } from '$lib/server/repo/buckets';
 import { Money } from '$lib/domain/money/money';
 import { periodTotal, categoryBreakdown, memberBreakdown } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
-import { savingsInPeriod } from '$lib/server/repo/buckets';
-import { monthPeriod, previousMonthPeriod, yearPeriod } from '$lib/domain/analytics/period';
+import { monthPeriod, yearPeriod } from '$lib/domain/analytics/period';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { calDateInZone } from '$lib/domain/time/zoned';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
@@ -24,17 +13,12 @@ import { parse, type TimePeriod } from '$lib/intelligence/parser';
 import { formatPct } from '$lib/format';
 import type { RequestHandler } from './$types';
 
-function stringifyBigInts(obj: unknown): unknown {
-	if (typeof obj === 'bigint') return obj.toString();
-	if (Array.isArray(obj)) return obj.map(stringifyBigInts);
-	if (obj && typeof obj === 'object') {
-		const out: Record<string, unknown> = {};
-		for (const [k, v] of Object.entries(obj)) {
-			out[k] = stringifyBigInts(v);
-		}
-		return out;
-	}
-	return obj;
+/** Amounts cross the wire as bigint minor units; JSON.stringify can't do those. */
+function jsonSafe(data: unknown) {
+	return new Response(
+		JSON.stringify(data, (_, v) => (typeof v === 'bigint' ? v.toString() : v)),
+		{ headers: { 'content-type': 'application/json' } }
+	);
 }
 
 function timeToPeriod(tp: TimePeriod) {
@@ -42,8 +26,27 @@ function timeToPeriod(tp: TimePeriod) {
 	return tp.type === 'year' ? yearPeriod(date) : monthPeriod(date);
 }
 
+// Standalone endpoint: SvelteKit's form-action CSRF check doesn't cover it, and
+// this one both reads workspace data and can create buckets.
+function assertSameOrigin(request: Request): void {
+	const origin = request.headers.get('origin');
+	const allowed = new URL(getEnv().PUBLIC_ORIGIN).origin;
+	if (origin !== allowed && origin !== new URL(request.url).origin) {
+		error(403, 'Cross-origin request rejected');
+	}
+}
+
 export const POST: RequestHandler = async ({ locals, request }) => {
-	const { query } = await request.json();
+	assertSameOrigin(request);
+
+	let body: unknown;
+	try {
+		body = await request.json();
+	} catch {
+		error(400, 'Malformed request body');
+	}
+
+	const query = (body as { query?: unknown } | null)?.query;
 	if (!query || typeof query !== 'string') {
 		return jsonSafe({ intent: 'unknown', raw: '' });
 	}
@@ -61,26 +64,11 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 
 	if (parsed.intent === 'spending_query') {
 		const period = timeToPeriod(parsed.period);
-		const prevPeriod =
-			parsed.period.type === 'year'
-				? (() => {
-						const d = parsed.period.month
-							? { y: parsed.period.year, m: parsed.period.month, d: 1 }
-							: { y: parsed.period.year, m: 7, d: 1 };
-						return previousMonthPeriod(d);
-					})()
-				: (() => {
-						const d = parsed.period.month
-							? { y: parsed.period.year, m: parsed.period.month, d: 1 }
-							: { y: parsed.period.year, m: 7, d: 1 };
-						return previousMonthPeriod(d);
-					})();
-
 		const total = await periodTotal(db, scope, period, now);
 		const categories = await categoryBreakdown(db, scope, period, now);
 		const members = await memberBreakdown(db, scope, period, now);
 		const income = await incomeInPeriod(db, locals.workspace!.id, period, scope.timezone, today);
-		let answer = '';
+		let answer: string;
 		let detail: unknown[] = [];
 		let highlight: number | null = null;
 
@@ -90,7 +78,6 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			);
 			if (matched.length > 0) {
 				const catTotal = matched.reduce((s, c) => s + c.totalMinor, 0n);
-				const pct = total > 0n ? Number((catTotal * 1000n) / total) / 10 : 0;
 				answer = `${Money.of(catTotal, currency).format()} spent on ${matched.map((c) => c.name).join(', ')} in ${parsed.period.label}`;
 				detail = matched.map((c) => ({ label: c.name, amountMinor: c.totalMinor }));
 				highlight = Number(catTotal);
@@ -133,7 +120,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		answer += `${Money.of(total, currency).format()} out`;
 		if (savings > 0n) answer += `, ${Money.of(savings, currency).format()} saved`;
 		answer += `. Net: ${Money.of(net, currency).format()}`;
-			if (income > 0n) answer += ` (${formatPct(pct)} free)`;
+		if (income > 0n) answer += ` (${formatPct(pct)} free)`;
 
 		return jsonSafe({ intent: parsed.intent, answer });
 	}

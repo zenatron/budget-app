@@ -175,6 +175,8 @@ export const purchase = pgTable(
 		// Seal filtering.
 		index('purchase_sealed_from_gin').using('gin', t.sealedFromMemberIds),
 		index('purchase_member_idx').on(t.memberId),
+		// FK lookups: bucket detail lists its purchases, and archiving scans by it.
+		index('purchase_bucket_idx').on(t.bucketId),
 		// recurring_rule is declared below; declare the FK here to keep types happy.
 		foreignKey({
 			name: 'purchase_recurring_rule_fk',

@@ -63,12 +63,29 @@ export async function addPurchaseImage(
 	});
 }
 
-export async function listImages(db: Db, purchaseId: string) {
-	return db
-		.select()
+/**
+ * Scoped like every other read: a purchase id alone is not authorization, so
+ * the workspace + seal predicate is applied here rather than trusted upstream.
+ */
+export async function listImages(
+	db: Db,
+	scope: { workspaceId: string; viewerId: string },
+	purchaseId: string,
+	now: Date
+) {
+	const rows = await db
+		.select({ image: purchaseImage })
 		.from(purchaseImage)
-		.where(eq(purchaseImage.purchaseId, purchaseId))
+		.innerJoin(purchase, eq(purchaseImage.purchaseId, purchase.id))
+		.where(
+			and(
+				eq(purchaseImage.purchaseId, purchaseId),
+				eq(purchase.workspaceId, scope.workspaceId),
+				visibleTo(scope.viewerId, now)
+			)
+		)
 		.orderBy(asc(purchaseImage.position));
+	return rows.map((r) => r.image);
 }
 
 /**

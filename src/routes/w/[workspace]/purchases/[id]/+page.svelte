@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
 	import { formatMinor } from '$lib/money-format';
 	import Icon from '$lib/components/Icon.svelte';
@@ -289,7 +290,15 @@
 							Until {fmtDate(p.sealedUntil!)} — invisible everywhere, including totals.
 						</p>
 						{#if data.can.unseal}
-							<form method="POST" action="?/unseal" use:enhance class="mt-2.5">
+							<form
+								method="POST"
+								action="?/unseal"
+								use:submit={{
+									confirm: 'Reveal this purchase now? It becomes visible to everyone immediately.',
+									success: 'Purchase revealed'
+								}}
+								class="mt-2.5"
+							>
 								<button
 									class="btn py-2 text-[13px]"
 									style="color: var(--seal); background: color-mix(in oklab, var(--seal) 14%, transparent)"
@@ -308,7 +317,12 @@
 				<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
 					Enter what you actually spent — a large overage triggers re-approval.
 				</p>
-				<form method="POST" action="?/complete" use:enhance class="mt-3.5 space-y-3">
+				<form
+					method="POST"
+					action="?/complete"
+					use:submit={{ success: 'Marked as bought' }}
+					class="mt-3.5 space-y-3"
+				>
 					<div class="grid grid-cols-2 gap-3">
 						<input
 							name="finalAmount"
@@ -349,7 +363,12 @@
 							Changing item, amount, or category sends this back for approval.
 						</p>
 					{/if}
-					<form method="POST" action="?/edit" use:enhance class="mt-3 space-y-3">
+					<form
+						method="POST"
+						action="?/edit"
+						use:submit={{ success: 'Changes saved' }}
+						class="mt-3 space-y-3"
+					>
 						<input name="itemName" required value={p.itemName} class="field text-[15px]" />
 						<div class="grid grid-cols-2 gap-3">
 							<input
@@ -377,7 +396,12 @@
 		{#if data.can.refund}
 			<div class="card p-5">
 				<p class="text-[15px] font-semibold" style="color: var(--ink)">Record a refund</p>
-				<form method="POST" action="?/refund" use:enhance class="mt-3 flex gap-2.5">
+				<form
+					method="POST"
+					action="?/refund"
+					use:submit={{ success: 'Refund recorded' }}
+					class="mt-3 flex gap-2.5"
+				>
 					<input
 						name="refundAmount"
 						use:money
@@ -392,7 +416,12 @@
 		{/if}
 
 		{#if data.can.cancel}
-			<form method="POST" action="?/cancel" use:enhance class="pt-1 text-center">
+			<form
+				method="POST"
+				action="?/cancel"
+				use:submit={{ confirm: 'Cancel this purchase?', success: 'Purchase cancelled' }}
+				class="pt-1 text-center"
+			>
 				<button class="btn btn-plain" style="color: var(--ink-4)">Cancel this purchase</button>
 			</form>
 		{/if}

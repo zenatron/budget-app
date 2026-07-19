@@ -44,9 +44,21 @@ PostgreSQL 17 + Drizzle, auth via an external [Pocket ID](https://pocket-id.org)
 - ✅ **Phase 8 — Income & net position**: one-off entries plus recurring templates
   expanded at query time (no materialization state), net cash flow and savings
   rate on the analytics page. Income is workspace-open by design.
-- ✅ **Phase 9 (core) — Export & ops**: seal-aware CSV export, backup docs.
-  Remaining polish: strict CSP, rate limiting, offline shell beyond asset cache,
-  seed script.
+- ✅ **Phase 9 — Export & ops**: seal-aware CSV export (formula-injection safe),
+  CSP with split `style-src-elem`/`style-src-attr`, per-IP rate limiting on auth
+  and per-session on uploads, seed script, backup docs.
+- ✅ **Phase 10 — Buckets**: per-member sinking funds with a monthly accrual on a
+  chosen day-of-month, materialized by the sweep under a row lock (one accrual per
+  bucket per month, ever). Withdrawals and manual adjustments are owner-only.
+  Purchases can be charged to a bucket, optionally skipping approval per workspace.
+- ✅ **Phase 11 — Intelligence & command palette**: a local intent parser (no LLM)
+  over spending questions, net-position questions, bucket creation, and navigation,
+  reachable from the palette in the header. Same-origin enforced like `/push`.
+- ✅ **Phase 12 — Merchants & accents**: merchant extraction and per-merchant
+  grouping on purchases; a per-workspace accent color that drives the whole theme.
+- ✅ **Phase 13 — Interaction polish**: navigation progress bar, toast feedback,
+  in-flight form state and confirm gates via `use:submit`, Escape-dismissable
+  popovers via `use:dismiss`.
 
 ## Development
 
@@ -109,10 +121,19 @@ docker run --rm -v budget-app_blobs:/data/blobs -v "$PWD/backup:/backup" \
 src/lib/domain/        pure TS, no I/O — money, purchase state machine,
                        approval policy evaluation, staleness (all unit-tested)
 src/lib/application/   use-cases: create/join workspace, submit/approve/deny/
-                       cancel/complete/edit purchase (transactional + audit event)
-src/lib/ports/         Clock, IdGenerator
-src/lib/infra/         system clock, UUIDv7 generator
+                       cancel/complete/edit purchase (transactional + audit event),
+                       recurring materialization, bucket accruals, budget alerts
+src/lib/intelligence/  intent parser for the command palette (pure TS, no network)
+src/lib/ports/         Clock, IdGenerator, Notifier, BlobStore
+src/lib/infra/         system clock, UUIDv7, filesystem blob store, image pipeline,
+                       notifiers (web push, ntfy, composite), in-process SSE bus
+src/lib/actions/       Svelte actions — money input masking, use:submit, use:dismiss
 src/lib/server/        env validation, db client, migrations, auth (OIDC, sessions),
-                       repositories (every purchase read takes workspaceId + viewerId)
+                       rate limiting, repositories (every purchase read takes
+                       workspaceId + viewerId)
 src/routes/            thin routes; authorization resolved once in hooks.server.ts
 ```
+
+The periodic sweep lives in `hooks.server.ts`: unseal due purchases, materialize
+recurring rules and bucket accruals, send stale nudges and budget alerts. It runs
+on boot and every 5 minutes, never overlapping itself, and stops on SIGTERM.

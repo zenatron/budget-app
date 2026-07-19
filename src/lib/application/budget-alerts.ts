@@ -102,14 +102,30 @@ export async function checkBudgetAlerts(
 				{ userId: ownerMember.userId, memberId: ownerMember.memberId }
 			];
 
+			// Claim the alert before sending it. The conditional update is the
+			// real cooldown gate — the check above is just a cheap pre-filter, and
+			// two overlapping sweeps would both pass it. Only the winner notifies.
+			const claimed = await db
+				.update(budget)
+				.set({ lastAlertedAt: now })
+				.where(
+					and(
+						eq(budget.id, b.id),
+						or(
+							isNull(budget.lastAlertedAt),
+							lt(budget.lastAlertedAt, new Date(now.getTime() - ALERT_COOLDOWN_MS))
+						)
+					)
+				)
+				.returning({ id: budget.id });
+			if (claimed.length === 0) continue;
+
 			await deps.notifier.notify(recipients, 'budget_exceeded', {
 				title: over ? `Budget exceeded in ${ws.name}` : `Budget nearing limit in ${ws.name}`,
 				body: `Spent ${actualMoney.format()} of ${budgetMoney.format()} this month`,
 				path: `/w/${ws.slug}/analytics`,
 				tag: `budget-alert:${b.id}`
 			});
-
-			await db.update(budget).set({ lastAlertedAt: now }).where(eq(budget.id, b.id));
 
 			alerted += 1;
 		}

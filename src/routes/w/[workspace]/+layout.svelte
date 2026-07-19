@@ -5,6 +5,8 @@
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import CommandPaletteOverlay from '$lib/components/CommandPaletteOverlay.svelte';
 	import { paletteOpen } from '$lib/command-palette-state.svelte';
+	import { dismiss } from '$lib/actions/dismiss';
+	import { toastError } from '$lib/toast-state.svelte';
 
 	let { data, children } = $props();
 	let pathname = $derived(page.url.pathname);
@@ -42,14 +44,21 @@
 	$effect(() => {
 		if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 		if (Notification.permission !== 'granted') return;
-		navigator.serviceWorker.ready.then(async (reg) => {
+		void navigator.serviceWorker.ready.then(async (reg) => {
 			const sub = await reg.pushManager.getSubscription();
 			if (!sub) return;
-			fetch('/push', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(sub.toJSON())
-			}).catch(() => {});
+			try {
+				const res = await fetch('/push', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(sub.toJSON())
+				});
+				if (!res.ok) throw new Error(String(res.status));
+			} catch {
+				// Silence here means notifications quietly stop arriving and the
+				// settings page still claims they're on.
+				toastError('Push notifications could not be re-registered');
+			}
 		});
 	});
 
@@ -67,9 +76,9 @@
 	];
 	const accent = $derived(
 		data.workspace.accentColor ??
-		accents[
-			slug.split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) % accents.length
-		]
+			accents[
+				slug.split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) % accents.length
+			]
 	);
 
 	const tabs = [
@@ -104,6 +113,9 @@
 				<button
 					onclick={() => (showSwitcher = !showSwitcher)}
 					class="press flex items-center gap-2.5"
+					aria-label="Switch workspace — currently {wsName}"
+					aria-expanded={showSwitcher}
+					aria-haspopup="menu"
 				>
 					<span
 						class="flex h-7 w-7 items-center justify-center rounded-[8px] font-[family-name:var(--font-display)] text-[15px] font-semibold text-white"
@@ -133,12 +145,7 @@
 				</div>
 
 				{#if showSwitcher}
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div
-						class="fixed inset-0 z-30"
-						onclick={() => (showSwitcher = false)}
-						onkeydown={() => {}}
-					></div>
+					<div class="fixed inset-0 z-30" use:dismiss={() => (showSwitcher = false)}></div>
 					<div
 						class="material card-lg absolute top-full left-0 z-40 mt-1 w-64 overflow-hidden p-1.5"
 						style="box-shadow: var(--shadow-float); background: var(--surface); backdrop-filter: saturate(1.4) blur(24px); -webkit-backdrop-filter: saturate(1.4) blur(24px)"

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
 	import Icon from '$lib/components/Icon.svelte';
 
@@ -155,7 +155,7 @@
 		<p class="mt-1 text-[13px]" style="color: var(--ink-3)">
 			Reliable delivery via the ntfy app — subscribe to your topic there.
 		</p>
-		<form method="POST" action="?/ntfy" use:enhance class="mt-3.5 space-y-3">
+		<form method="POST" action="?/ntfy" use:submit class="mt-3.5 space-y-3">
 			<label class="block">
 				<span class="text-[12px]" style="color: var(--ink-4)">Server</span>
 				<input name="serverUrl" value={data.ntfy.serverUrl} class="field mt-1 text-[15px]" />
@@ -192,7 +192,12 @@
 
 	<section class="card p-5">
 		<h2 class="text-[16px] font-semibold" style="color: var(--ink)">What to send where</h2>
-		<form method="POST" action="?/prefs" use:enhance class="mt-3.5">
+		<form
+			method="POST"
+			action="?/prefs"
+			use:submit={{ success: 'Preferences saved' }}
+			class="mt-3.5"
+		>
 			<div class="grid grid-cols-[1fr_auto_auto] items-center gap-x-5 gap-y-3 text-[15px]">
 				<span></span>
 				<span class="text-[12px] font-medium" style="color: var(--ink-4)">Push</span>

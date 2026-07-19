@@ -6,8 +6,14 @@ import { Money } from '$lib/domain/money/money';
 import { systemClock } from '$lib/infra/time/system-clock';
 import type { RequestHandler } from './$types';
 
+/**
+ * Quote per RFC 4180, and neutralize spreadsheet formula injection: Excel and
+ * Sheets execute a cell starting with = + - @ (or a leading tab/CR), so an item
+ * named `=HYPERLINK(...)` would run on open. A leading apostrophe forces text.
+ */
 function csvField(value: string): string {
-	return /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+	const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+	return /[",\n\r]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }
 
 /** Purchase history export. Seal-filtered like every other read surface. */

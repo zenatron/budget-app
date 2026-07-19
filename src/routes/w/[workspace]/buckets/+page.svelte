@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { submit } from '$lib/actions/submit';
 	import { money } from '$lib/actions/money';
 	import { formatMinor } from '$lib/money-format';
 	import { formatPct } from '$lib/format';
@@ -72,14 +72,12 @@
 		<form
 			method="POST"
 			action="?/create"
-			use:enhance={() => {
-				return async ({ update, result }) => {
-					await update();
-					if (result.type === 'success') {
-						showNew = false;
-						createColor = null;
-					}
-				};
+			use:submit={{
+				success: 'Bucket created',
+				onSuccess: () => {
+					showNew = false;
+					createColor = null;
+				}
 			}}
 			class="card space-y-3.5 p-5"
 		>
@@ -99,7 +97,7 @@
 					>Accrues on day</label
 				>
 				<select id="createDayOfMonth" name="dayOfMonth" class="field text-[16px]">
-					{#each Array.from({ length: 28 }, (_, i) => i + 1) as d}
+					{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}
 						<option value={d}>{d}</option>
 					{/each}
 				</select>
@@ -207,14 +205,14 @@
 								<Icon name="pencil" class="h-3.5 w-3.5" /> Edit
 							</button>
 							{#if b.status === 'active'}
-								<form method="POST" action="?/pause" use:enhance>
+								<form method="POST" action="?/pause" use:submit={{ success: 'Paused' }}>
 									<input type="hidden" name="bucketId" value={b.id} />
 									<button class="press inline-flex items-center gap-1" style="color: var(--ink-3)">
 										<Icon name="pause" class="h-3.5 w-3.5" /> Pause
 									</button>
 								</form>
 							{:else}
-								<form method="POST" action="?/resume" use:enhance>
+								<form method="POST" action="?/resume" use:submit={{ success: 'Resumed' }}>
 									<input type="hidden" name="bucketId" value={b.id} />
 									<button
 										class="press inline-flex items-center gap-1"
@@ -231,7 +229,16 @@
 							>
 								<Icon name="plus" class="h-3.5 w-3.5" /> Adjust
 							</button>
-							<form method="POST" action="?/archive" use:enhance class="ml-auto">
+							<form
+								method="POST"
+								action="?/archive"
+								use:submit={{
+									confirm:
+										'Archive this bucket? Its balance and history stay, but it stops accruing.',
+									success: 'Bucket archived'
+								}}
+								class="ml-auto"
+							>
 								<input type="hidden" name="bucketId" value={b.id} />
 								<button class="press" style="color: color-mix(in oklab, var(--deny) 80%, white)"
 									>Archive</button
@@ -244,12 +251,7 @@
 							<form
 								method="POST"
 								action="?/edit"
-								use:enhance={() => {
-									return async ({ update, result }) => {
-										await update();
-										if (result.type === 'success') editing = null;
-									};
-								}}
+								use:submit={{ success: 'Changes saved', onSuccess: () => (editing = null) }}
 								class="mt-3 space-y-3 rounded-[14px] p-4"
 								style="background: var(--surface-2)"
 							>
@@ -272,7 +274,7 @@
 										for="editDayOfMonth-{b.id}">Accrues on day</label
 									>
 									<select id="editDayOfMonth-{b.id}" name="dayOfMonth" class="field text-[15px]">
-										{#each Array.from({ length: 28 }, (_, i) => i + 1) as d}
+										{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}
 											<option value={d} selected={d === b.dayOfMonth}>{d}</option>
 										{/each}
 									</select>
@@ -322,12 +324,7 @@
 							<form
 								method="POST"
 								action="?/adjust"
-								use:enhance={() => {
-									return async ({ update, result }) => {
-										await update();
-										if (result.type === 'success') adjusting = null;
-									};
-								}}
+								use:submit={{ success: 'Bucket updated', onSuccess: () => (adjusting = null) }}
 								class="mt-3 space-y-3 rounded-[14px] p-4"
 								style="background: var(--surface-2)"
 							>
@@ -348,9 +345,7 @@
 								</div>
 								<input name="note" placeholder="Optional note" class="field text-[15px]" />
 								<div class="flex gap-2">
-									<button class="btn btn-accent flex-1 py-2.5 text-[14px]">
-										Save
-									</button>
+									<button class="btn btn-accent flex-1 py-2.5 text-[14px]"> Save </button>
 									<button
 										type="button"
 										onclick={() => (adjusting = null)}

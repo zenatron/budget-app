@@ -77,13 +77,17 @@ export async function setNtfyTarget(
 	deps: { clock: Clock; ids: IdGenerator },
 	cmd: { userId: string; topic: string; serverUrl: string }
 ) {
-	await db.delete(ntfyTarget).where(eq(ntfyTarget.userId, cmd.userId));
-	await db.insert(ntfyTarget).values({
-		id: deps.ids.newId(),
-		userId: cmd.userId,
-		topic: cmd.topic,
-		serverUrl: cmd.serverUrl,
-		createdAt: deps.clock.now()
+	// Delete + insert as one unit: a failure between them would leave the user
+	// with no target at all rather than the old one.
+	await db.transaction(async (tx) => {
+		await tx.delete(ntfyTarget).where(eq(ntfyTarget.userId, cmd.userId));
+		await tx.insert(ntfyTarget).values({
+			id: deps.ids.newId(),
+			userId: cmd.userId,
+			topic: cmd.topic,
+			serverUrl: cmd.serverUrl,
+			createdAt: deps.clock.now()
+		});
 	});
 }
 

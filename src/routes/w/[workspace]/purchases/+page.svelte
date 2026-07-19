@@ -2,6 +2,8 @@
 	import { page } from '$app/state';
 	import Icon from '$lib/components/Icon.svelte';
 	import Money from '$lib/components/Money.svelte';
+	import { dismiss } from '$lib/actions/dismiss';
+	import { toastError } from '$lib/toast-state.svelte';
 	let { data } = $props();
 	let slug = $derived(page.params.workspace);
 
@@ -13,11 +15,13 @@
 	let items = $state<typeof data.purchases>([]);
 	let hasMore = $state(false);
 
+	// Re-seed from the server list whenever it changes, not just on first paint.
+	// An SSE invalidation refreshes `data` but the paginated `items` array is
+	// what renders, so gating on `items.length === 0` froze the list on stale
+	// rows after any live update.
 	$effect(() => {
-		if (items.length === 0) {
-			items = [...data.purchases];
-			hasMore = data.hasMore;
-		}
+		items = [...data.purchases];
+		hasMore = data.hasMore;
 	});
 
 	let filtered = $derived.by(() => {
@@ -64,15 +68,15 @@
 	async function loadMore() {
 		if (loadingMore) return;
 		loadingMore = true;
-		const p = new URLSearchParams();
-		p.set('offset', String(items.length));
 		try {
-			const res = await fetch(`/w/${slug}/purchases/data?${p}`);
+			const res = await fetch(`/w/${slug}/purchases/data?offset=${items.length}`);
+			if (!res.ok) throw new Error(String(res.status));
 			const json = await res.json();
 			items = [...items, ...json.purchases];
 			hasMore = json.hasMore;
 		} catch {
-			/* network issue */
+			// Failing silently left "Show more" looking like a no-op button.
+			toastError("Couldn't load more purchases");
 		}
 		loadingMore = false;
 	}
@@ -142,6 +146,7 @@
 
 	<div class="mb-5 flex gap-2">
 		<label class="relative flex-1">
+			<span class="sr-only">Search purchases</span>
 			<Icon
 				name="search"
 				class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2"
@@ -187,8 +192,7 @@
 	</div>
 
 	{#if showFilter}
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="fixed inset-0 z-30" onclick={() => (showFilter = false)} onkeydown={() => {}}></div>
+		<div class="fixed inset-0 z-30" use:dismiss={() => (showFilter = false)}></div>
 		<div
 			class="card-lg absolute right-4 z-40 mt-1 w-56 overflow-hidden p-1.5"
 			style="box-shadow: var(--shadow-float); background: var(--surface)"

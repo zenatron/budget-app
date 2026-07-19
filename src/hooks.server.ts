@@ -32,7 +32,23 @@ export const init: ServerInit = async () => {
 	await runMigrations(env.DATABASE_URL, env.MIGRATIONS_DIR);
 	console.log(JSON.stringify({ level: 'info', msg: 'boot: migrations up to date' }));
 
+	// A sweep that outruns its interval must not stack: overlapping runs race each
+	// other over the same due rows and each one holds a pool connection.
+	let sweeping = false;
 	const sweep = async () => {
+		if (sweeping) {
+			console.log(JSON.stringify({ level: 'warn', msg: 'sweep: skipped, previous still running' }));
+			return;
+		}
+		sweeping = true;
+		try {
+			await runSweep();
+		} finally {
+			sweeping = false;
+		}
+	};
+
+	const runSweep = async () => {
 		const deps = { clock: systemClock, ids: uuidv7, notifier: getNotifier() };
 		try {
 			const opened = await unsealDuePurchases(getDb(), deps);
@@ -104,8 +120,22 @@ export const init: ServerInit = async () => {
 		}
 	};
 	await sweep();
-	const schedule = () => setTimeout(() => sweep().finally(schedule), SWEEP_INTERVAL_MS);
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	let stopped = false;
+	const schedule = () => {
+		if (stopped) return;
+		timer = setTimeout(() => void sweep().finally(schedule), SWEEP_INTERVAL_MS);
+	};
 	schedule();
+
+	// Without this the pending timer keeps the process alive past SIGTERM and
+	// the container waits out Docker's 10s kill timeout on every deploy.
+	const shutdown = () => {
+		stopped = true;
+		if (timer) clearTimeout(timer);
+	};
+	process.once('SIGTERM', shutdown);
+	process.once('SIGINT', shutdown);
 };
 
 const WORKSPACE_PATH = /^\/w\/([^/]+)(?:\/|$)/;
@@ -135,7 +165,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const sid = event.cookies.get(SESSION_COOKIE);
 	if (sid) {
-		const hit = await validateSession(getDb(), sid);
+		// Shape-check before the lookup: ids are base64url from randomBytes(32),
+		// so anything else is junk and shouldn't cost a database round trip.
+		const wellFormed = sid.length <= 128 && /^[A-Za-z0-9_-]+$/.test(sid);
+		const hit = wellFormed ? await validateSession(getDb(), sid) : null;
 		if (hit) {
 			event.locals.user = hit.user;
 			event.locals.session = hit.session;

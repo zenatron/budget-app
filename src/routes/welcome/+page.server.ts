@@ -15,7 +15,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const memberships = await listWorkspacesForUser(getDb(), locals.user.id);
 	return {
 		displayName: locals.user.displayName,
-		workspaces: memberships.map((m) => ({ slug: m.workspace.slug, name: m.workspace.name, accentColor: m.workspace.accentColor })),
+		workspaces: memberships.map((m) => ({
+			slug: m.workspace.slug,
+			name: m.workspace.name,
+			accentColor: m.workspace.accentColor
+		})),
 		timezones: Intl.supportedValuesOf('timeZone'),
 		currencies: Intl.supportedValuesOf('currency')
 	};
