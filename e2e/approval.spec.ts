@@ -64,8 +64,17 @@ test('approval loop: request → approve → overage re-approval → complete; d
 		intent: 'request'
 	});
 	await alice.goto(denyUrl);
-	await alice.getByRole('button', { name: 'Deny…' }).click();
-	await alice.getByPlaceholder('Reason (optional)').fill('audiophile nonsense');
+	// Same hydration race as the policy toggle and invite button: "Deny…" only
+	// reveals the reason field once its handler is attached, and a click that
+	// lands before then is a no-op.
+	const reason = alice.getByPlaceholder('Reason (optional)');
+	await expect(async () => {
+		if (!(await reason.isVisible())) {
+			await alice.getByRole('button', { name: 'Deny…' }).click();
+		}
+		await expect(reason).toBeVisible({ timeout: 1000 });
+	}).toPass({ timeout: 30_000 });
+	await reason.fill('audiophile nonsense');
 	await alice.getByRole('button', { name: 'Deny request' }).click();
 	await expect(alice.locator('.chip', { hasText: 'Denied' })).toBeVisible();
 	await expect(alice.getByText(/audiophile nonsense/)).toBeVisible();
