@@ -151,7 +151,7 @@
 	<div class="px-1">
 		<h1 class="text-[28px]">How Ledger works</h1>
 		<p class="mt-1.5 text-[15px] leading-relaxed" style="color: var(--ink-3)">
-			The rules worth knowing, including the few that aren't obvious from the screens.
+			New here? Everything you need to get going.
 		</p>
 	</div>
 
