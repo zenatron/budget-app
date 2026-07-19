@@ -1,4 +1,4 @@
-import { and, asc, eq, or, sql } from 'drizzle-orm';
+import { and, asc, eq, or } from 'drizzle-orm';
 import type { Db } from '$lib/server/db';
 import { purchase, purchaseImage } from '$lib/server/db/schema';
 import { loadPurchase, visibleTo } from '$lib/server/repo/purchases';
@@ -20,47 +20,70 @@ interface Scope {
 	memberId: string;
 }
 
-/** Validate → derive → store (content-addressed) → record. Original discarded. */
-export async function addPurchaseImage(
+async function assertOwnPurchase(db: Db, deps: Deps, scope: Scope, purchaseId: string) {
+	const p = await loadPurchase(
+		db,
+		{ workspaceId: scope.workspaceId, viewerId: scope.memberId },
+		purchaseId,
+		{ now: deps.clock.now() }
+	);
+	if (!p) throw new PurchaseNotFoundError();
+	if (p.memberId !== scope.memberId) {
+		throw new PurchaseStateError('Only the requester can change photos');
+	}
+	return p;
+}
+
+/**
+ * Validate → derive → store (content-addressed) → record. Original discarded.
+ *
+ * A purchase carries one photo. This replaces whatever was there: the detail
+ * page only ever rendered `images[0]`, so appending produced rows that consumed
+ * storage and were never visible anywhere.
+ *
+ * The blob itself is left in place — the store is content-addressed and
+ * append-only, and the same bytes may back another purchase's photo.
+ */
+export async function setPurchaseImage(
 	db: Db,
 	deps: Deps,
 	scope: Scope,
 	purchaseId: string,
 	upload: Uint8Array
 ): Promise<void> {
-	const now = deps.clock.now();
-	const p = await loadPurchase(
-		db,
-		{ workspaceId: scope.workspaceId, viewerId: scope.memberId },
-		purchaseId,
-		{ now }
-	);
-	if (!p) throw new PurchaseNotFoundError();
-	if (p.memberId !== scope.memberId) {
-		throw new PurchaseStateError('Only the requester can add photos');
-	}
+	await assertOwnPurchase(db, deps, scope, purchaseId);
 
+	// Process before touching the DB: an invalid upload must not clear the
+	// existing photo.
 	const processed = await processUpload(upload);
 	const [display, thumb] = await Promise.all([
 		deps.blobs.put(processed.display.data, 'webp'),
 		deps.blobs.put(processed.thumb.data, 'webp')
 	]);
 
-	const [{ maxPos }] = await db
-		.select({ maxPos: sql<number>`coalesce(max(${purchaseImage.position}), -1)::int` })
-		.from(purchaseImage)
-		.where(eq(purchaseImage.purchaseId, purchaseId));
-
-	await db.insert(purchaseImage).values({
-		id: deps.ids.newId(),
-		purchaseId,
-		blobId: display.id,
-		thumbBlobId: thumb.id,
-		width: processed.display.width,
-		height: processed.display.height,
-		byteSize: display.byteSize,
-		position: maxPos + 1
+	await db.transaction(async (tx) => {
+		await tx.delete(purchaseImage).where(eq(purchaseImage.purchaseId, purchaseId));
+		await tx.insert(purchaseImage).values({
+			id: deps.ids.newId(),
+			purchaseId,
+			blobId: display.id,
+			thumbBlobId: thumb.id,
+			width: processed.display.width,
+			height: processed.display.height,
+			byteSize: display.byteSize,
+			position: 0
+		});
 	});
+}
+
+export async function removePurchaseImage(
+	db: Db,
+	deps: Deps,
+	scope: Scope,
+	purchaseId: string
+): Promise<void> {
+	await assertOwnPurchase(db, deps, scope, purchaseId);
+	await db.delete(purchaseImage).where(eq(purchaseImage.purchaseId, purchaseId));
 }
 
 /**

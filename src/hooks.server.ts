@@ -32,6 +32,23 @@ export const init: ServerInit = async () => {
 	await runMigrations(env.DATABASE_URL, env.MIGRATIONS_DIR);
 	console.log(JSON.stringify({ level: 'info', msg: 'boot: migrations up to date' }));
 
+	// ntfy links are absolute — it's a third-party app with no origin of its own —
+	// so a stale PUBLIC_ORIGIN sends people to localhost from their phone. Web push
+	// resolves paths in the service worker and is immune, but say so either way:
+	// the default is localhost, which makes this easy to ship by accident.
+	if (
+		!env.DEV_MODE &&
+		/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(env.PUBLIC_ORIGIN)
+	) {
+		console.log(
+			JSON.stringify({
+				level: 'warn',
+				msg: 'boot: PUBLIC_ORIGIN points at localhost — ntfy notification links will not open off-device',
+				origin: env.PUBLIC_ORIGIN
+			})
+		);
+	}
+
 	// A sweep that outruns its interval must not stack: overlapping runs race each
 	// other over the same due rows and each one holds a pool connection.
 	let sweeping = false;

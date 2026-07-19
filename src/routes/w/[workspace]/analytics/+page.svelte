@@ -6,6 +6,7 @@
 	import { formatPct } from '$lib/format';
 	import Money from '$lib/components/Money.svelte';
 	import CategoryRing from '$lib/components/CategoryRing.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	let { data } = $props();
 	let showBudgetForm = $state(false);
 	const currency = $derived(data.workspace.currency);
@@ -24,15 +25,30 @@
 		swiping = true;
 	}
 
+	/** Past this, the drag is a commit; the card never travels further. */
+	const SWIPE_LIMIT = 96;
+
+	// Rubber-band: full tracking up to the limit, then resistance. Dragging
+	// toward a period that doesn't exist resists from the start, so the end of
+	// the range is something you feel rather than discover on release.
+	function damp(dx: number, hasTarget: boolean): number {
+		const sign = Math.sign(dx);
+		const mag = Math.abs(dx);
+		if (!hasTarget) return sign * Math.min(mag * 0.25, 28);
+		if (mag <= SWIPE_LIMIT) return dx;
+		return sign * (SWIPE_LIMIT + (mag - SWIPE_LIMIT) * 0.3);
+	}
+
 	function onTouchMove(e: TouchEvent) {
 		if (!swiping) return;
 		const dx = e.touches[0].clientX - touchStartX;
 		const dy = e.touches[0].clientY - touchStartY;
 		if (Math.abs(dy) > Math.abs(dx)) {
 			swiping = false;
+			swipeOffset = 0;
 			return;
 		}
-		swipeOffset = dx;
+		swipeOffset = damp(dx, dx > 0 ? data.hasPrev : data.hasNext);
 	}
 
 	function onTouchEnd(e: TouchEvent) {
@@ -44,16 +60,43 @@
 		const dx = e.changedTouches[0].clientX - touchStartX;
 		swipeOffset = 0;
 		if (Math.abs(dx) < 60) return;
-		navigate(dx > 0 ? 'prev' : 'next');
+		void navigate(dx > 0 ? 'prev' : 'next');
 	}
 
-	function navigate(dir: 'prev' | 'next') {
+	/**
+	 * SvelteKit routes client-side, where the CSS-only `@view-transition` rule
+	 * never applies — it covers cross-document navigation only. So the transition
+	 * is started explicitly here, and only here: this is the one navigation that
+	 * wants a directional slide, and a global hook would silently switch it on for
+	 * every route in the app.
+	 */
+	async function navigate(dir: 'prev' | 'next') {
 		const href = navHref(dir);
 		if (!href) return;
-		document.documentElement.setAttribute('data-vt-slide', dir === 'next' ? 'right' : 'left');
-		goto(href).finally(() => {
-			document.documentElement.removeAttribute('data-vt-slide');
-		});
+
+		const root = document.documentElement;
+		const start = (
+			document as Document & {
+				startViewTransition?: (cb: () => Promise<void>) => { finished: Promise<void> };
+			}
+		).startViewTransition?.bind(document);
+
+		// noScroll: stepping through periods keeps your place on the page. Without
+		// it, SvelteKit's default scroll-to-top fired on every swipe, so comparing
+		// the category breakdown across months meant scrolling back down each time.
+		const step = () => goto(href, { noScroll: true });
+
+		if (!start || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+			await step();
+			return;
+		}
+
+		root.setAttribute('data-vt-slide', dir === 'next' ? 'right' : 'left');
+		try {
+			await start(step).finished;
+		} finally {
+			root.removeAttribute('data-vt-slide');
+		}
 	}
 
 	const maxCategory = $derived(
@@ -152,9 +195,7 @@
 	ontouchstart={onTouchStart}
 	ontouchmove={onTouchMove}
 	ontouchend={onTouchEnd}
-	style="transform: translateX({swiping ? swipeOffset : 0}px); transition: transform {swiping
-		? '0s'
-		: 'var(--dur) var(--ease-out)'}; touch-action: pan-y"
+	style="touch-action: pan-y"
 >
 	<div class="flex items-center justify-between px-1 pt-1">
 		<h1 class="text-[28px]">Activity</h1>
@@ -188,7 +229,7 @@
 	<div class="-mx-1 flex items-center justify-between gap-1">
 		{#if data.hasPrev}
 			<button
-				onclick={() => navigate('prev')}
+				onclick={() => void navigate('prev')}
 				class="press flex h-9 w-9 items-center justify-center rounded-full"
 				style="color: var(--ink-3)"
 				aria-label="Previous"
@@ -210,7 +251,7 @@
 		<span class="text-[17px] font-semibold" style="color: var(--ink)">{data.label}</span>
 		{#if data.hasNext}
 			<button
-				onclick={() => navigate('next')}
+				onclick={() => void navigate('next')}
 				class="press flex h-9 w-9 items-center justify-center rounded-full"
 				style="color: var(--ink-3)"
 				aria-label="Next"
@@ -231,9 +272,18 @@
 		{/if}
 	</div>
 
+	<!--
+		The period card is the only thing that tracks the swipe. Dragging the whole
+		page moved the heading, the period tabs and the arrows too, which made a
+		gesture that changes one number look like the entire screen was leaving.
+		`view-transition-name` scopes the follow-through slide to this card as well,
+		so the drag and the transition are the same motion.
+	-->
 	<div
 		class="card-lg grain relative overflow-hidden p-6"
-		style="background: radial-gradient(120% 80% at 85% -10%, color-mix(in oklab, var(--ws-accent) 24%, transparent), transparent 60%), var(--surface)"
+		style="background: radial-gradient(120% 80% at 85% -10%, color-mix(in oklab, var(--ws-accent) 24%, transparent), transparent 60%), var(--surface); view-transition-name: vt-period-card; transform: translateX({swipeOffset}px); transition: transform {swiping
+			? '0s'
+			: 'var(--dur) var(--ease-out)'}"
 	>
 		<p class="section-label text-center">{data.label}</p>
 		<div class="mt-4 flex justify-center">
@@ -500,29 +550,84 @@
 					method="POST"
 					action="?/setBudget"
 					use:submit={{ success: 'Budget saved' }}
-					class="mb-3 flex items-end gap-2"
+					class="mb-3 space-y-2"
 				>
-					<label class="flex-1">
-						<span class="text-[11px]" style="color: var(--ink-4)">Scope</span>
-						<select name="categoryId" class="field mt-1 text-[16px]">
-							<option value="">Everything</option>
-							{#each data.allCategories as c (c.id)}
-								<option value={c.id}>{c.icon} {c.name}</option>
-							{/each}
-						</select>
-					</label>
-					<label class="w-28">
-						<span class="text-[11px]" style="color: var(--ink-4)">{currency}</span>
-						<input
-							name="amount"
-							use:money
-							inputmode="decimal"
-							placeholder="500"
-							class="field num mt-1 text-[16px]"
-						/>
-					</label>
-					<button class="btn btn-accent shrink-0 px-4 py-3 text-[15px]">Save</button>
+					<div class="flex items-end gap-2">
+						<label class="flex-1">
+							<span class="text-[11px]" style="color: var(--ink-4)">Scope</span>
+							<select name="categoryId" class="field mt-1 text-[16px]">
+								<option value="">Everything</option>
+								{#each data.allCategories as c (c.id)}
+									<option value={c.id}>{c.icon} {c.name}</option>
+								{/each}
+							</select>
+						</label>
+						<label class="w-28">
+							<span class="text-[11px]" style="color: var(--ink-4)">{currency}</span>
+							<input
+								name="amount"
+								use:money
+								inputmode="decimal"
+								placeholder="500"
+								class="field num mt-1 text-[16px]"
+							/>
+						</label>
+					</div>
+					<div class="flex items-end gap-2">
+						<label class="flex-1">
+							<span class="text-[11px]" style="color: var(--ink-4)">Starts</span>
+							<select name="effectiveMonth" class="field mt-1 text-[16px]">
+								{#each data.budgetMonths as m (m.value)}
+									<option value={m.value}>{m.label}</option>
+								{/each}
+							</select>
+						</label>
+						<button class="btn btn-accent shrink-0 px-4 py-3 text-[15px]">Save</button>
+					</div>
+					<p class="px-1 text-[12px]" style="color: var(--ink-4)">
+						Applies from that month onward until you set another.
+					</p>
 				</form>
+			{/if}
+
+			<!--
+				Budgets scheduled ahead of the current month. Without this they were
+				invisible until the month arrived, so a plan made in advance looked
+				like it hadn't saved.
+			-->
+			{#if data.scheduledBudgets.length > 0}
+				<div class="mb-4 rounded-[14px] p-3" style="background: var(--surface-2)">
+					<p class="section-label mb-2 px-1">Scheduled</p>
+					{#each data.scheduledBudgets as s (s.id)}
+						<div class="flex items-center justify-between gap-2 px-1 py-1.5 text-[14px]">
+							<span style="color: var(--ink-2)">
+								{s.categoryIcon ?? ''}
+								{s.categoryName ?? 'Everything'}
+								<span style="color: var(--ink-4)">· from {s.label}</span>
+							</span>
+							<span class="flex items-center gap-2">
+								<span class="num" style="color: var(--ink)"
+									>{formatMinor(s.amountMinor, currency)}</span
+								>
+								{#if data.isOwner}
+									<form
+										method="POST"
+										action="?/removeScheduledBudget"
+										use:submit={{
+											confirm: `Remove the ${s.label} budget?`,
+											success: 'Scheduled budget removed'
+										}}
+									>
+										<input type="hidden" name="budgetId" value={s.id} />
+										<button class="press" style="color: var(--ink-4)" aria-label="Remove">
+											<Icon name="xmark" class="h-3.5 w-3.5" />
+										</button>
+									</form>
+								{/if}
+							</span>
+						</div>
+					{/each}
+				</div>
 			{/if}
 			{#if data.budgets.length > 0}
 				<div class="space-y-4">

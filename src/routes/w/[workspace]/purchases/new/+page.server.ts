@@ -5,7 +5,7 @@ import { ApprovalRoutingError } from '$lib/domain/approval/evaluate';
 import { PurchaseStateError } from '$lib/domain/purchase/purchase';
 import { SealError } from '$lib/domain/visibility/seal';
 import { submitPurchase } from '$lib/application/purchases';
-import { addPurchaseImage } from '$lib/application/images';
+import { setPurchaseImage } from '$lib/application/images';
 import { ImageValidationError } from '$lib/infra/images/process';
 import { getBlobStore } from '$lib/server/blobs';
 import { getDb } from '$lib/server/db';
@@ -101,7 +101,7 @@ export const actions: Actions = {
 		const photo = form.get('photo');
 		if (photo instanceof File && photo.size > 0) {
 			try {
-				await addPurchaseImage(
+				await setPurchaseImage(
 					getDb(),
 					{ clock: systemClock, ids: uuidv7, blobs: getBlobStore() },
 					{ workspaceId: locals.workspace!.id, memberId: locals.member!.id },

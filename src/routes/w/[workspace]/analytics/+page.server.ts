@@ -1,8 +1,8 @@
 import { error, fail } from '@sveltejs/kit';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, gt, isNull, lt, or } from 'drizzle-orm';
 import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
-import { budget } from '$lib/server/db/schema';
+import { budget, category } from '$lib/server/db/schema';
 import { Money, InvalidMoneyError } from '$lib/domain/money/money';
 import {
 	listDays,
@@ -84,8 +84,14 @@ function resolvePeriod(params: {
 	pad: (n: number) => string;
 }): PeriodConfig {
 	const { period, target, today, now, timezone, weekStartDay, weekOffset, pad } = params;
-	const latestYear = today.y + 1;
-	const latestMonth = today.m === 12 ? { y: today.y + 1, m: 1 } : { y: today.y, m: today.m + 1 };
+	// The current period is the last one you can reach. A future period has
+	// nothing in it by construction — purchases only exist once materialized, and
+	// incomeInPeriod stops expanding at today — so it rendered as an empty screen
+	// captioned "100% less than last month", which reads as an achievement rather
+	// than as a month that hasn't happened. Day already worked this way; week,
+	// month and year each allowed a different amount of lookahead.
+	const latestYear = today.y;
+	const latestMonth = { y: today.y, m: today.m };
 
 	if (period === 'week') {
 		const base = calDateInZone(new Date(now.getTime() + weekOffset * 7 * DAY_MS), timezone);
@@ -112,7 +118,8 @@ function resolvePeriod(params: {
 			queryPeriod.toExclusive.m - 1,
 			queryPeriod.toExclusive.d
 		);
-		const hasNext = nextWeekStart.getTime() <= now.getTime() + 2 * 7 * DAY_MS;
+		// Stop at the week containing today, not two weeks past it.
+		const hasNext = nextWeekStart.getTime() <= now.getTime();
 		return {
 			queryPeriod,
 			prevPeriod,
@@ -176,7 +183,6 @@ function resolvePeriod(params: {
 			}
 		];
 		const earliest = { y: EARLIEST, m: 1, d: 1 };
-		const tomorrow = addDays(today, 1);
 		return {
 			queryPeriod,
 			prevPeriod,
@@ -185,7 +191,9 @@ function resolvePeriod(params: {
 			buckets,
 			showBudgets: false,
 			hasPrev: compareDates(target, earliest) > 0,
-			hasNext: compareDates(target, tomorrow) < 0,
+			// Strictly before today — comparing against tomorrow let you step onto
+			// tomorrow itself, which is always an empty day.
+			hasNext: compareDates(target, today) < 0,
 			nav: {
 				prevMonth: `${today.y}-${pad(today.m)}`,
 				nextMonth: `${today.y}-${pad(today.m)}`,
@@ -301,6 +309,30 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			: Promise.resolve(new Map())
 	]);
 
+	// Budgets that start after the current month — scheduled, not yet in force.
+	// Surfaced so a plan you made months ago is visible rather than a surprise.
+	const scheduled = cfg.showBudgets
+		? await db
+				.select({
+					id: budget.id,
+					categoryId: budget.categoryId,
+					amountMinor: budget.amountMinor,
+					effectiveFrom: budget.effectiveFrom,
+					categoryName: category.name,
+					categoryIcon: category.icon
+				})
+				.from(budget)
+				.leftJoin(category, eq(budget.categoryId, category.id))
+				.where(
+					and(
+						eq(budget.workspaceId, ws.id),
+						eq(budget.period, 'month'),
+						gt(budget.effectiveFrom, `${today.y}-${pad(today.m)}-01`)
+					)
+				)
+				.orderBy(asc(budget.effectiveFrom))
+		: [];
+
 	return {
 		period,
 		label: cfg.label,
@@ -328,6 +360,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			return { ...b, totalMinor: trend.get(b.key) ?? 0n, href, segments: segs };
 		}),
 		budgets: budgets.map((b) => ({ ...b })),
+		budgetMonths: cfg.showBudgets ? schedulableMonths(today) : [],
+		scheduledBudgets: scheduled.map((s) => ({
+			id: s.id,
+			categoryId: s.categoryId,
+			categoryName: s.categoryName,
+			categoryIcon: s.categoryIcon,
+			amountMinor: s.amountMinor,
+			effectiveFrom: s.effectiveFrom,
+			// "2026-09-01" -> "Sep 2026"
+			label: `${MONTH_NAMES[Number(s.effectiveFrom.slice(5, 7)) - 1]} ${s.effectiveFrom.slice(0, 4)}`
+		})),
 		allCategories: allCategories.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
 		isOwner: locals.member!.role === 'owner',
 		hasPrev: cfg.hasPrev,
@@ -349,10 +392,30 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	};
 };
 
+/** How far ahead a budget may be scheduled, in months. */
+const MAX_BUDGET_LEAD_MONTHS = 12;
+
 const BudgetSchema = v.object({
 	categoryId: v.optional(v.string()),
-	amount: v.pipe(v.string(), v.trim(), v.minLength(1, 'How much?'))
+	amount: v.pipe(v.string(), v.trim(), v.minLength(1, 'How much?')),
+	// YYYY-MM. Absent means "this month", which is what the form defaults to.
+	effectiveMonth: v.optional(v.pipe(v.string(), v.regex(/^\d{4}-\d{2}$/, 'Pick a month')))
 });
+
+/** Months a budget can be scheduled for: this month through +12. */
+function schedulableMonths(today: { y: number; m: number }) {
+	const out: { value: string; label: string }[] = [];
+	for (let i = 0; i <= MAX_BUDGET_LEAD_MONTHS; i++) {
+		const m0 = today.m - 1 + i;
+		const y = today.y + Math.floor(m0 / 12);
+		const m = (m0 % 12) + 1;
+		out.push({
+			value: `${y}-${String(m).padStart(2, '0')}`,
+			label: i === 0 ? 'This month' : `${MONTH_NAMES[m - 1]} ${y}`
+		});
+	}
+	return out;
+}
 
 export const actions: Actions = {
 	setBudget: async ({ locals, request }) => {
@@ -373,26 +436,97 @@ export const actions: Actions = {
 		const db = getDb();
 		const now = systemClock.now();
 		const today = calDateInZone(now, locals.workspace!.timezone);
-		const pad = (n: number) => String(n).padStart(2, '0');
-		const monthStart = `${today.y}-${pad(today.m)}-01`;
 
-		await db
-			.delete(budget)
-			.where(
-				and(
-					eq(budget.workspaceId, locals.workspace!.id),
-					eq(budget.period, 'month'),
-					categoryId === null ? isNull(budget.categoryId) : eq(budget.categoryId, categoryId)
-				)
-			);
-		await db.insert(budget).values({
-			id: uuidv7.newId(),
-			workspaceId: locals.workspace!.id,
-			categoryId,
-			period: 'month',
-			amountMinor: amount.minor,
-			effectiveFrom: monthStart,
-			effectiveTo: null
+		const allowed = schedulableMonths(today);
+		const chosen = parsed.output.effectiveMonth ?? allowed[0].value;
+		if (!allowed.some((m) => m.value === chosen)) {
+			return fail(400, { error: `Pick a month between now and ${allowed.at(-1)!.label}` });
+		}
+		const from = `${chosen}-01`;
+
+		const scope = and(
+			eq(budget.workspaceId, locals.workspace!.id),
+			eq(budget.period, 'month'),
+			categoryId === null ? isNull(budget.categoryId) : eq(budget.categoryId, categoryId)
+		);
+
+		/*
+		 * Budgets are a timeline, not a single value. Reads already select the row
+		 * effective for the month being viewed; the writer used to delete every row
+		 * and re-anchor to the current month, which both destroyed past months'
+		 * budget lines and made scheduling impossible.
+		 *
+		 * Insert closes the open range at `from` and inherits the start of whatever
+		 * is already scheduled after it, so ranges stay adjacent and non-overlapping.
+		 */
+		await db.transaction(async (tx) => {
+			// Replacing a budget that already starts exactly here.
+			await tx.delete(budget).where(and(scope, eq(budget.effectiveFrom, from)));
+
+			const [next] = await tx
+				.select({ from: budget.effectiveFrom })
+				.from(budget)
+				.where(and(scope, gt(budget.effectiveFrom, from)))
+				.orderBy(asc(budget.effectiveFrom))
+				.limit(1);
+
+			// Truncate the range this one starts inside of.
+			await tx
+				.update(budget)
+				.set({ effectiveTo: from })
+				.where(
+					and(
+						scope,
+						lt(budget.effectiveFrom, from),
+						or(isNull(budget.effectiveTo), gt(budget.effectiveTo, from))
+					)
+				);
+
+			await tx.insert(budget).values({
+				id: uuidv7.newId(),
+				workspaceId: locals.workspace!.id,
+				categoryId,
+				period: 'month',
+				amountMinor: amount.minor,
+				effectiveFrom: from,
+				effectiveTo: next?.from ?? null
+			});
+		});
+		return { ok: true };
+	},
+
+	/** Drop a scheduled budget and reopen the range that preceded it. */
+	removeScheduledBudget: async ({ locals, request }) => {
+		if (locals.member!.role !== 'owner') error(403, 'Only the owner can set budgets');
+		const id = String((await request.formData()).get('budgetId') ?? '');
+		const db = getDb();
+		const today = calDateInZone(systemClock.now(), locals.workspace!.timezone);
+		const pad = (n: number) => String(n).padStart(2, '0');
+		const thisMonth = `${today.y}-${pad(today.m)}-01`;
+
+		await db.transaction(async (tx) => {
+			const [row] = await tx
+				.select()
+				.from(budget)
+				.where(and(eq(budget.id, id), eq(budget.workspaceId, locals.workspace!.id)))
+				.limit(1);
+			// Only future rows are removable here; past ones are history.
+			if (!row || row.effectiveFrom <= thisMonth) return;
+
+			await tx.delete(budget).where(eq(budget.id, id));
+			await tx
+				.update(budget)
+				.set({ effectiveTo: row.effectiveTo })
+				.where(
+					and(
+						eq(budget.workspaceId, locals.workspace!.id),
+						eq(budget.period, 'month'),
+						row.categoryId === null
+							? isNull(budget.categoryId)
+							: eq(budget.categoryId, row.categoryId),
+						eq(budget.effectiveTo, row.effectiveFrom)
+					)
+				);
 		});
 		return { ok: true };
 	},

@@ -18,12 +18,13 @@ export type WebPushResult = 'ok' | 'gone' | 'failed';
 /**
  * One send per subscription. 404/410 mean the subscription is dead ('gone') —
  * normal lifecycle, the caller prunes the row. Payloads stay minimal: title,
- * body, deep-link path, collapse tag.
+ * body, deep-link path, collapse tag. The path stays relative on purpose.
  */
 export async function sendWebPush(
 	config: WebPushConfig,
 	target: WebPushTarget,
-	msg: NotificationMessage & { origin: string }
+	// No `origin`: unlike ntfy, the service worker knows its own.
+	msg: NotificationMessage
 ): Promise<WebPushResult> {
 	try {
 		await webpush.sendNotification(
@@ -31,7 +32,10 @@ export async function sendWebPush(
 			JSON.stringify({
 				title: msg.title,
 				body: msg.body,
-				url: msg.origin + msg.path,
+				// Path only. The service worker resolves it against the origin
+				// actually serving it, so a wrong PUBLIC_ORIGIN can't produce a
+				// notification that opens localhost on someone's phone.
+				path: msg.path,
 				tag: msg.tag
 			}),
 			{

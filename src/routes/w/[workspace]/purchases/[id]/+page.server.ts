@@ -5,7 +5,7 @@ import { Money, InvalidMoneyError } from '$lib/domain/money/money';
 import { PurchaseStateError } from '$lib/domain/purchase/purchase';
 import { isStale, waitingDays } from '$lib/domain/approval/staleness';
 import { isSealed } from '$lib/domain/visibility/seal';
-import { addPurchaseImage, listImages } from '$lib/application/images';
+import { setPurchaseImage, removePurchaseImage, listImages } from '$lib/application/images';
 import { ImageValidationError } from '$lib/infra/images/process';
 import { getBlobStore } from '$lib/server/blobs';
 import {
@@ -168,7 +168,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Pick a photo first' });
 		}
 		try {
-			await addPurchaseImage(
+			await setPurchaseImage(
 				getDb(),
 				{ ...deps, blobs: getBlobStore() },
 				scopeOf(locals),
@@ -180,6 +180,22 @@ export const actions: Actions = {
 			if (e instanceof ImageValidationError || e instanceof PurchaseStateError) {
 				return fail(400, { error: e.message });
 			}
+			throw e;
+		}
+		return null;
+	},
+
+	removeImage: async ({ locals, params }) => {
+		try {
+			await removePurchaseImage(
+				getDb(),
+				{ ...deps, blobs: getBlobStore() },
+				scopeOf(locals),
+				params.id
+			);
+		} catch (e) {
+			if (e instanceof PurchaseNotFoundError) error(404, 'Not found');
+			if (e instanceof PurchaseStateError) return fail(400, { error: e.message });
 			throw e;
 		}
 		return null;

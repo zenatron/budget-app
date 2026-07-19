@@ -85,16 +85,56 @@
 	</div>
 
 	{#if img}
-		<div
-			class="mt-5 overflow-hidden rounded-[14px]"
-			style="box-shadow: var(--shadow-card), inset 0 0 0 1px var(--hairline)"
-		>
-			<img
-				src="/w/{slug}/blobs/{img.blobId}"
-				alt={p.itemName}
-				class="aspect-[4/3] w-full object-cover"
-				loading="eager"
-			/>
+		<div class="relative mt-5">
+			<div
+				class="overflow-hidden rounded-[14px]"
+				style="box-shadow: var(--shadow-card), inset 0 0 0 1px var(--hairline)"
+			>
+				<img
+					src="/w/{slug}/blobs/{img.blobId}"
+					alt={p.itemName}
+					class="aspect-[4/3] w-full object-cover"
+					loading="eager"
+				/>
+			</div>
+			<!--
+				Photo controls sit on the photo, because they act on it. A purchase
+				carries exactly one, so this replaces rather than appends — the old
+				"Add another photo" stored images that nothing ever displayed.
+			-->
+			{#if data.can.addPhoto}
+				<div class="absolute right-2.5 bottom-2.5 flex gap-2">
+					<form method="POST" action="?/addImage" enctype="multipart/form-data">
+						<label
+							class="press flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold backdrop-blur"
+							style="background: oklch(0 0 0 / 0.55); color: white"
+						>
+							<Icon name="camera" class="h-3.5 w-3.5" /> Replace
+							<input
+								type="file"
+								name="photo"
+								accept="image/jpeg,image/png,image/webp"
+								required
+								class="sr-only"
+								onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
+							/>
+						</label>
+					</form>
+					<form
+						method="POST"
+						action="?/removeImage"
+						use:submit={{ confirm: 'Remove this photo?', success: 'Photo removed' }}
+					>
+						<button
+							class="press flex items-center justify-center rounded-full px-2.5 py-1.5 backdrop-blur"
+							style="background: oklch(0 0 0 / 0.55); color: white"
+							aria-label="Remove photo"
+						>
+							<Icon name="trash" class="h-3.5 w-3.5" />
+						</button>
+					</form>
+				</div>
+			{/if}
 		</div>
 	{/if}
 
@@ -248,24 +288,6 @@
 					<p class="hairline py-3.5 text-[15px] leading-relaxed" style="color: var(--ink-2)">
 						{p.note}
 					</p>
-				{/if}
-				{#if data.can.addPhoto && data.images.length > 0}
-					<form method="POST" action="?/addImage" enctype="multipart/form-data" class="py-3">
-						<label
-							class="press inline-flex cursor-pointer items-center gap-1.5 text-[14px] font-medium"
-							style="color: color-mix(in oklab, var(--accent) 72%, black)"
-						>
-							<Icon name="plus" class="h-4 w-4" /> Add another photo
-							<input
-								type="file"
-								name="photo"
-								accept="image/jpeg,image/png,image/webp"
-								required
-								class="sr-only"
-								onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
-							/>
-						</label>
-					</form>
 				{/if}
 			</div>
 		</div>

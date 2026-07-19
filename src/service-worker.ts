@@ -1,6 +1,7 @@
 /// <reference types="@sveltejs/kit" />
 /// <reference lib="webworker" />
 import { build, files, version } from '$service-worker';
+import { resolveDeepLink, type DeepLinkPayload } from '$lib/deep-link';
 
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
@@ -72,10 +73,9 @@ sw.addEventListener('fetch', (event) => {
 	}
 });
 
-interface PushPayload {
+interface PushPayload extends DeepLinkPayload {
 	title?: string;
 	body?: string;
-	url?: string;
 	tag?: string;
 }
 
@@ -92,7 +92,7 @@ sw.addEventListener('push', (event) => {
 			tag: payload.tag,
 			icon: '/icons/icon-192.png',
 			badge: '/icons/icon-192.png',
-			data: { url: payload.url ?? '/' }
+			data: { url: resolveDeepLink(payload, sw.location.origin) }
 		})
 	);
 });
@@ -100,7 +100,8 @@ sw.addEventListener('push', (event) => {
 // Notifications are deep links, not action surfaces (iOS action support is thin).
 sw.addEventListener('notificationclick', (event) => {
 	event.notification.close();
-	const url: string = event.notification.data?.url ?? '/';
+	// Same-origin by construction: stored as a path, resolved here.
+	const url = new URL(event.notification.data?.url ?? '/', sw.location.origin).href;
 	event.waitUntil(
 		sw.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
 			for (const client of clients) {

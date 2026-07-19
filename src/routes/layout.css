@@ -362,16 +362,22 @@ form[data-submitting] button:not([type])::after {
 ::view-transition-new(root) {
 	animation: vt-fade-in var(--dur) var(--ease-out) both;
 }
-html[data-vt-slide='right']::view-transition-old(root) {
+/*
+ * Period stepping on Activity. The slide is scoped to the card that carries the
+ * ring — the surrounding chrome (heading, period tabs, prev/next) is identical
+ * between the two states, so sliding it just made the page look like it was
+ * being replaced. The root keeps its default cross-fade for the figures below.
+ */
+html[data-vt-slide='right']::view-transition-old(vt-period-card) {
 	animation: vt-slide-out-right var(--dur) var(--ease-out) both;
 }
-html[data-vt-slide='right']::view-transition-new(root) {
+html[data-vt-slide='right']::view-transition-new(vt-period-card) {
 	animation: vt-slide-in-right var(--dur) var(--ease-out) both;
 }
-html[data-vt-slide='left']::view-transition-old(root) {
+html[data-vt-slide='left']::view-transition-old(vt-period-card) {
 	animation: vt-slide-out-left var(--dur) var(--ease-out) both;
 }
-html[data-vt-slide='left']::view-transition-new(root) {
+html[data-vt-slide='left']::view-transition-new(vt-period-card) {
 	animation: vt-slide-in-left var(--dur) var(--ease-out) both;
 }
 @keyframes vt-fade-out {
