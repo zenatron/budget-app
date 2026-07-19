@@ -204,20 +204,29 @@
 				<span class="text-[12px] font-medium" style="color: var(--ink-4)">ntfy</span>
 				{#each data.eventTypes as event (event.id)}
 					<span style="color: var(--ink-2)">{event.label}</span>
-					<input
-						type="checkbox"
-						name="enabled"
-						value="{event.id}:webpush"
-						checked={isEnabled(event.id, 'webpush')}
-						class="justify-self-center rounded"
-					/>
-					<input
-						type="checkbox"
-						name="enabled"
-						value="{event.id}:ntfy"
-						checked={isEnabled(event.id, 'ntfy')}
-						class="justify-self-center rounded"
-					/>
+					<!--
+						Wrapped in labels purely for the tap target: the box itself is 17px,
+						and these sit shoulder to shoulder in a dense grid, so bare inputs
+						made it easy to toggle the wrong channel on a phone.
+					-->
+					<label class="-my-2 flex cursor-pointer justify-center px-3 py-2">
+						<span class="sr-only">{event.label} — push</span>
+						<input
+							type="checkbox"
+							name="enabled"
+							value="{event.id}:webpush"
+							checked={isEnabled(event.id, 'webpush')}
+						/>
+					</label>
+					<label class="-my-2 flex cursor-pointer justify-center px-3 py-2">
+						<span class="sr-only">{event.label} — ntfy</span>
+						<input
+							type="checkbox"
+							name="enabled"
+							value="{event.id}:ntfy"
+							checked={isEnabled(event.id, 'ntfy')}
+						/>
+					</label>
 				{/each}
 			</div>
 			<div class="mt-4 flex items-center gap-3">

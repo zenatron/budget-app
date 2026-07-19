@@ -1,8 +1,7 @@
 import { and, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db';
 import { budget, category, purchase, user, workspaceMember } from '$lib/server/db/schema';
-import type { Period } from '$lib/domain/analytics/period';
-import { zonedTimeToUtc } from '$lib/domain/time/zoned';
+import { periodBoundsUtc, type Period } from '$lib/domain/analytics/period';
 import { visibleTo } from './purchases';
 
 /**
@@ -16,13 +15,6 @@ export interface AnalyticsScope {
 	workspaceId: string;
 	viewerId: string;
 	timezone: string;
-}
-
-function periodBoundsUtc(period: Period, timezone: string): { from: Date; to: Date } {
-	return {
-		from: zonedTimeToUtc(period.from, 0, 0, timezone),
-		to: zonedTimeToUtc(period.toExclusive, 0, 0, timezone)
-	};
 }
 
 function spentInPeriod(scope: AnalyticsScope, period: Period, now: Date) {
@@ -80,7 +72,9 @@ export async function categoryBreakdown(
 		.orderBy(sql`sum(${purchase.finalAmountMinor}) desc`);
 	return rows.map((r) => ({
 		categoryId: r.categoryId,
-		name: r.name ?? 'Uncategorized',
+		// "Other", not "Uncategorized": this is a legitimate place for a one-off to
+		// live, and naming it after what it lacks made it read as a chore.
+		name: r.name ?? 'Other',
 		icon: r.icon,
 		color: r.color,
 		totalMinor: BigInt(r.total)

@@ -7,6 +7,7 @@
 	import { money } from '$lib/actions/money';
 	import Icon from '$lib/components/Icon.svelte';
 	import Money from '$lib/components/Money.svelte';
+	import CheckField from '$lib/components/CheckField.svelte';
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
 
@@ -122,39 +123,30 @@
 				<option value="">No category</option>
 				{#each data.categories as c (c.id)}<option value={c.id}>{c.icon} {c.name}</option>{/each}
 			</select>
-			{#if startDate < today}
-				<!--
-					Only offered when the start date is already behind us, because that
-					is the only time it does anything.
-				-->
-				<label class="flex items-start gap-2.5">
-					<input type="checkbox" name="backfill" bind:checked={backfill} class="mt-0.5 rounded" />
-					<span class="text-[15px]" style="color: var(--ink-2)">
-						Add the charges I've already missed
-						<span class="mt-0.5 block text-[13px]" style="color: var(--ink-4)">
-							{backfill
-								? `Fills in every occurrence since ${fmtStart(startDate)} — added quietly, no notifications.`
-								: 'Starts from the next occurrence only.'}
-						</span>
-					</span>
-				</label>
-			{/if}
-			<label class="flex items-start gap-2.5">
-				<input
-					type="checkbox"
-					name="autoComplete"
-					bind:checked={autoComplete}
-					class="mt-0.5 rounded"
-				/>
-				<span class="text-[15px]" style="color: var(--ink-2)">
-					It's the same amount every time
-					<span class="mt-0.5 block text-[13px]" style="color: var(--ink-4)">
-						{autoComplete
-							? 'Recorded for you on the day, at this amount.'
-							: 'Each charge waits for you to enter what you were actually billed.'}
-					</span>
-				</span>
-			</label>
+			<!--
+				Only *does* anything when the start date is behind us, but it stays on
+				screen either way: hiding it meant you couldn't discover backfilling
+				until you'd already backdated the start, and the form reflowed the
+				moment you did. Disabled, it doubles as the instruction for enabling it.
+				A disabled input isn't submitted, so a stale tick can't leak through.
+			-->
+			<CheckField
+				name="backfill"
+				bind:checked={backfill}
+				disabled={startDate >= today}
+				label="Add the charges I've already missed"
+				hint={startDate < today
+					? `Fills in every occurrence since ${fmtStart(startDate)}.`
+					: 'Set the start date in the past to fill in charges you already missed.'}
+			/>
+			<CheckField
+				name="autoComplete"
+				bind:checked={autoComplete}
+				label="It's the same amount every time"
+				hint={autoComplete
+					? 'Recorded for you on the day, at this amount.'
+					: 'Each charge waits for you to enter what you were actually billed.'}
+			/>
 			<button class="btn btn-accent w-full">Add recurring charge</button>
 		</form>
 	{/if}
@@ -278,22 +270,14 @@
 										<option value={c.id} selected={c.id === r.categoryId}>{c.icon} {c.name}</option>
 									{/each}
 								</select>
-								<label class="flex items-start gap-2.5">
-									<input
-										type="checkbox"
-										name="autoComplete"
-										bind:checked={editAutoComplete}
-										class="mt-0.5 rounded"
-									/>
-									<span class="text-[15px]" style="color: var(--ink-2)">
-										It's the same amount every time
-										<span class="mt-0.5 block text-[13px]" style="color: var(--ink-4)">
-											{editAutoComplete
-												? 'Recorded for you on the day, at this amount.'
-												: 'Each charge waits for you to enter what you were actually billed.'}
-										</span>
-									</span>
-								</label>
+								<CheckField
+									name="autoComplete"
+									bind:checked={editAutoComplete}
+									label="It's the same amount every time"
+									hint={editAutoComplete
+										? 'Recorded for you on the day, at this amount.'
+										: 'Each charge waits for you to enter what you were actually billed.'}
+								/>
 								<div class="flex gap-2">
 									<button class="btn btn-accent flex-1 py-2.5 text-[14px]">Save changes</button>
 									<button

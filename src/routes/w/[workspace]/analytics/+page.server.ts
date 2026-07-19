@@ -346,10 +346,19 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				.orderBy(asc(budget.effectiveFrom))
 		: [];
 
+	// The window as inclusive calendar dates, for links into the ledger. The
+	// period is half-open internally; `to` steps back a day so the link reads the
+	// way a person does — "Jun 1 – Jun 30", not "Jun 1 – Jul 1".
+	const lastDay = addDays(cfg.queryPeriod.toExclusive, -1);
+	const rangeFrom = `${cfg.queryPeriod.from.y}-${pad(cfg.queryPeriod.from.m)}-${pad(cfg.queryPeriod.from.d)}`;
+	const rangeTo = `${lastDay.y}-${pad(lastDay.m)}-${pad(lastDay.d)}`;
+
 	return {
 		period,
 		label: cfg.label,
 		prevLabel: cfg.prevLabel,
+		rangeFrom,
+		rangeTo,
 		totalMinor: total,
 		prevTotalMinor: prevTotal,
 		incomeMinor: periodIncome,

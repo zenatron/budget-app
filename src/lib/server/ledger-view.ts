@@ -27,6 +27,14 @@ export function toLedgerView(
 	return {
 		...e,
 		kind: 'purchase' as const,
+		/*
+		 * When the row happened, by the same rule the ledger sorts and filters on
+		 * — `purchaseAt` in repo/ledger.ts. The row used to be labelled with
+		 * createdAt while being ordered by this, so a backfilled charge (created
+		 * today, completed in March) sorted under March and read "Jul 19". Filter
+		 * to March and you'd get a row stamped outside the range you asked for.
+		 */
+		at: (e.completedAt ?? e.requestedAt ?? e.createdAt).toISOString(),
 		createdAt: e.createdAt.toISOString(),
 		stale:
 			e.state === 'pending_approval' &&

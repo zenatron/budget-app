@@ -1,6 +1,7 @@
 import { getDb } from '$lib/server/db';
 import { listLedger } from '$lib/server/repo/ledger';
 import { toLedgerView } from '$lib/server/ledger-view';
+import { ledgerOptsFromUrl } from '$lib/server/ledger-query';
 import { systemClock } from '$lib/infra/time/system-clock';
 import type { RequestHandler } from './$types';
 
@@ -16,9 +17,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	const db = getDb();
 	const scope = { workspaceId: locals.workspace!.id, viewerId: locals.member!.id };
 	const feed = await listLedger(db, scope, now, {
-		search: url.searchParams.get('q') ?? undefined,
-		categoryId: url.searchParams.get('category') ?? undefined,
-		includeMovements: url.searchParams.get('movements') === '1',
+		...ledgerOptsFromUrl(url.searchParams, locals.workspace!.timezone),
 		limit: 20,
 		offset: parseInt(url.searchParams.get('offset') ?? '0') || 0
 	});

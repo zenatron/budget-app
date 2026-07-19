@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { unionAll } from 'drizzle-orm/pg-core';
 import type { Db } from '$lib/server/db';
 import { bucket, bucketTransaction, purchase } from '$lib/server/db/schema';
@@ -31,9 +31,32 @@ export interface BucketMovementItem {
 export type LedgerEntry =
 	({ kind: 'purchase' } & PurchaseListItem) | ({ kind: 'movement' } & BucketMovementItem);
 
+/**
+ * Which reading of "in this window" a date filter means.
+ *
+ * `activity` — anything that happened, dated by when it last moved. What you
+ * want when you pick a range by hand: pending requests and refusals are things
+ * that happened in that week, and hiding them would make the ledger lie.
+ *
+ * `spend` — money actually spent, dated by `completedAt`, counting only the
+ * states analytics counts. This is the basis every figure on the analytics page
+ * is computed on, so drilling into one of those figures must use it or the rows
+ * won't sum to the number that was tapped. See `spentInPeriod` in
+ * repo/analytics.ts — the two predicates are deliberately the same shape.
+ */
+export type LedgerBasis = 'activity' | 'spend';
+
 export interface LedgerOpts {
 	search?: string;
 	categoryId?: string;
+	/** Sentinel for "has no category" — the rows analytics shows as "Other". */
+	uncategorized?: boolean;
+	memberId?: string;
+	/** Instants, half-open [from, to). Convert from calendar dates with
+	 *  periodBoundsUtc so the boundary matches the analytics page exactly. */
+	from?: Date;
+	to?: Date;
+	basis?: LedgerBasis;
 	/** Bucket movements are off unless asked for. */
 	includeMovements?: boolean;
 	limit?: number;
@@ -52,12 +75,30 @@ export async function listLedger(
 	const limit = opts.limit ?? 20;
 	const offset = opts.offset ?? 0;
 
+	const basis = opts.basis ?? 'activity';
+
 	const purchaseWhere: SQL[] = [
 		eq(purchase.workspaceId, scope.workspaceId),
 		visibleTo(scope.viewerId, now)
 	];
 	if (opts.search) purchaseWhere.push(ilike(purchase.itemName, `%${opts.search}%`));
 	if (opts.categoryId) purchaseWhere.push(eq(purchase.categoryId, opts.categoryId));
+	if (opts.uncategorized) purchaseWhere.push(isNull(purchase.categoryId));
+	if (opts.memberId) purchaseWhere.push(eq(purchase.memberId, opts.memberId));
+
+	// On the spend basis a row is dated by when it completed, and only settled
+	// states count — matching analytics exactly. On the activity basis a row is
+	// dated by whenever it last moved, whatever state it reached.
+	if (basis === 'spend') {
+		purchaseWhere.push(inArray(purchase.state, ['completed', 'refunded']));
+		if (opts.from) purchaseWhere.push(gte(purchase.completedAt, opts.from));
+		if (opts.to) purchaseWhere.push(lt(purchase.completedAt, opts.to));
+	} else {
+		// purchaseAt is an expression, not a column, so bind through sql`` rather
+		// than gte()/lt() — those want a column to infer the driver encoding from.
+		if (opts.from) purchaseWhere.push(sql`${purchaseAt} >= ${opts.from}`);
+		if (opts.to) purchaseWhere.push(sql`${purchaseAt} < ${opts.to}`);
+	}
 
 	const purchaseKeys = db
 		.select({
@@ -68,13 +109,25 @@ export async function listLedger(
 		.from(purchase)
 		.where(and(...purchaseWhere));
 
-	// A movement has no category, so a category filter excludes them by
-	// construction rather than by an extra flag.
-	const wantMovements = opts.includeMovements && !opts.categoryId;
+	/*
+	 * A movement has no category and no member, so those filters exclude them by
+	 * construction rather than by an extra flag. The spend basis excludes them
+	 * too: moving your own money sideways isn't spending, and analytics never
+	 * counts it — so a drill-through that showed movements would list rows that
+	 * aren't part of the total you tapped.
+	 */
+	const wantMovements =
+		opts.includeMovements &&
+		!opts.categoryId &&
+		!opts.uncategorized &&
+		!opts.memberId &&
+		basis !== 'spend';
 
 	let keys: { kind: string; id: string; at: string }[];
 	if (wantMovements) {
 		const movementWhere: SQL[] = [eq(bucket.workspaceId, scope.workspaceId)];
+		if (opts.from) movementWhere.push(gte(bucketTransaction.createdAt, opts.from));
+		if (opts.to) movementWhere.push(lt(bucketTransaction.createdAt, opts.to));
 		if (opts.search) {
 			movementWhere.push(
 				or(

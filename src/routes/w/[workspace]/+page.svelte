@@ -198,7 +198,6 @@
 											name="approverIds"
 											value={a.id}
 											checked={m.policy.routing.approver_ids.includes(a.id)}
-											class="rounded"
 										/>
 										{a.displayName}
 									</label>

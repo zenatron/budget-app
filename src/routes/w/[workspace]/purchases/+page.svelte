@@ -6,6 +6,7 @@
 	import { dismiss } from '$lib/actions/dismiss';
 	import { goto } from '$app/navigation';
 	import { formatMinor } from '$lib/money-format';
+	import { NO_CATEGORY } from '$lib/ledger-filters';
 	import { toastError } from '$lib/toast-state.svelte';
 	let { data } = $props();
 	let slug = $derived(page.params.workspace);
@@ -18,9 +19,43 @@
 	 */
 	let search = $state(page.url.searchParams.get('q') ?? '');
 	const category = $derived(page.url.searchParams.get('category') ?? '');
+	const member = $derived(page.url.searchParams.get('member') ?? '');
+	const from = $derived(page.url.searchParams.get('from') ?? '');
+	const to = $derived(page.url.searchParams.get('to') ?? '');
 	const activeQuery = $derived(page.url.searchParams.get('q') ?? '');
 	let showFilter = $state(false);
 	let loadingMore = $state(false);
+
+	/*
+	 * The chips below the search box, one per active filter. You can arrive here
+	 * from a figure on the analytics page, so the list is often already narrowed
+	 * before you've touched anything — without a visible, removable account of
+	 * why, a filtered ledger just looks like a ledger that lost your data.
+	 */
+	const activeFilters = $derived.by(() => {
+		const out: { key: string; label: string; clear: Record<string, string> }[] = [];
+		if (from || to) {
+			out.push({
+				key: 'date',
+				label: from && to ? `${fmtDay(from)} – ${fmtDay(to)}` : from ? `From ${fmtDay(from)}` : `Until ${fmtDay(to)}`,
+				clear: { from: '', to: '', basis: '' }
+			});
+		}
+		if (member) {
+			const name = data.members.find((m) => m.id === member)?.name ?? 'Member';
+			out.push({ key: 'member', label: name, clear: { member: '' } });
+		}
+		if (category) {
+			const name =
+				category === NO_CATEGORY
+					? 'Other'
+					: (data.categories.find((c) => c.id === category)?.name ?? 'Category');
+			out.push({ key: 'category', label: name, clear: { category: '' } });
+		}
+		return out;
+	});
+
+	const hasFilters = $derived(activeFilters.length > 0);
 
 	let items = $state<typeof data.entries>([]);
 	let hasMore = $state(false);
@@ -73,6 +108,27 @@
 		void navigateWith({ category: id });
 	}
 
+	function pickMember(id: string) {
+		showFilter = false;
+		void navigateWith({ member: id });
+	}
+
+	/*
+	 * Changing a date by hand drops the spend basis. The basis is only ever set
+	 * by a drill-through link, and it means "the rows behind that figure"; once
+	 * you move the window yourself you are no longer looking at that figure, and
+	 * silently keeping a stricter filter would hide pending rows for no reason
+	 * you could see.
+	 */
+	function setRange(next: { from?: string; to?: string }) {
+		void navigateWith({ ...next, basis: '' });
+	}
+
+	function clearFilters() {
+		showFilter = false;
+		void navigateWith({ category: '', member: '', from: '', to: '', basis: '' });
+	}
+
 	/** Reloads from the server: it changes what gets paged over, not just shown. */
 	function toggleMovements() {
 		showFilter = false;
@@ -112,14 +168,12 @@
 		if (loadingMore) return;
 		loadingMore = true;
 		try {
-			// Plain string: this is a one-shot fetch URL, not reactive state. It has
-			// to carry the same filters the page was loaded with, or "Show more"
-			// would append rows from an unfiltered query.
-			const qs =
-				`offset=${items.length}` +
-				(data.includeMovements ? '&movements=1' : '') +
-				(activeQuery ? `&q=${encodeURIComponent(activeQuery)}` : '') +
-				(category ? `&category=${encodeURIComponent(category)}` : '');
+			// One-shot fetch URL, not reactive state. It carries the page's whole
+			// query so the next page is filtered exactly like the first — copying
+			// the current params is what keeps that true as filters are added,
+			// rather than a hand-maintained list that silently falls behind.
+			const qs = new URLSearchParams(page.url.searchParams);
+			qs.set('offset', String(items.length));
 			const res = await fetch(`/w/${slug}/purchases/data?${qs}`);
 			if (!res.ok) throw new Error(String(res.status));
 			const json = await res.json();
@@ -134,6 +188,16 @@
 
 	function fmtDate(iso: string): string {
 		return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+	}
+
+	/** "2026-06-01" -> "Jun 1". Parsed as parts, not Date: `new Date('2026-06-01')`
+	 *  is UTC midnight, which renders as the day before west of Greenwich. */
+	function fmtDay(ymd: string): string {
+		const [y, m, d] = ymd.split('-').map(Number);
+		return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+			month: 'short',
+			day: 'numeric'
+		});
 	}
 </script>
 
@@ -226,7 +290,7 @@
 			<div class="mt-0.5 flex items-center gap-1.5 text-[13px]" style="color: var(--ink-4)">
 				{#if p.categoryIcon}<span>{p.categoryIcon}</span>{/if}
 				<span>{p.requesterName}</span>
-				<span>· {fmtDate(p.createdAt)}</span>
+				<span>· {fmtDate(p.at)}</span>
 				{#if p.state === 'pending_approval' && p.waitingDays > 0}
 					<span style={p.stale ? 'color: var(--pending)' : ''}
 						>· {p.waitingDays}d{p.stale ? ' · stale' : ''}</span
@@ -287,14 +351,14 @@
 			style="box-shadow: inset 0 0 0 1px {category
 				? 'var(--hairline-strong)'
 				: 'var(--hairline)'}; background: var(--surface)"
-			aria-label="Filter by category"
+			aria-label="Filter the ledger"
 		>
 			<Icon
 				name="funnel"
 				class="h-4 w-4"
-				style="color: {category ? 'var(--ink)' : 'var(--ink-4)'}"
+				style="color: {hasFilters ? 'var(--ink)' : 'var(--ink-4)'}"
 			/>
-			{#if category}
+			{#if hasFilters}
 				<span
 					class="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full"
 					style="background: var(--ws-accent)"
@@ -303,28 +367,128 @@
 		</button>
 	</div>
 
+	{#if hasFilters}
+		<div class="mb-4 flex flex-wrap items-center gap-2">
+			{#each activeFilters as f (f.key)}
+				<button
+					onclick={() => navigateWith(f.clear)}
+					class="press flex items-center gap-1.5 rounded-[var(--r-full)] py-1.5 pr-2.5 pl-3 text-[13px]"
+					style="background: var(--surface-2); color: var(--ink-2)"
+					aria-label="Remove filter: {f.label}"
+				>
+					{f.label}
+					<Icon name="xmark" class="h-3 w-3" style="color: var(--ink-4)" />
+				</button>
+			{/each}
+			{#if activeFilters.length > 1}
+				<button
+					onclick={clearFilters}
+					class="press px-1 text-[13px] underline underline-offset-2"
+					style="color: var(--ink-4)">Clear all</button
+				>
+			{/if}
+		</div>
+	{/if}
+
 	{#if showFilter}
 		<div class="fixed inset-0 z-30" use:dismiss={() => (showFilter = false)}></div>
+		<!--
+			Scrolls rather than grows: with a date range, every member and every
+			category it is taller than a phone, and a menu that runs off the bottom
+			of the screen hides the rows you opened it to reach.
+		-->
 		<div
-			class="card-lg absolute right-4 z-40 mt-1 w-56 overflow-hidden p-1.5"
+			class="card-lg absolute right-4 z-40 mt-1 max-h-[70vh] w-72 overflow-y-auto p-1.5"
 			style="box-shadow: var(--shadow-float); background: var(--surface)"
 			role="menu"
 		>
+			<!--
+				A checkmark, not a pill or a switch: this is a menu, so the row commits
+				on tap like every category below it. It used to carry a "Shown"/"Hidden"
+				caption *and* the tick — the state said twice, once in words that changed
+				under your thumb as you tapped.
+			-->
 			<button
 				onclick={toggleMovements}
+				role="menuitemcheckbox"
+				aria-checked={data.includeMovements}
 				class="press flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
 			>
 				<span style="color: var(--ink)">Bucket activity</span>
-				<span class="ml-auto text-[13px]" style="color: var(--ink-4)">
-					{data.includeMovements ? 'Shown' : 'Hidden'}
-				</span>
-				{#if data.includeMovements}
-					<Icon name="checkmark" class="h-4 w-4" style="color: var(--ink)" />
-				{/if}
+				<Icon
+					name="checkmark"
+					class="ml-auto h-4 w-4 shrink-0 {data.includeMovements ? '' : 'invisible'}"
+					style="color: var(--ink)"
+				/>
 			</button>
 			<div class="my-1 h-px" style="background: var(--hairline)"></div>
+
+			<p class="section-label px-3 pt-2 pb-1.5">Date range</p>
+			<div class="flex items-center gap-2 px-3 pb-2">
+				<label class="flex-1">
+					<span class="sr-only">From date</span>
+					<input
+						type="date"
+						value={from}
+						max={to || undefined}
+						onchange={(e) => setRange({ from: e.currentTarget.value })}
+						class="field px-2 py-1.5 text-[13px]"
+					/>
+				</label>
+				<span class="text-[13px]" style="color: var(--ink-4)">to</span>
+				<label class="flex-1">
+					<span class="sr-only">To date</span>
+					<input
+						type="date"
+						value={to}
+						min={from || undefined}
+						onchange={(e) => setRange({ to: e.currentTarget.value })}
+						class="field px-2 py-1.5 text-[13px]"
+					/>
+				</label>
+			</div>
+
+			{#if data.members.length > 1}
+				<div class="my-1 h-px" style="background: var(--hairline)"></div>
+				<p class="section-label px-3 pt-2 pb-1">Member</p>
+				<button
+					onclick={() => pickMember('')}
+					role="menuitemradio"
+					aria-checked={!member}
+					class="press flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
+					style={!member ? 'background: oklch(0.28 0.03 65 / 0.06)' : ''}
+				>
+					<span style="color: var(--ink)">Anyone</span>
+					<Icon
+						name="checkmark"
+						class="ml-auto h-4 w-4 shrink-0 {member ? 'invisible' : ''}"
+						style="color: var(--ink)"
+					/>
+				</button>
+				{#each data.members as m (m.id)}
+					<button
+						onclick={() => pickMember(m.id)}
+						role="menuitemradio"
+						aria-checked={member === m.id}
+						class="press flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
+						style={member === m.id ? 'background: oklch(0.28 0.03 65 / 0.06)' : ''}
+					>
+						<span style="color: var(--ink)">{m.name}</span>
+						<Icon
+							name="checkmark"
+							class="ml-auto h-4 w-4 shrink-0 {member === m.id ? '' : 'invisible'}"
+							style="color: var(--ink)"
+						/>
+					</button>
+				{/each}
+			{/if}
+
+			<div class="my-1 h-px" style="background: var(--hairline)"></div>
+			<p class="section-label px-3 pt-2 pb-1">Category</p>
 			<button
 				onclick={() => pickCategory('')}
+				role="menuitemradio"
+				aria-checked={!category}
 				class="press flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
 				style={!category ? 'background: oklch(0.28 0.03 65 / 0.06)' : ''}
 			>
@@ -336,15 +500,34 @@
 			{#each data.categories as c (c.id)}
 				<button
 					onclick={() => pickCategory(c.id)}
+					role="menuitemradio"
+					aria-checked={category === c.id}
 					class="press flex w-full items-center gap-2 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
 					style={category === c.id ? 'background: oklch(0.28 0.03 65 / 0.06)' : ''}
 				>
 					<span style="color: var(--ink)">{c.icon} {c.name}</span>
-					{#if category === c.id}
-						<Icon name="checkmark" class="ml-auto h-4 w-4" style="color: var(--ink)" />
-					{/if}
+					<Icon
+						name="checkmark"
+						class="ml-auto h-4 w-4 shrink-0 {category === c.id ? '' : 'invisible'}"
+						style="color: var(--ink)"
+					/>
 				</button>
 			{/each}
+			<!-- The rows with no category at all — what analytics totals as "Other". -->
+			<button
+				onclick={() => pickCategory(NO_CATEGORY)}
+				role="menuitemradio"
+				aria-checked={category === NO_CATEGORY}
+				class="press flex w-full items-center gap-2 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
+				style={category === NO_CATEGORY ? 'background: oklch(0.28 0.03 65 / 0.06)' : ''}
+			>
+				<span style="color: var(--ink)">Other</span>
+				<Icon
+					name="checkmark"
+					class="ml-auto h-4 w-4 shrink-0 {category === NO_CATEGORY ? '' : 'invisible'}"
+					style="color: var(--ink)"
+				/>
+			</button>
 		</div>
 	{/if}
 

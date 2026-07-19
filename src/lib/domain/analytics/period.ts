@@ -5,12 +5,29 @@
  */
 
 import { addDays, compareDates, daysInMonth, isoWeekday, type CalDate } from '../recurrence/rrule';
+import { zonedTimeToUtc } from '../time/zoned';
 
 export interface Period {
 	/** Inclusive. */
 	from: CalDate;
 	/** Exclusive. */
 	toExclusive: CalDate;
+}
+
+/**
+ * A period as the pair of instants that bound it, [from, to).
+ *
+ * The single definition of where a period starts and stops. Analytics and the
+ * ledger both slice on it, and they have to agree exactly: the ledger is where
+ * you land when you tap a figure on the analytics page, so a boundary that
+ * differed by one local-midnight offset would show you rows that don't add up
+ * to the number you tapped.
+ */
+export function periodBoundsUtc(period: Period, timezone: string): { from: Date; to: Date } {
+	return {
+		from: zonedTimeToUtc(period.from, 0, 0, timezone),
+		to: zonedTimeToUtc(period.toExclusive, 0, 0, timezone)
+	};
 }
 
 export function monthPeriod(today: CalDate): Period {

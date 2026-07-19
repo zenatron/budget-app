@@ -107,11 +107,39 @@
 		font-variant-numeric: tabular-nums;
 	}
 
-	/* Checkboxes shipped as the browser default blue, which is the one thing on
-	   screen that belongs to no palette. */
+	/* Checkboxes belong to no palette out of the box. Note @tailwindcss/forms
+	   sets appearance:none on these, which makes accent-color inert — the box is
+	   drawn by the plugin, tinted with `color` via `background-color:currentColor`
+	   when checked. So we set `color`, not `accent-color`. Ink rather than accent:
+	   --accent is per-workspace and these are utility controls, not brand moments. */
 	input[type='checkbox'],
 	input[type='radio'] {
-		accent-color: var(--ink);
+		color: var(--ink);
+		background-color: var(--surface);
+		border-color: var(--hairline-strong);
+		border-radius: 5px;
+		width: 17px;
+		height: 17px;
+		transition:
+			background-color var(--dur-fast) var(--ease-out),
+			border-color var(--dur-fast) var(--ease-out);
+	}
+	input[type='radio'] {
+		border-radius: var(--r-full);
+	}
+	input[type='checkbox']:hover:not(:checked),
+	input[type='radio']:hover:not(:checked) {
+		border-color: var(--ink-4);
+	}
+	/* The plugin ships its own blue ring on :focus; defer to the global
+	   :focus-visible ring so keyboard focus looks the same everywhere. */
+	input[type='checkbox']:focus,
+	input[type='radio']:focus {
+		box-shadow: none;
+	}
+	input[type='checkbox']:focus-visible,
+	input[type='radio']:focus-visible {
+		box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 32%, transparent);
 	}
 
 	/* Native date/time fields render the picker glyph in the UA's own color. */

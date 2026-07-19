@@ -8,7 +8,10 @@
 	import Money from '$lib/components/Money.svelte';
 	import CategoryRing from '$lib/components/CategoryRing.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import { page } from '$app/state';
+	import { ledgerLink } from '$lib/ledger-filters';
 	let { data } = $props();
+	const slug = $derived(page.params.workspace!);
 	let showBudgetForm = $state(false);
 	const currency = $derived(data.workspace.currency);
 	const period = $derived(data.period);
@@ -739,24 +742,49 @@
 	{/if}
 
 	<div>
-		<p class="section-label mb-3.5 px-1">By category</p>
+		<div class="mb-3.5 flex items-baseline justify-between px-1">
+			<p class="section-label">By category</p>
+			<!--
+				Says once, quietly, what every row below affords. A chevron on each row
+				shows there is somewhere to go; this says where, without repeating
+				"see purchases" ten times.
+			-->
+			{#if data.categories.length > 0}
+				<span class="text-[12px]" style="color: var(--ink-4)">Tap to see purchases</span>
+			{/if}
+		</div>
 		{#if data.categories.length === 0}
 			<p class="px-1 text-[15px]" style="color: var(--ink-4)">Nothing spent this {period}.</p>
 		{:else}
-			<div class="space-y-4">
+			<div class="space-y-1">
 				{#each data.categories as c (c.categoryId)}
 					{@const pct = pctOf(c.totalMinor, data.totalMinor)}
-					<div>
-						<div class="flex items-baseline justify-between px-1 text-[15px]">
+					<a
+						href={ledgerLink(slug, {
+							from: data.rangeFrom,
+							to: data.rangeTo,
+							category: c.categoryId
+						})}
+						class="press -mx-1 block rounded-[var(--r-sm)] px-2 py-2.5"
+						aria-label="{c.name}, {formatMinor(c.totalMinor, currency)} — see purchases"
+					>
+						<div class="flex items-baseline justify-between text-[15px]">
 							<span style="color: var(--ink)">
 								<span
 									class="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle"
 									style="background: {c.color ?? '#8E8E93'}"
 								></span>{c.name}
 							</span>
-							<span class="num" style="color: var(--ink-2)">
-								{formatMinor(c.totalMinor, currency)}
-								<span class="ml-1 text-[12px]" style="color: var(--ink-4)">{formatPct(pct)}</span>
+							<span class="flex items-baseline gap-1.5">
+								<span class="num" style="color: var(--ink-2)">
+									{formatMinor(c.totalMinor, currency)}
+									<span class="ml-1 text-[12px]" style="color: var(--ink-4)">{formatPct(pct)}</span>
+								</span>
+								<Icon
+									name="chevronRight"
+									class="h-3.5 w-3.5 self-center"
+									style="color: var(--ink-4)"
+								/>
 							</span>
 						</div>
 						<div
@@ -769,25 +797,45 @@
 									'#8E8E93'}; transition: width 800ms var(--ease-out)"
 							></div>
 						</div>
-					</div>
+					</a>
 				{/each}
 			</div>
 		{/if}
 	</div>
 
 	<div>
-		<p class="section-label mb-2 px-1">By member</p>
+		<div class="mb-2 flex items-baseline justify-between px-1">
+			<p class="section-label">By member</p>
+			{#if data.members.length > 0}
+				<span class="text-[12px]" style="color: var(--ink-4)">Tap to see purchases</span>
+			{/if}
+		</div>
 		{#if data.members.length === 0}
 			<p class="px-1 text-[15px]" style="color: var(--ink-4)">Nothing spent this {period}.</p>
 		{:else}
 			<div style="border-top: 0.5px solid var(--hairline)">
 				{#each data.members as m (m.memberId)}
-					<div class="hairline flex items-baseline justify-between py-3.5">
+					<a
+						href={ledgerLink(slug, {
+							from: data.rangeFrom,
+							to: data.rangeTo,
+							member: m.memberId
+						})}
+						class="press hairline flex items-baseline justify-between py-3.5"
+						aria-label="{m.name}, {formatMinor(m.totalMinor, currency)} — see purchases"
+					>
 						<span class="text-[15px]" style="color: var(--ink)">{m.name}</span>
-						<span class="num text-[15px] font-medium" style="color: var(--ink)"
-							>{formatMinor(m.totalMinor, currency)}</span
-						>
-					</div>
+						<span class="flex items-baseline gap-1.5">
+							<span class="num text-[15px] font-medium" style="color: var(--ink)"
+								>{formatMinor(m.totalMinor, currency)}</span
+							>
+							<Icon
+								name="chevronRight"
+								class="h-3.5 w-3.5 self-center"
+								style="color: var(--ink-4)"
+							/>
+						</span>
+					</a>
 				{/each}
 			</div>
 		{/if}
