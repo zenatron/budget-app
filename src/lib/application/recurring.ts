@@ -13,6 +13,8 @@ import type { Notifier } from '$lib/ports/notifier';
 
 /** Recurring charges land at 09:00 workspace-local on their occurrence date. */
 const MATERIALIZE_HOUR = 9;
+const DAY_MS = 86_400_000;
+
 /** Catch-up guard: at most this many missed occurrences generated per sweep. */
 const MAX_CATCHUP = 36;
 
@@ -40,6 +42,8 @@ export interface CreateRuleCmd {
 	categoryId: string | null;
 	rrule: string;
 	autoComplete: boolean;
+	/** Also generate the occurrences between the start date and today. */
+	backfill?: boolean;
 }
 
 export async function createRule(
@@ -60,9 +64,13 @@ export async function createRule(
 	}
 	const rec = parseRRule(cmd.rrule); // throws RecurrenceError on bad input
 
-	// First occurrence: today counts if it matches, nothing in the past.
+	// Normally the first occurrence is today at the earliest — nothing in the
+	// past. Backfilling instead anchors to the rule's own start date, and the
+	// materialization sweep walks forward from there on its next pass (capped at
+	// MAX_CATCHUP). Those charges land silently; see materializeDueRules.
 	const today = calDateInZone(now, ws.timezone);
-	const next = nextOccurrence(rec, addDays(today, -1));
+	const from = cmd.backfill ? addDays(rec.start, -1) : addDays(today, -1);
+	const next = nextOccurrence(rec, from);
 
 	const ruleId = deps.ids.newId();
 	await db.insert(recurringRule).values({
@@ -281,8 +289,16 @@ export async function materializeDueRules(db: Db, deps: Deps): Promise<number> {
 
 			if (!made) break;
 
-			await announcePurchaseChange(db, deps.notifier, made.purchase, made.event);
-			await notifyRuleOwner(db, deps.notifier, made.purchase);
+			// Anything dated more than a day ago is history, not news: a backfilled
+			// subscription or a catch-up after downtime. Open pages still refresh
+			// over SSE; nobody's phone buzzes twelve times.
+			const fresh = made.purchase.decidedAt
+				? made.purchase.decidedAt.getTime() >= now.getTime() - DAY_MS
+				: true;
+			await announcePurchaseChange(db, deps.notifier, made.purchase, made.event, {
+				push: fresh
+			});
+			if (fresh) await notifyRuleOwner(db, deps.notifier, made.purchase);
 			generated += 1;
 		}
 	}

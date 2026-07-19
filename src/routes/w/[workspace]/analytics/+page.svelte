@@ -232,7 +232,7 @@
 			label: 'Cancelled',
 			minor: data.verdicts.cancelledMinor,
 			tone: 'var(--ink-4)',
-			hint: 'Withdrawn'
+			hint: 'Voided'
 		}
 	]);
 

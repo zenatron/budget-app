@@ -35,6 +35,25 @@
 		return b.color ?? 'var(--ws-accent)';
 	}
 
+	/**
+	 * "+$400.00/mo on the 1st · next Aug 1" — assembled here rather than inline,
+	 * where the separator's whitespace kept collapsing against the date.
+	 * Recurring has always said "next Jul 28"; buckets now say the same thing.
+	 */
+	function cadenceLine(b: (typeof data.buckets)[number]): string {
+		const base = formatMonthly(b.monthlyAmountMinor, b.currency, b.dayOfMonth);
+		const a = b.nextAccrual;
+		if (!a) return base;
+		const when = a.due
+			? 'due now'
+			: new Date(Date.UTC(a.y, a.m - 1, a.d)).toLocaleDateString(undefined, {
+					month: 'short',
+					day: 'numeric',
+					timeZone: 'UTC'
+				});
+		return `${base} · ${b.everAccrued ? 'next' : 'first'} ${when}`;
+	}
+
 	function progressPct(b: (typeof data.buckets)[number]): number {
 		if (!b.goalCapMinor || b.goalCapMinor <= 0n) return 0;
 		const pct = Math.round((Number(b.balanceMinor) / Number(b.goalCapMinor)) * 100);
@@ -171,9 +190,7 @@
 									>
 								{/if}
 							</p>
-							<p class="text-[13px]" style="color: var(--ink-4)">
-								{formatMonthly(b.monthlyAmountMinor, b.currency, b.dayOfMonth)}
-							</p>
+							<p class="text-[13px]" style="color: var(--ink-4)">{cadenceLine(b)}</p>
 						</div>
 						<span class="shrink-0 text-[16px] font-semibold" style="color: var(--ink)">
 							<Money

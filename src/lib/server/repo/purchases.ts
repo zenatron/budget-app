@@ -249,12 +249,22 @@ export async function listPurchases(
 	db: Db,
 	scope: { workspaceId: string; viewerId: string },
 	now: Date,
-	opts?: { search?: string; categoryId?: string; limit?: number; offset?: number }
+	opts?: {
+		search?: string;
+		categoryId?: string;
+		limit?: number;
+		offset?: number;
+		/** Hydrate exactly these, in no particular order — used by the ledger feed,
+		 *  which decides ordering and paging across purchases and bucket moves. */
+		ids?: string[];
+	}
 ): Promise<PurchaseListItem[]> {
+	if (opts?.ids && opts.ids.length === 0) return [];
 	const conditions: SQL[] = [
 		eq(purchase.workspaceId, scope.workspaceId),
 		visibleTo(scope.viewerId, now)
 	];
+	if (opts?.ids) conditions.push(inArray(purchase.id, opts.ids));
 	if (opts?.search) conditions.push(ilike(purchase.itemName, `%${opts.search}%`));
 	if (opts?.categoryId) conditions.push(eq(purchase.categoryId, opts.categoryId));
 
@@ -304,8 +314,8 @@ export async function listPurchases(
 			desc(sql`${purchase.state} = 'pending_approval'`),
 			desc(sql`coalesce(${purchase.completedAt}, ${purchase.requestedAt}, ${purchase.createdAt})`)
 		)
-		.limit(opts?.limit ?? 20)
-		.offset(opts?.offset ?? 0);
+		.limit(opts?.ids ? opts.ids.length : (opts?.limit ?? 20))
+		.offset(opts?.ids ? 0 : (opts?.offset ?? 0));
 	return rows.map((r) => ({
 		id: r.p.id,
 		itemName: r.p.itemName,

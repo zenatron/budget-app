@@ -253,3 +253,31 @@ export async function savingsInPeriod(
 		);
 	return BigInt(rows[0]?.total ?? '0');
 }
+
+/**
+ * Which of these buckets have already taken their accrual for the given month.
+ * One query rather than `hasAccrualForMonth` per bucket — the list needs this
+ * for every row at once.
+ *
+ * Matches the sweep's own definition of "this month" (extract on created_at) so
+ * the date shown can't disagree with the date the sweep acts on.
+ */
+export async function bucketsAccruedInMonth(
+	db: Db,
+	workspaceId: string,
+	year: number,
+	month: number
+): Promise<Set<string>> {
+	const rows = await db
+		.selectDistinct({ bucketId: bucketTransaction.bucketId })
+		.from(bucketTransaction)
+		.innerJoin(bucket, eq(bucketTransaction.bucketId, bucket.id))
+		.where(
+			and(
+				eq(bucket.workspaceId, workspaceId),
+				eq(bucketTransaction.type, 'accrual'),
+				sql`extract(year from ${bucketTransaction.createdAt}) = ${year} and extract(month from ${bucketTransaction.createdAt}) = ${month}`
+			)
+		);
+	return new Set(rows.map((r) => r.bucketId));
+}

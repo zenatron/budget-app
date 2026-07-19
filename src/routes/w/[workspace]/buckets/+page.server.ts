@@ -1,10 +1,12 @@
 import { fail } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
+import { calDateInZone } from '$lib/domain/time/zoned';
 import { Money, InvalidMoneyError } from '$lib/domain/money/money';
 import {
 	createBucket,
 	listBuckets,
+	bucketsAccruedInMonth,
 	loadOwnBucket,
 	updateBucket,
 	pauseBucket,
@@ -19,7 +21,33 @@ import type { Actions, PageServerLoad } from './$types';
 const deps = { clock: systemClock, ids: uuidv7 };
 
 export const load: PageServerLoad = async ({ locals }) => {
-	const rows = await listBuckets(getDb(), locals.workspace!.id);
+	const db = getDb();
+	const ws = locals.workspace!;
+	const rows = await listBuckets(db, ws.id);
+
+	/*
+	 * When each bucket next takes its monthly amount. Recurring charges have
+	 * always shown "next Jul 28"; buckets showed nothing, so a new one sat at
+	 * $0.00 with no hint that anything was going to happen.
+	 *
+	 * Mirrors the sweep exactly: it accrues once the day of the month has
+	 * arrived and this month hasn't been taken yet.
+	 */
+	const today = calDateInZone(systemClock.now(), ws.timezone);
+	const accrued = await bucketsAccruedInMonth(db, ws.id, today.y, today.m);
+	const nextAccrual = (b: { id: string; dayOfMonth: number; status: string }) => {
+		if (b.status !== 'active') return null;
+		const day = Math.min(b.dayOfMonth, 28);
+		if (!accrued.has(b.id)) {
+			// Due already, or later this month.
+			const d = today.d >= day ? today.d : day;
+			return { y: today.y, m: today.m, d, due: today.d >= day };
+		}
+		const m = today.m === 12 ? 1 : today.m + 1;
+		const y = today.m === 12 ? today.y + 1 : today.y;
+		return { y, m, d: day, due: false };
+	};
+
 	return {
 		buckets: rows.map((r) => ({
 			id: r.bucket.id,
@@ -33,7 +61,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 			status: r.bucket.status,
 			balanceMinor: r.balanceMinor,
 			memberName: r.memberName,
-			mine: r.bucket.memberId === locals.member!.id
+			mine: r.bucket.memberId === locals.member!.id,
+			nextAccrual: nextAccrual({
+				id: r.bucket.id,
+				dayOfMonth: r.bucket.dayOfMonth,
+				status: r.bucket.status
+			}),
+			everAccrued: r.balanceMinor !== 0n || accrued.has(r.bucket.id)
 		}))
 	};
 };

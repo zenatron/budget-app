@@ -38,7 +38,7 @@
 	});
 
 	const sections = [
-		// Ordered to mirror the nav — Wallet, Activity, Plan (recurring then
+		// Ordered to mirror the nav — Ledger, Activity, Plan (recurring then
 		// buckets, matching its sub-tabs), Income — so the section you want sits
 		// where the tab you were just on sits. This is scanned, not read.
 		{

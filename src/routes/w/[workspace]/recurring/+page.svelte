@@ -35,6 +35,19 @@
 	// edits it from there. The page remounts per workspace, so it can't go stale.
 	// svelte-ignore state_referenced_locally
 	let startDate = $state(today);
+	let autoComplete = $state(true);
+	let backfill = $state(false);
+	let editAutoComplete = $state(true);
+
+	function fmtStart(d: string): string {
+		const [y, m, day] = d.split('-').map(Number);
+		return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString(undefined, {
+			month: 'long',
+			day: 'numeric',
+			year: 'numeric',
+			timeZone: 'UTC'
+		});
+	}
 
 	function fmtNext(iso: string | null): string {
 		if (!iso) return '—';
@@ -49,6 +62,7 @@
 		editWeekDays = [...r.byDay];
 		editMonthDay = String(r.monthDay ?? 1);
 		editStart = r.startDate ?? today;
+		editAutoComplete = r.autoComplete;
 	}
 
 	function resetNewForm() {
@@ -58,6 +72,8 @@
 		weekDays = [];
 		monthDay = '1';
 		startDate = today;
+		autoComplete = true;
+		backfill = false;
 	}
 </script>
 
@@ -106,8 +122,38 @@
 				<option value="">No category</option>
 				{#each data.categories as c (c.id)}<option value={c.id}>{c.icon} {c.name}</option>{/each}
 			</select>
-			<label class="flex items-center gap-2 text-[15px]" style="color: var(--ink-2)">
-				<input type="checkbox" name="autoComplete" checked class="rounded" /> Record automatically
+			{#if startDate < today}
+				<!--
+					Only offered when the start date is already behind us, because that
+					is the only time it does anything.
+				-->
+				<label class="flex items-start gap-2.5">
+					<input type="checkbox" name="backfill" bind:checked={backfill} class="mt-0.5 rounded" />
+					<span class="text-[15px]" style="color: var(--ink-2)">
+						Add the charges I've already missed
+						<span class="mt-0.5 block text-[13px]" style="color: var(--ink-4)">
+							{backfill
+								? `Fills in every occurrence since ${fmtStart(startDate)} — added quietly, no notifications.`
+								: 'Starts from the next occurrence only.'}
+						</span>
+					</span>
+				</label>
+			{/if}
+			<label class="flex items-start gap-2.5">
+				<input
+					type="checkbox"
+					name="autoComplete"
+					bind:checked={autoComplete}
+					class="mt-0.5 rounded"
+				/>
+				<span class="text-[15px]" style="color: var(--ink-2)">
+					It's the same amount every time
+					<span class="mt-0.5 block text-[13px]" style="color: var(--ink-4)">
+						{autoComplete
+							? 'Recorded for you on the day, at this amount.'
+							: 'Each charge waits for you to enter what you were actually billed.'}
+					</span>
+				</span>
 			</label>
 			<button class="btn btn-accent w-full">Add recurring charge</button>
 		</form>
@@ -232,13 +278,21 @@
 										<option value={c.id} selected={c.id === r.categoryId}>{c.icon} {c.name}</option>
 									{/each}
 								</select>
-								<label class="flex items-center gap-2 text-[15px]" style="color: var(--ink-2)">
+								<label class="flex items-start gap-2.5">
 									<input
 										type="checkbox"
 										name="autoComplete"
-										checked={r.autoComplete}
-										class="rounded"
-									/> Record automatically
+										bind:checked={editAutoComplete}
+										class="mt-0.5 rounded"
+									/>
+									<span class="text-[15px]" style="color: var(--ink-2)">
+										It's the same amount every time
+										<span class="mt-0.5 block text-[13px]" style="color: var(--ink-4)">
+											{editAutoComplete
+												? 'Recorded for you on the day, at this amount.'
+												: 'Each charge waits for you to enter what you were actually billed.'}
+										</span>
+									</span>
 								</label>
 								<div class="flex gap-2">
 									<button class="btn btn-accent flex-1 py-2.5 text-[14px]">Save changes</button>

@@ -13,6 +13,7 @@ import {
 } from '$lib/domain/recurrence/rrule';
 import {
 	RecurringRuleError,
+	materializeDueRules,
 	createRule,
 	endRule,
 	pauseRule,
@@ -117,6 +118,7 @@ export const actions: Actions = {
 	create: async ({ locals, request }) => {
 		const form = await request.formData();
 		const weekDays = form.getAll('weekDay').map(Number);
+		const backfill = form.get('backfill') === 'on';
 		const parsed = v.safeParse(CreateSchema, Object.fromEntries(form));
 		if (!parsed.success) return fail(400, { error: parsed.issues[0].message });
 		const f = parsed.output;
@@ -141,9 +143,16 @@ export const actions: Actions = {
 					amount: Money.fromDecimal(f.amount, locals.workspace!.currency),
 					categoryId: f.categoryId || null,
 					rrule: formatRRule(rec),
-					autoComplete: form.get('autoComplete') === 'on'
+					autoComplete: form.get('autoComplete') === 'on',
+					backfill
 				}
 			);
+
+			// Backfill has to land now. The sweep would get to it within five
+			// minutes, but the user just asked for past charges and would be looking
+			// at a list that doesn't have them yet. Materializing is transactional
+			// and takes a row lock, so racing the sweep is safe.
+			if (backfill) await materializeDueRules(getDb(), deps);
 		} catch (e) {
 			if (
 				e instanceof InvalidMoneyError ||

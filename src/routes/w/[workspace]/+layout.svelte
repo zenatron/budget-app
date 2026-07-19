@@ -85,7 +85,7 @@
 	 * thumb real estate.
 	 */
 	const tabs = [
-		{ section: 'purchases', label: 'Wallet', icon: 'card', also: [] as string[] },
+		{ section: 'purchases', label: 'Ledger', icon: 'card', also: [] as string[] },
 		{ section: 'analytics', label: 'Activity', icon: 'chart', also: [] as string[] },
 		{ section: 'recurring', label: 'Plan', icon: 'repeat', also: ['buckets'] },
 		{ section: 'income', label: 'Income', icon: 'dollar', also: [] as string[] }

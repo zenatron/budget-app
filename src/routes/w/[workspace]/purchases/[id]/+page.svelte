@@ -55,7 +55,7 @@
 		class="press mb-4 -ml-1 inline-flex items-center gap-0.5 text-[14px] font-medium"
 		style="color: var(--ink-3)"
 	>
-		<Icon name="chevronLeft" class="h-4 w-4" /> Wallet
+		<Icon name="chevronLeft" class="h-4 w-4" /> Ledger
 	</a>
 
 	<!-- Editorial masthead: the amount as a magazine headline -->

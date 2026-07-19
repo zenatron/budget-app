@@ -16,7 +16,14 @@ export async function announcePurchaseChange(
 	db: Db,
 	notifier: Notifier,
 	p: Purchase,
-	ev: TransitionEvent
+	ev: TransitionEvent,
+	/**
+	 * `push: false` still refreshes open pages over SSE but sends nothing to
+	 * anyone's phone. For charges materialized into the past — a backfilled
+	 * subscription, or catch-up after downtime — the news is stale by
+	 * definition, and a year of Netflix would otherwise be twelve buzzes.
+	 */
+	opts: { push?: boolean } = {}
 ): Promise<void> {
 	publish(
 		p.workspaceId,
@@ -28,6 +35,8 @@ export async function announcePurchaseChange(
 		},
 		ev.at
 	);
+
+	if (opts.push === false) return;
 
 	const plan = planNotification(p, ev);
 	if (!plan) return;

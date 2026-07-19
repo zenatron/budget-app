@@ -80,7 +80,7 @@
 				<p class="text-[15px] font-semibold" style="color: var(--pending)">
 					{data.pendingCount} awaiting a decision
 				</p>
-				<p class="text-[13px]" style="color: var(--ink-3)">Tap to review in your Wallet</p>
+				<p class="text-[13px]" style="color: var(--ink-3)">Tap to review in your Ledger</p>
 			</div>
 			<Icon name="chevronRight" class="h-4 w-4" style="color: var(--pending)" />
 		</a>

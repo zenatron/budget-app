@@ -84,7 +84,7 @@
 		class="press -ml-1 inline-flex items-center gap-0.5 text-[15px]"
 		style="color: var(--ink-3)"
 	>
-		<Icon name="chevronLeft" class="h-4 w-4" /> Wallet
+		<Icon name="chevronLeft" class="h-4 w-4" /> Ledger
 	</a>
 
 	<form method="POST" enctype="multipart/form-data" use:submit class="space-y-4">

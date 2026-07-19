@@ -1,18 +1,28 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { untrack } from 'svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import Money from '$lib/components/Money.svelte';
 	import { dismiss } from '$lib/actions/dismiss';
+	import { goto } from '$app/navigation';
+	import { formatMinor } from '$lib/money-format';
 	import { toastError } from '$lib/toast-state.svelte';
 	let { data } = $props();
 	let slug = $derived(page.params.workspace);
 
-	let search = $state('');
-	let category = $state('');
+	/*
+	 * Search and category live in the URL, like `movements`. Filtering used to
+	 * happen client-side over whatever had been fetched, which meant it searched
+	 * the loaded page rather than the workspace, and "Show more" had to be hidden
+	 * whenever a filter was on because paging filtered results was incoherent.
+	 */
+	let search = $state(page.url.searchParams.get('q') ?? '');
+	const category = $derived(page.url.searchParams.get('category') ?? '');
+	const activeQuery = $derived(page.url.searchParams.get('q') ?? '');
 	let showFilter = $state(false);
 	let loadingMore = $state(false);
 
-	let items = $state<typeof data.purchases>([]);
+	let items = $state<typeof data.entries>([]);
 	let hasMore = $state(false);
 
 	// Re-seed from the server list whenever it changes, not just on first paint.
@@ -20,28 +30,59 @@
 	// what renders, so gating on `items.length === 0` froze the list on stale
 	// rows after any live update.
 	$effect(() => {
-		items = [...data.purchases];
+		items = [...data.entries];
 		hasMore = data.hasMore;
 	});
 
-	let filtered = $derived.by(() => {
-		let result = items;
-		if (search.trim()) {
-			const q = search.toLowerCase();
-			result = result.filter(
-				(p) =>
-					p.itemName.toLowerCase().includes(q) ||
-					(p.merchantName && p.merchantName.toLowerCase().includes(q))
-			);
-		}
-		if (category) {
-			result = result.filter((p) => p.categoryId === category);
-		}
-		return result;
+	// Keep the box in step when the URL changes underneath it — back button,
+	// or the clear affordance.
+	$effect(() => {
+		const fromUrl = activeQuery;
+		if (fromUrl !== untrack(() => search)) search = fromUrl;
 	});
+
+	type Entry = (typeof items)[number];
+	const isPurchase = (e: Entry): e is Extract<Entry, { kind: 'purchase' }> => e.kind === 'purchase';
+
+	/** The server already filtered; the client only groups. */
+	const filtered = $derived(items);
+
+	function navigateWith(changes: Record<string, string>, opts: { replace?: boolean } = {}) {
+		const next = new URL(page.url);
+		for (const [k, v] of Object.entries(changes)) {
+			if (v) next.searchParams.set(k, v);
+			else next.searchParams.delete(k);
+		}
+		return goto(next, {
+			noScroll: true,
+			keepFocus: true,
+			replaceState: opts.replace ?? false
+		});
+	}
+
+	// Debounced so typing doesn't fire a request per keystroke, and replaces
+	// history so the back button doesn't walk letter by letter.
+	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	function onSearchInput() {
+		clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => void navigateWith({ q: search }, { replace: true }), 250);
+	}
+
+	function pickCategory(id: string) {
+		showFilter = false;
+		void navigateWith({ category: id });
+	}
+
+	/** Reloads from the server: it changes what gets paged over, not just shown. */
+	function toggleMovements() {
+		showFilter = false;
+		void navigateWith({ movements: data.includeMovements ? '' : '1' });
+	}
 
 	function clearSearch() {
 		search = '';
+		clearTimeout(searchTimer);
+		void navigateWith({ q: '' }, { replace: true });
 	}
 
 	const stateVar: Record<string, string> = {
@@ -61,22 +102,32 @@
 		draft: 'Draft'
 	};
 
-	type P = (typeof items)[number];
-	const pending = $derived(filtered.filter((p: P) => p.state === 'pending_approval'));
-	const rest = $derived(filtered.filter((p: P) => p.state !== 'pending_approval'));
+	type P = Extract<Entry, { kind: 'purchase' }>;
+	const pending = $derived(
+		filtered.filter((e): e is P => isPurchase(e) && e.state === 'pending_approval')
+	);
+	const rest = $derived(filtered.filter((e) => !isPurchase(e) || e.state !== 'pending_approval'));
 
 	async function loadMore() {
 		if (loadingMore) return;
 		loadingMore = true;
 		try {
-			const res = await fetch(`/w/${slug}/purchases/data?offset=${items.length}`);
+			// Plain string: this is a one-shot fetch URL, not reactive state. It has
+			// to carry the same filters the page was loaded with, or "Show more"
+			// would append rows from an unfiltered query.
+			const qs =
+				`offset=${items.length}` +
+				(data.includeMovements ? '&movements=1' : '') +
+				(activeQuery ? `&q=${encodeURIComponent(activeQuery)}` : '') +
+				(category ? `&category=${encodeURIComponent(category)}` : '');
+			const res = await fetch(`/w/${slug}/purchases/data?${qs}`);
 			if (!res.ok) throw new Error(String(res.status));
 			const json = await res.json();
-			items = [...items, ...json.purchases];
+			items = [...items, ...json.entries];
 			hasMore = json.hasMore;
 		} catch {
 			// Failing silently left "Show more" looking like a no-op button.
-			toastError("Couldn't load more purchases");
+			toastError("Couldn't load more");
 		}
 		loadingMore = false;
 	}
@@ -85,6 +136,38 @@
 		return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 </script>
+
+{#snippet movementRow(m: Extract<Entry, { kind: 'movement' }>, last: boolean)}
+	<!--
+		Deliberately quieter than a purchase. An accrual isn't spending — it's your
+		own money moving sideways — and giving it equal weight would dilute what
+		the page is for.
+	-->
+	<a
+		href="/w/{slug}/buckets"
+		class="press flex items-center gap-3 px-1 py-2.5 {last ? '' : 'hairline'}"
+	>
+		<span
+			class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px]"
+			style="background: color-mix(in oklab, {m.bucketColor ??
+				'var(--seal)'} 14%, var(--surface-2))"
+		>
+			<Icon name="bank" class="h-[16px] w-[16px]" style="color: {m.bucketColor ?? 'var(--seal)'}" />
+		</span>
+		<div class="min-w-0 flex-1">
+			<p class="truncate text-[15px]" style="color: var(--ink-2)">
+				{m.type === 'accrual' ? 'Set aside' : m.type === 'withdrawal' ? 'Taken from' : 'Adjusted'}
+				{m.bucketName}
+			</p>
+			<p class="mt-0.5 text-[13px]" style="color: var(--ink-4)">
+				{m.note ?? 'Bucket'} · {fmtDate(m.at)}
+			</p>
+		</div>
+		<span class="num shrink-0 text-[15px]" style="color: var(--ink-3)">
+			{m.amountMinor >= 0n ? '+' : ''}{formatMinor(m.amountMinor, m.currency)}
+		</span>
+	</a>
+{/snippet}
 
 {#snippet row(p: P, last: boolean)}
 	<a
@@ -165,7 +248,7 @@
 
 <div>
 	<div class="flex items-end justify-between px-1 pt-1 pb-2">
-		<h1>Wallet</h1>
+		<h1>Ledger</h1>
 		<span class="num pb-1 text-[13px]" style="color: var(--ink-4)"
 			>{filtered.length}
 			{filtered.length === 1 ? 'item' : 'items'}</span
@@ -174,7 +257,7 @@
 
 	<div class="mb-5 flex gap-2">
 		<label class="relative flex-1">
-			<span class="sr-only">Search purchases</span>
+			<span class="sr-only">Search the ledger</span>
 			<Icon
 				name="search"
 				class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2"
@@ -182,8 +265,9 @@
 			/>
 			<input
 				type="text"
-				placeholder="Search purchases..."
+				placeholder="Search the ledger..."
 				bind:value={search}
+				oninput={onSearchInput}
 				class="field pr-10 pl-10 text-[16px]"
 			/>
 			{#if search}
@@ -227,10 +311,20 @@
 			role="menu"
 		>
 			<button
-				onclick={() => {
-					category = '';
-					showFilter = false;
-				}}
+				onclick={toggleMovements}
+				class="press flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
+			>
+				<span style="color: var(--ink)">Bucket activity</span>
+				<span class="ml-auto text-[13px]" style="color: var(--ink-4)">
+					{data.includeMovements ? 'Shown' : 'Hidden'}
+				</span>
+				{#if data.includeMovements}
+					<Icon name="checkmark" class="h-4 w-4" style="color: var(--ink)" />
+				{/if}
+			</button>
+			<div class="my-1 h-px" style="background: var(--hairline)"></div>
+			<button
+				onclick={() => pickCategory('')}
 				class="press flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
 				style={!category ? 'background: oklch(0.28 0.03 65 / 0.06)' : ''}
 			>
@@ -241,10 +335,7 @@
 			</button>
 			{#each data.categories as c (c.id)}
 				<button
-					onclick={() => {
-						category = c.id;
-						showFilter = false;
-					}}
+					onclick={() => pickCategory(c.id)}
 					class="press flex w-full items-center gap-2 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
 					style={category === c.id ? 'background: oklch(0.28 0.03 65 / 0.06)' : ''}
 				>
@@ -270,9 +361,9 @@
 				/>
 			</div>
 			<p class="text-[19px] font-semibold" style="color: var(--ink)">
-				{search || category ? 'No matches' : 'Nothing here yet'}
+				{activeQuery || category ? 'No matches' : 'Nothing here yet'}
 			</p>
-			{#if search || category}
+			{#if activeQuery || category}
 				<p
 					class="mx-auto mt-1.5 max-w-[28ch] text-[15px] leading-relaxed"
 					style="color: var(--ink-3)"
@@ -288,7 +379,7 @@
 				</p>
 			{/if}
 			<a href="/w/{slug}/purchases/new" class="btn btn-accent mt-6">New purchase</a>
-			{#if !search && !category}
+			{#if !activeQuery && !category}
 				<!-- Empty states are the teaching moment: you're here precisely
 				     because you haven't done the thing yet. -->
 				<a
@@ -315,12 +406,16 @@
 		{#if rest.length > 0}
 			<p class="section-label mb-1 px-1">Recent</p>
 			<div>
-				{#each rest as p, i (p.id)}
-					{@render row(p, i === rest.length - 1)}
+				{#each rest as e, i (e.id)}
+					{#if e.kind === 'movement'}
+						{@render movementRow(e, i === rest.length - 1)}
+					{:else}
+						{@render row(e, i === rest.length - 1)}
+					{/if}
 				{/each}
 			</div>
 		{/if}
-		{#if hasMore && !search && !category}
+		{#if hasMore}
 			<button
 				onclick={loadMore}
 				disabled={loadingMore}
