@@ -57,6 +57,13 @@
       "when": 1784419539817,
       "tag": "0007_outstanding_zombie",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784476131971,
+      "tag": "0008_complex_pestilence",
+      "breakpoints": true
     }
   ]
 }

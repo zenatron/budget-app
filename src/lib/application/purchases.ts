@@ -195,10 +195,13 @@ export async function submitPurchase(
 			merchantId
 		};
 
-		const needed =
-			cmd.bucketId && ws.bucketChargesSkipApproval
-				? false
-				: approvalRequired(policy, cmd.amount, cmd.categoryId);
+		// The bucket carve-out is part of what the policy means, so it is decided
+		// in the policy engine rather than short-circuited here — the member's own
+		// rule can now override the workspace default in either direction.
+		const needed = approvalRequired(policy, cmd.amount, cmd.categoryId, {
+			chargedToBucket: Boolean(cmd.bucketId),
+			workspaceSkipsBucketCharges: ws.bucketChargesSkipApproval
+		});
 		let result;
 		if (needed) {
 			const approvers = resolveApprovers(

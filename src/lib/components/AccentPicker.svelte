@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ACCENTS } from '$lib/accent';
+	import { ACCENTS, accentName } from '$lib/accent';
 	import Icon from '$lib/components/Icon.svelte';
 
 	let { value = $bindable(), label = 'Accent color' }: { value: string; label?: string } = $props();
@@ -19,7 +19,8 @@
 				type="button"
 				onclick={() => (value = c)}
 				class="press flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
-				aria-label={selected ? `Accent ${c}, selected` : `Use accent ${c}`}
+				aria-label={selected ? `${accentName(c)}, selected` : `Use ${accentName(c)}`}
+				title={accentName(c)}
 				aria-pressed={selected}
 			>
 				<span
@@ -37,4 +38,10 @@
 			</button>
 		{/each}
 	</div>
+	<!--
+		Names the current pick rather than labelling all nine — nine captions under
+		nine swatches is more text than colour. Each swatch still carries its name
+		in aria-label and title, so nothing is only available to the eye.
+	-->
+	<p class="mt-2 text-[13px]" style="color: var(--ink-3)">{accentName(value)}</p>
 </fieldset>

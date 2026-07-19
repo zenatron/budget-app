@@ -3,12 +3,24 @@
  * Describes when *that member's own* spending needs approval and who decides.
  * Approval is not symmetric: being an approver and needing approval are independent.
  */
+/**
+ * What a member's own bucket-charged purchases do.
+ *
+ * `inherit` defers to the workspace-wide setting, and is what an absent value
+ * means — so adding this field changed nobody's behaviour.
+ */
+export type BucketChargeRule = 'inherit' | 'skip' | 'require';
+
+export const BUCKET_CHARGE_RULES = ['inherit', 'skip', 'require'] as const;
+
 export interface ApprovalPolicy {
 	mode: 'none' | 'threshold' | 'always';
 	/** Minor units; required when mode is 'threshold'. */
 	threshold_minor?: number;
 	/** categoryId -> exemption/override of the base mode. */
 	category_overrides?: Record<string, 'exempt' | 'always'>;
+	/** Absent means 'inherit'. */
+	bucket_charges?: BucketChargeRule;
 	routing: {
 		/** any_of: any listed approver satisfies. specific: exactly that one member. */
 		mode: 'any_of' | 'specific';
@@ -19,6 +31,38 @@ export interface ApprovalPolicy {
 /** New members start needing no approval; the workspace owner tunes this later. */
 export function defaultApprovalPolicy(): ApprovalPolicy {
 	return { mode: 'none', routing: { mode: 'any_of', approver_ids: [] } };
+}
+
+/**
+ * Whose spending would break if `leavingId` stopped being an active member.
+ *
+ * `resolveApprovers` throws when a policy that needs approval has no active
+ * approver left, and it throws at the moment someone tries to buy something —
+ * long after the change that caused it, to a person who had nothing to do with
+ * it. Disabling the household's only approver is an easy mistake to make and an
+ * obscure one to diagnose, so it is checked up front instead.
+ *
+ * Returns the member ids that would be stranded; empty means the change is safe.
+ */
+export function strandedByRemoving(
+	members: { id: string; policy: ApprovalPolicy; status: string }[],
+	leavingId: string
+): string[] {
+	const remaining = members
+		.filter((m) => m.status === 'active' && m.id !== leavingId)
+		.map((m) => m.id);
+
+	return members
+		.filter((m) => m.status === 'active' && m.id !== leavingId)
+		.filter((m) => {
+			const canRequire =
+				m.policy.mode !== 'none' ||
+				m.policy.bucket_charges === 'require' ||
+				Object.values(m.policy.category_overrides ?? {}).some((o) => o === 'always');
+			if (!canRequire) return false;
+			return m.policy.routing.approver_ids.filter((id) => remaining.includes(id)).length === 0;
+		})
+		.map((m) => m.id);
 }
 
 export class InvalidPolicyError extends Error {

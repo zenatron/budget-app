@@ -10,8 +10,9 @@ import sharp from 'sharp';
 
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 const MAX_INPUT_PIXELS = 40_000_000; // ~40MP
-const DISPLAY_WIDTH = 1600;
-const THUMB_WIDTH = 400;
+/** Bounds on the *long* edge, not on width — see `derive`. */
+const DISPLAY_EDGE = 1600;
+const THUMB_EDGE = 400;
 const WEBP_QUALITY = 78;
 
 export class ImageValidationError extends Error {
@@ -59,17 +60,25 @@ export async function processUpload(input: Uint8Array): Promise<ProcessedImage> 
 		throw new ImageValidationError('Not a supported image (JPEG, PNG, or WebP)');
 	}
 
-	async function derive(width: number): Promise<Derivative> {
+	/*
+	 * `fit: 'inside'` bounds the long edge, so both dimensions stay under `edge`
+	 * and the aspect ratio is untouched — nothing is ever cropped here. Bounding
+	 * width alone made portrait uploads the most expensive thing in the store: a
+	 * phone photo came out 1600×2133, half again the pixels of the same shot held
+	 * landscape. Cropping to a uniform shape is a presentation choice and belongs
+	 * in CSS, where it can be changed later; these are the only copies kept.
+	 */
+	async function derive(edge: number): Promise<Derivative> {
 		const out = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })
 			.rotate() // bake EXIF orientation before metadata is dropped
-			.resize(width, undefined, { withoutEnlargement: true })
+			.resize(edge, edge, { fit: 'inside', withoutEnlargement: true })
 			.webp({ quality: WEBP_QUALITY })
 			.toBuffer({ resolveWithObject: true });
 		return { data: out.data, width: out.info.width, height: out.info.height };
 	}
 
 	try {
-		const [display, thumb] = await Promise.all([derive(DISPLAY_WIDTH), derive(THUMB_WIDTH)]);
+		const [display, thumb] = await Promise.all([derive(DISPLAY_EDGE), derive(THUMB_EDGE)]);
 		return { display, thumb };
 	} catch (e) {
 		if (e instanceof ImageValidationError) throw e;

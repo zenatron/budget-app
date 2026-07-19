@@ -52,5 +52,7 @@ for (const ws of workspaces) {
 	console.log(`${ws.slug}: added ${missing.map((c) => c.name).join(', ')}`);
 }
 
-console.log(`\nDone — ${added} categor${added === 1 ? 'y' : 'ies'} added across ${workspaces.length} workspace(s).`);
+console.log(
+	`\nDone — ${added} categor${added === 1 ? 'y' : 'ies'} added across ${workspaces.length} workspace(s).`
+);
 await client.end();

@@ -6,8 +6,10 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import Money from '$lib/components/Money.svelte';
 	import { money } from '$lib/actions/money';
+	import ImageViewer from '$lib/components/ImageViewer.svelte';
 
 	let { data, form } = $props();
+	let viewing = $state(false);
 	let slug = $derived(page.params.workspace);
 	let editing = $state(false);
 	let deciding = $state<'approve' | 'deny' | null>(null);
@@ -140,17 +142,31 @@
 		</a>
 	{:else if img}
 		<div class="relative mt-5">
-			<div
-				class="overflow-hidden rounded-[14px]"
-				style="box-shadow: var(--shadow-card), inset 0 0 0 1px var(--hairline)"
+			<!--
+				The image sets its own shape. A fixed aspect box with object-cover threw
+				away more than half of any portrait photo — which is most phone photos.
+				Its real job was holding space so the page doesn't jump while the image
+				loads, and the stored width/height do that exactly, without a crop.
+				Capped so a tall receipt doesn't push everything else off screen; the
+				viewer is where it gets the whole screen.
+			-->
+			<button
+				onclick={() => (viewing = true)}
+				class="press block w-full overflow-hidden rounded-[14px]"
+				style="box-shadow: var(--shadow-card), inset 0 0 0 1px var(--hairline); background: var(--surface-2)"
+				aria-label="View photo full screen"
 			>
 				<img
 					src="/w/{slug}/blobs/{img.blobId}"
 					alt={p.itemName}
-					class="aspect-[4/3] w-full object-cover"
+					width={img.width}
+					height={img.height}
+					class="max-h-[70vh] w-full object-contain"
+					style="aspect-ratio: {img.width} / {img.height}"
 					loading="eager"
 				/>
-			</div>
+			</button>
+			<ImageViewer src="/w/{slug}/blobs/{img.blobId}" alt={p.itemName} bind:open={viewing} />
 			<!--
 				Photo controls sit on the photo, because they act on it. A purchase
 				carries exactly one, so this replaces rather than appends — the old

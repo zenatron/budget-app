@@ -6,10 +6,40 @@
 	import { onDestroy } from 'svelte';
 	import { calDateInZone } from '$lib/domain/time/zoned';
 
+	import BillImport from '$lib/components/BillImport.svelte';
+
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
 	let showGift = $state(false);
 	let photoPreview: string | null = $state(null);
+
+	// Bound so the bill importer can fill them. Everything else on this form
+	// stays uncontrolled — these three are the only fields a bill can speak to.
+	let amount = $state('');
+	let itemName = $state('');
+	let merchantName = $state('');
+	let photoInput: HTMLInputElement | null = $state(null);
+
+	/**
+	 * Hand the rendered page to the form's own photo input rather than uploading
+	 * it separately: it then travels as an ordinary image through the pipeline
+	 * that already sniffs magic bytes, caps pixels and strips metadata. A
+	 * DataTransfer is the only way to set an input's files programmatically.
+	 */
+	function applyBill(v: { amount: string; vendor: string | null; image: File | null }) {
+		amount = v.amount;
+		if (v.vendor) {
+			if (!merchantName) merchantName = v.vendor;
+			if (!itemName) itemName = `${v.vendor} bill`;
+		}
+		if (v.image && photoInput) {
+			const dt = new DataTransfer();
+			dt.items.add(v.image);
+			photoInput.files = dt.files;
+			if (photoPreview) URL.revokeObjectURL(photoPreview);
+			photoPreview = URL.createObjectURL(v.image);
+		}
+	}
 	const symbol = $derived(
 		(0)
 			.toLocaleString(undefined, { style: 'currency', currency: data.workspace.currency })
@@ -87,6 +117,10 @@
 		<Icon name="chevronLeft" class="h-4 w-4" /> Ledger
 	</a>
 
+	{#if data.billImportEnabled}
+		<BillImport currency={data.workspace.currency} dayFirst={data.dayFirst} onapply={applyBill} />
+	{/if}
+
 	<form method="POST" enctype="multipart/form-data" use:submit class="space-y-4">
 		<!-- Amount: the focal point -->
 		<div class="card-lg card px-6 py-8 text-center">
@@ -100,6 +134,7 @@
 					<input
 						name="amount"
 						aria-label="Amount"
+						bind:value={amount}
 						use:money
 						required
 						inputmode="decimal"
@@ -119,6 +154,7 @@
 				<input
 					name="itemName"
 					aria-label="Item"
+					bind:value={itemName}
 					required
 					maxlength="120"
 					placeholder="What did you buy?"
@@ -131,6 +167,7 @@
 				<input
 					name="merchantName"
 					aria-label="Merchant"
+					bind:value={merchantName}
 					maxlength="200"
 					placeholder="Where did you buy it?"
 					class="flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:opacity-40"
@@ -179,6 +216,7 @@
 				<input
 					type="file"
 					name="photo"
+					bind:this={photoInput}
 					accept="image/jpeg,image/png,image/webp"
 					class="sr-only"
 					onchange={onPhoto}

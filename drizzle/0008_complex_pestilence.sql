@@ -1,0 +1,1 @@
+ALTER TABLE "workspace" ADD COLUMN "bill_import_enabled" boolean DEFAULT false NOT NULL;

@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
-	import { money } from '$lib/actions/money';
-	import { formatMinor } from '$lib/money-format';
 	import Icon from '$lib/components/Icon.svelte';
 	import AccentPicker from '$lib/components/AccentPicker.svelte';
 	import { accentFor } from '$lib/accent';
@@ -14,32 +12,10 @@
 	// button only appears once the two diverge.
 	const currentAccent = $derived(accentFor({ slug: slug ?? '', accentColor: data.accentColor }));
 	let accent = $derived(currentAccent);
-	let editingPolicy: string | null = $state(null);
-	let copied: string | null = $state(null);
 
-	const roleLabel: Record<string, string> = { owner: 'Owner', member: 'Member' };
-
-	function expiresIn(iso: string) {
-		const ts = Date.parse(iso);
-		if (Number.isNaN(ts)) return 'Invalid date';
-		const d = Math.max(0, Math.round((ts - Date.now()) / 86400000));
-		return d <= 1 ? 'Expires soon' : `Expires in ${d} days`;
-	}
-	function policySummary(p: { mode: string; threshold_minor?: number | null }) {
-		if (p.mode === 'none') return 'No approval needed';
-		if (p.mode === 'always') return 'Always needs approval';
-		const minor = p.threshold_minor ?? 0;
-		return `Approval above ${formatMinor(BigInt(minor), data.workspace.currency)}`;
-	}
-	async function copyCode(code: string) {
-		try {
-			await navigator.clipboard.writeText(code);
-			copied = code;
-			setTimeout(() => (copied = copied === code ? null : copied), 1400);
-		} catch {
-			/* clipboard may be unavailable */
-		}
-	}
+	const memberSummary = $derived(
+		`${data.memberCount} ${data.memberCount === 1 ? 'person' : 'people'} · approvals and invites`
+	);
 </script>
 
 <div class="space-y-4">
@@ -114,6 +90,20 @@
 		<Icon name="chevronRight" class="h-4 w-4" style="color: var(--ink-4)" />
 	</a>
 
+	<a href="/w/{slug}/settings/members" class="press card flex items-center gap-3.5 p-4">
+		<span
+			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+		>
+			<Icon name="people" class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+		</span>
+		<div class="flex-1">
+			<p class="text-[15px] font-medium" style="color: var(--ink)">Members</p>
+			<p class="text-[13px]" style="color: var(--ink-4)">{memberSummary}</p>
+		</div>
+		<Icon name="chevronRight" class="h-4 w-4" style="color: var(--ink-4)" />
+	</a>
+
 	{#if form?.error}
 		<div
 			class="card p-4 text-[15px]"
@@ -123,92 +113,34 @@
 		</div>
 	{/if}
 
-	<!-- Members -->
-	<div class="card p-5">
-		<p class="section-label">Members</p>
-		<div class="mt-1">
-			{#each data.members as m (m.id)}
-				<!-- One wrapper per member: the row and its policy editor belong
-				     together, and without it nothing scopes to a single member. -->
-				<div data-member={m.displayName}>
-					<div class="hairline flex items-center justify-between py-3 last:shadow-none">
-						<div class="min-w-0">
-							<p class="text-[16px]" style="color: var(--ink)">
-								{m.displayName}
-								<span class="ml-1 text-[13px]" style="color: var(--ink-4)"
-									>{roleLabel[m.role]}{m.status !== 'active' ? ` · ${m.status}` : ''}</span
-								>
-							</p>
-							<p class="text-[13px]" style="color: var(--ink-4)">{policySummary(m.policy)}</p>
-						</div>
-						{#if data.member.role === 'owner'}
-							<button
-								onclick={() => (editingPolicy = editingPolicy === m.id ? null : m.id)}
-								class="press shrink-0 text-[13px] font-medium"
-								style="color: var(--ws-accent)">{editingPolicy === m.id ? 'Done' : 'Policy'}</button
-							>
-						{/if}
-					</div>
-					{#if editingPolicy === m.id}
-						<form
-							method="POST"
-							action="?/policy"
-							use:submit={{ success: 'Policy updated' }}
-							class="mt-1 mb-2 space-y-3 rounded-[14px] p-4"
-							style="background: var(--surface-2)"
-						>
-							<input type="hidden" name="memberId" value={m.id} />
-							<div class="grid grid-cols-2 gap-3">
-								<select
-									name="mode"
-									aria-label="Approval"
-									value={m.policy.mode}
-									class="field text-[16px]"
-								>
-									<option value="none">Never</option>
-									<option value="threshold">Above amount</option>
-									<option value="always">Always</option>
-								</select>
-								<input
-									name="threshold"
-									aria-label="Threshold"
-									use:money
-									inputmode="decimal"
-									placeholder="50.00"
-									value={m.policy.threshold_minor !== undefined
-										? (m.policy.threshold_minor / 100).toFixed(2)
-										: ''}
-									class="field text-[16px] tabular-nums"
-								/>
-							</div>
-							<select
-								name="routingMode"
-								aria-label="Routing"
-								value={m.policy.routing.mode}
-								class="field text-[16px]"
-							>
-								<option value="any_of">Any approver can decide</option>
-								<option value="specific">One specific approver</option>
-							</select>
-							<div class="flex flex-wrap gap-x-4 gap-y-2">
-								{#each data.members.filter((x: { status: string }) => x.status === 'active') as a (a.id)}
-									<label class="flex items-center gap-1.5 text-[15px]" style="color: var(--ink)">
-										<input
-											type="checkbox"
-											name="approverIds"
-											value={a.id}
-											checked={m.policy.routing.approver_ids.includes(a.id)}
-										/>
-										{a.displayName}
-									</label>
-								{/each}
-							</div>
-							<button class="btn btn-accent px-5 py-2.5 text-[15px]">Save policy</button>
-						</form>
-					{/if}
-				</div>
-			{/each}
+	<div class="card flex items-center justify-between gap-4 p-4">
+		<div>
+			<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
+				Read bills from PDFs
+				<span
+					class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
+					style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
+					>Alpha</span
+				>
+			</p>
+			<p class="text-[13px]" style="color: var(--ink-4)">
+				Prefills a purchase from a bill PDF. It guesses, so it always asks you to confirm.
+			</p>
 		</div>
+		<form method="POST" action="?/billImport" use:submit={{ success: 'Setting saved' }}>
+			<button
+				name="enabled"
+				value={data.billImportEnabled ? 'false' : 'true'}
+				aria-label="Toggle reading bills from PDFs"
+				class="press relative inline-flex h-7 w-11 items-center rounded-full transition-colors"
+				style="background: {data.billImportEnabled ? 'var(--approve)' : 'var(--surface-hi)'}"
+			>
+				<span
+					class="inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform"
+					style="transform: translateX({data.billImportEnabled ? '22px' : '2px'})"
+				></span>
+			</button>
+		</form>
 	</div>
 
 	<div class="card flex items-center justify-between p-4">
@@ -249,39 +181,6 @@
 					<button class="btn btn-tint mt-3.5 px-4 py-2 text-[14px]">Save accent</button>
 				{/if}
 			</form>
-		</div>
-
-		<div class="card p-5">
-			<div class="flex items-center justify-between">
-				<p class="section-label">Invites</p>
-				<form method="POST" action="?/invite" use:submit={{ success: 'Invite created' }}>
-					<button class="btn btn-tint px-4 py-1.5 text-[13px]">New code</button>
-				</form>
-			</div>
-			{#if data.invites.length === 0}
-				<p class="mt-3 text-[15px]" style="color: var(--ink-4)">
-					No open invites. Create a code to add someone.
-				</p>
-			{:else}
-				<div class="mt-1">
-					{#each data.invites as inv (inv.code)}
-						<button
-							onclick={() => copyCode(inv.code)}
-							class="press hairline flex w-full items-center justify-between py-3 last:shadow-none"
-						>
-							<code class="font-mono text-[16px] tracking-[0.12em]" style="color: var(--ink)"
-								>{inv.code}</code
-							>
-							<span
-								class="text-[13px]"
-								style="color: {copied === inv.code ? 'var(--approve)' : 'var(--ink-4)'}"
-							>
-								{copied === inv.code ? 'Copied ✓' : expiresIn(inv.expiresAt)}
-							</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
 		</div>
 	{/if}
 

@@ -66,6 +66,8 @@ export const workspace = pgTable('workspace', {
 	maxSealDays: integer('max_seal_days').notNull().default(90),
 	accentColor: text('accent_color'),
 	bucketChargesSkipApproval: boolean('bucket_charges_skip_approval').notNull().default(false),
+	/** Alpha: read a bill PDF to prefill a purchase. Off until asked for. */
+	billImportEnabled: boolean('bill_import_enabled').notNull().default(false),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull()
 });
 

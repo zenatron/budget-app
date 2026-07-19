@@ -37,7 +37,12 @@
 		if (from || to) {
 			out.push({
 				key: 'date',
-				label: from && to ? `${fmtDay(from)} – ${fmtDay(to)}` : from ? `From ${fmtDay(from)}` : `Until ${fmtDay(to)}`,
+				label:
+					from && to
+						? `${fmtDay(from)} – ${fmtDay(to)}`
+						: from
+							? `From ${fmtDay(from)}`
+							: `Until ${fmtDay(to)}`,
 				clear: { from: '', to: '', basis: '' }
 			});
 		}
@@ -172,8 +177,15 @@
 			// query so the next page is filtered exactly like the first — copying
 			// the current params is what keeps that true as filters are added,
 			// rather than a hand-maintained list that silently falls behind.
-			const qs = new URLSearchParams(page.url.searchParams);
-			qs.set('offset', String(items.length));
+			// Built as string pairs rather than a URLSearchParams instance: this is a
+			// throwaway value read once, and a mutable URLSearchParams in component
+			// scope is the reactivity footgun svelte/prefer-svelte-reactivity warns
+			// about.
+			const qs = [...page.url.searchParams.entries()]
+				.filter(([k]) => k !== 'offset')
+				.concat([['offset', String(items.length)]])
+				.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+				.join('&');
 			const res = await fetch(`/w/${slug}/purchases/data?${qs}`);
 			if (!res.ok) throw new Error(String(res.status));
 			const json = await res.json();
@@ -247,10 +259,17 @@
 		-->
 		{#if p.thumbBlobId}
 			<span class="relative h-10 w-10 shrink-0">
+				<!--
+					Cropped from the top, not the centre. At 40px a letterboxed thumb
+					would shrink the content to nothing, so the square crop stays — but
+					receipts, bills and product shots all carry the identifying thing
+					(logo, vendor, item) at the top, and centre-cropping a receipt
+					showed a band of blank paper.
+				-->
 				<img
 					src="/w/{slug}/blobs/{p.thumbBlobId}"
 					alt=""
-					class="h-10 w-10 rounded-[12px] object-cover"
+					class="h-10 w-10 rounded-[12px] object-cover object-top"
 					style="box-shadow: inset 0 0 0 0.5px var(--hairline); {p.isRefund
 						? 'filter: grayscale(0.45) brightness(0.82)'
 						: ''}"

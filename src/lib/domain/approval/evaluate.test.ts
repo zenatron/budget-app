@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Money } from '../money/money';
 import { ApprovalRoutingError, approvalRequired, resolveApprovers } from './evaluate';
-import type { ApprovalPolicy } from './policy';
+import { strandedByRemoving, type ApprovalPolicy } from './policy';
 import { isStale, nextNudgeAt, waitingDays, MAX_NUDGES } from './staleness';
 
 const usd = (n: number) => Money.of(n, 'USD');
@@ -40,6 +40,67 @@ describe('approvalRequired', () => {
 		expect(approvalRequired(p, usd(1), 'other')).toBe(false);
 		const alwaysButExempt = policy({ mode: 'always', category_overrides: { g: 'exempt' } });
 		expect(approvalRequired(alwaysButExempt, usd(1), 'g')).toBe(false);
+	});
+
+	describe('bucket charges', () => {
+		const always = policy({ mode: 'always' });
+
+		it('an absent rule inherits the workspace setting', () => {
+			expect(
+				approvalRequired(always, usd(50), null, {
+					chargedToBucket: true,
+					workspaceSkipsBucketCharges: true
+				})
+			).toBe(false);
+			expect(
+				approvalRequired(always, usd(50), null, {
+					chargedToBucket: true,
+					workspaceSkipsBucketCharges: false
+				})
+			).toBe(true);
+		});
+
+		it("a member's own rule overrides the workspace default both ways", () => {
+			const skips = policy({ mode: 'always', bucket_charges: 'skip' });
+			expect(
+				approvalRequired(skips, usd(50), null, {
+					chargedToBucket: true,
+					workspaceSkipsBucketCharges: false
+				})
+			).toBe(false);
+
+			const requires = policy({ mode: 'none', bucket_charges: 'require' });
+			expect(
+				approvalRequired(requires, usd(50), null, {
+					chargedToBucket: true,
+					workspaceSkipsBucketCharges: true
+				})
+			).toBe(true);
+		});
+
+		it('only applies to purchases actually charged to a bucket', () => {
+			const skips = policy({ mode: 'always', bucket_charges: 'skip' });
+			expect(approvalRequired(skips, usd(50), null, { chargedToBucket: false })).toBe(true);
+		});
+
+		it('requirements beat exemptions when the two disagree', () => {
+			// Category says this always needs approving; the bucket rule says skip.
+			// Asking unnecessarily is recoverable, spending silently is not.
+			const p = policy({
+				mode: 'none',
+				bucket_charges: 'skip',
+				category_overrides: { electronics: 'always' }
+			});
+			expect(approvalRequired(p, usd(50), 'electronics', { chargedToBucket: true })).toBe(true);
+
+			// And the mirror: an exempt category against a bucket rule of 'require'.
+			const q = policy({
+				mode: 'none',
+				bucket_charges: 'require',
+				category_overrides: { groceries: 'exempt' }
+			});
+			expect(approvalRequired(q, usd(50), 'groceries', { chargedToBucket: true })).toBe(true);
+		});
 	});
 });
 
@@ -99,5 +160,62 @@ describe('staleness', () => {
 	it('reports whole waiting days', () => {
 		expect(waitingDays(requestedAt, new Date('2026-07-04T12:00:00Z'))).toBe(3);
 		expect(waitingDays(requestedAt, requestedAt)).toBe(0);
+	});
+});
+
+describe('strandedByRemoving', () => {
+	const m = (
+		id: string,
+		policy: Partial<ApprovalPolicy>,
+		status = 'active'
+	): { id: string; policy: ApprovalPolicy; status: string } => ({
+		id,
+		status,
+		policy: { mode: 'none', routing: { mode: 'any_of', approver_ids: [] }, ...policy }
+	});
+
+	it('is empty when everyone keeps an approver', () => {
+		const members = [
+			m('alice', { mode: 'always', routing: { mode: 'any_of', approver_ids: ['bob', 'phil'] } }),
+			m('bob', {}),
+			m('phil', {})
+		];
+		expect(strandedByRemoving(members, 'bob')).toEqual([]);
+	});
+
+	it('names members left with no active approver', () => {
+		const members = [
+			m('alice', { mode: 'always', routing: { mode: 'any_of', approver_ids: ['bob'] } }),
+			m('bob', {})
+		];
+		expect(strandedByRemoving(members, 'bob')).toEqual(['alice']);
+	});
+
+	it('ignores members who never need approval', () => {
+		const members = [
+			m('alice', { mode: 'none', routing: { mode: 'any_of', approver_ids: ['bob'] } }),
+			m('bob', {})
+		];
+		expect(strandedByRemoving(members, 'bob')).toEqual([]);
+	});
+
+	it('counts a bucket rule of require as needing an approver', () => {
+		const members = [
+			m('alice', {
+				mode: 'none',
+				bucket_charges: 'require',
+				routing: { mode: 'any_of', approver_ids: ['bob'] }
+			}),
+			m('bob', {})
+		];
+		expect(strandedByRemoving(members, 'bob')).toEqual(['alice']);
+	});
+
+	it('does not strand the person leaving, nor already-disabled members', () => {
+		const members = [
+			m('alice', { mode: 'always', routing: { mode: 'any_of', approver_ids: ['alice'] } }),
+			m('bob', { mode: 'always', routing: { mode: 'any_of', approver_ids: ['alice'] } }, 'disabled')
+		];
+		expect(strandedByRemoving(members, 'alice')).toEqual([]);
 	});
 });

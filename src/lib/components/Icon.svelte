@@ -251,6 +251,20 @@
 				d="M12 8V21M17 4a3 3 0 00-3 3v1h3a3 3 0 000-6zM7 4a3 3 0 013 3v1H7a3 3 0 010-6z"
 			/></svg
 		>
+	{:else if name === 'people'}
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1.5"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			class={cls}
+			><path d="M16 20v-1.5a4 4 0 00-4-4H6a4 4 0 00-4 4V20" /><circle cx="9" cy="7" r="3.5" /><path
+				d="M22 20v-1.5a4 4 0 00-3-3.87"
+			/><path d="M16.5 3.75a4 4 0 010 6.5" /></svg
+		>
 	{:else if name === 'bell'}
 		<svg
 			xmlns="http://www.w3.org/2000/svg"

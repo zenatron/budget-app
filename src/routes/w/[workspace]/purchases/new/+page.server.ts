@@ -30,6 +30,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.filter((m) => m.member.status === 'active' && m.member.id !== locals.member!.id)
 			.map((m) => ({ id: m.member.id, displayName: m.user.displayName })),
 		maxSealDays: locals.workspace!.maxSealDays,
+		billImportEnabled: locals.workspace!.billImportEnabled,
+		/*
+		 * How to read 03/04/2026 when the document doesn't say. Writing the month
+		 * first is essentially a US convention, and the timezone is the only locale
+		 * signal the workspace stores. It's a lean, not a fact — the parser flags
+		 * any date it had to resolve this way so the UI can admit the doubt.
+		 */
+		dayFirst: !locals.workspace!.timezone.startsWith('America/'),
 		buckets: buckets
 			.filter((b) => b.bucket.status === 'active')
 			.map((b) => ({ id: b.bucket.id, name: b.bucket.name }))
