@@ -263,10 +263,18 @@ export function edit(
 		note: changes.note === undefined ? p.note : changes.note
 	};
 
+	// An approved purchase with no approvers was never gated: either the policy
+	// required no approval, or every approver was concealed and it auto-approved
+	// with disclosure. There is no approval to invalidate, and sending it back to
+	// pending would strand it — nobody could ever decide it. Apply the edit.
+	if (p.state === 'approved' && substantive && p.approverMemberIds.length === 0) {
+		return {
+			purchase: { ...next, approvedAmount: next.requestedAmount },
+			event: event(next, next.state, actorMemberId, now, 'edited', next.requestedAmount)
+		};
+	}
+
 	if (p.state === 'approved' && substantive) {
-		if (p.approverMemberIds.length === 0) {
-			throw new PurchaseStateError('Cannot invalidate approval with no approvers to re-approve');
-		}
 		return {
 			purchase: {
 				...next,

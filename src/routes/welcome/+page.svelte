@@ -60,6 +60,7 @@
 						<p class="text-[17px] font-semibold" style="color: var(--ink)">Create a workspace</p>
 						<input
 							name="name"
+							aria-label="Name"
 							bind:value={wsName}
 							required
 							maxlength="60"
@@ -98,6 +99,7 @@
 			<form method="POST" action="?/join" use:submit class="space-y-3.5">
 				<input
 					name="code"
+					aria-label="Invite code"
 					required
 					placeholder="e.g. 7XK2M9QRTB"
 					autocapitalize="characters"

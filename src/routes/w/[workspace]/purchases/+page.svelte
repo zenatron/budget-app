@@ -129,7 +129,16 @@
 		<div class="min-w-0 flex-1">
 			<div class="flex items-center gap-1.5">
 				<span class="truncate text-[16px] font-medium" style="color: var(--ink)">{p.itemName}</span>
-				{#if p.sealed}<Icon name="lock" class="h-3 w-3 shrink-0" style="color: var(--seal)" />{/if}
+				{#if p.sealed}
+					<span
+						role="img"
+						title="Sealed — hidden from some members"
+						aria-label="Sealed — hidden from some members"
+						class="contents"
+					>
+						<Icon name="lock" class="h-3 w-3 shrink-0" style="color: var(--seal)" />
+					</span>
+				{/if}
 			</div>
 			<div class="mt-0.5 flex items-center gap-1.5 text-[13px]" style="color: var(--ink-4)">
 				{#if p.categoryIcon}<span>{p.categoryIcon}</span>{/if}

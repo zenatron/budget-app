@@ -24,15 +24,21 @@ export async function createWorkspace(page: Page, name: string): Promise<string>
 /** Owner creates an invite on the dashboard and reads the code. */
 export async function createInvite(page: Page, slug: string): Promise<string> {
 	await page.goto(`/w/${slug}`);
-	await page.getByRole('button', { name: 'New invite' }).click();
-	await expect(page.locator('code').first()).toBeVisible();
+	// Same hydration race as the policy toggle below: a click landing before
+	// the enhanced form is wired is a no-op, so retry until a code appears.
+	await expect(async () => {
+		if ((await page.locator('code').count()) === 0) {
+			await page.getByRole('button', { name: 'New code' }).click();
+		}
+		await expect(page.locator('code').first()).toBeVisible({ timeout: 2000 });
+	}).toPass({ timeout: 30_000 });
 	return (await page.locator('code').first().innerText()).trim();
 }
 
 export async function joinWorkspace(page: Page, code: string, slug: string): Promise<void> {
 	await page.goto('/welcome');
 	await page.getByPlaceholder('e.g. 7XK2M9QRTB').fill(code);
-	await page.getByRole('button', { name: 'Join workspace' }).click();
+	await page.getByRole('button', { name: 'Join', exact: true }).click();
 	await page.waitForURL(new RegExp(`/w/${slug}$`));
 }
 
@@ -45,7 +51,8 @@ export async function setThresholdPolicy(
 	approverNames: string[]
 ): Promise<void> {
 	await page.goto(`/w/${slug}`);
-	const row = page.locator('li', { hasText: memberName }).first();
+	// data-member wraps a member's row and its policy editor together.
+	const row = page.locator(`[data-member="${memberName}"]`);
 	// The toggle needs hydration; a too-early click is a no-op. Retry until
 	// the form actually opens.
 	const approvalSelect = row.getByLabel('Approval');
@@ -61,7 +68,7 @@ export async function setThresholdPolicy(
 		await row.getByRole('checkbox', { name }).check();
 	}
 	await row.getByRole('button', { name: 'Save policy' }).click();
-	await expect(row.getByText(/Needs approval from/)).toBeVisible();
+	await expect(row.getByText(/Approval above/)).toBeVisible();
 }
 
 export interface NewPurchase {

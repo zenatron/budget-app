@@ -394,17 +394,22 @@ form[data-submitting] button:not([type])::after {
 html[data-vt-slide] {
 	view-transition-name: none;
 }
+/* Snappier than --dur: this is the follow-through on a gesture you already
+   completed, so it should get out of the way rather than play out. */
+html[data-vt-slide] {
+	--vt-slide-dur: 170ms;
+}
 html[data-vt-slide='right']::view-transition-old(vt-period-card) {
-	animation: vt-slide-out-right var(--dur) var(--ease-out) both;
+	animation: vt-slide-out-right var(--vt-slide-dur) var(--ease-out) both;
 }
 html[data-vt-slide='right']::view-transition-new(vt-period-card) {
-	animation: vt-slide-in-right var(--dur) var(--ease-out) both;
+	animation: vt-slide-in-right var(--vt-slide-dur) var(--ease-out) both;
 }
 html[data-vt-slide='left']::view-transition-old(vt-period-card) {
-	animation: vt-slide-out-left var(--dur) var(--ease-out) both;
+	animation: vt-slide-out-left var(--vt-slide-dur) var(--ease-out) both;
 }
 html[data-vt-slide='left']::view-transition-new(vt-period-card) {
-	animation: vt-slide-in-left var(--dur) var(--ease-out) both;
+	animation: vt-slide-in-left var(--vt-slide-dur) var(--ease-out) both;
 }
 @keyframes vt-fade-out {
 	to {

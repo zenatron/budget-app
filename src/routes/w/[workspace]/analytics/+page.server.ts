@@ -28,10 +28,11 @@ import {
 	dailyTrend,
 	memberBreakdown,
 	monthlyTrend,
-	periodTotal
+	periodTotal,
+	verdictTotals
 } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
-import { savingsInPeriod } from '$lib/server/repo/buckets';
+import { savingsInPeriod, totalSaved } from '$lib/server/repo/buckets';
 import { listCategories } from '$lib/server/repo/workspaces';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
@@ -309,6 +310,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			: Promise.resolve(new Map())
 	]);
 
+	// Lifetime, not period-scoped: running totals for the workspace.
+	// Income has no stored lifetime figure — recurring entries are rrule
+	// templates expanded at query time — so it's summed over the whole range the
+	// app admits data for.
+	const allTime = yearPeriod({ y: EARLIEST, m: 1, d: 1 });
+	allTime.toExclusive = { y: today.y + 1, m: 1, d: 1 };
+	const [verdicts, earnedMinor, savedMinor] = await Promise.all([
+		verdictTotals(db, scope, now),
+		incomeInPeriod(db, ws.id, allTime, ws.timezone, today),
+		totalSaved(db, ws.id)
+	]);
+
 	// Budgets that start after the current month — scheduled, not yet in force.
 	// Surfaced so a plan you made months ago is visible rather than a surprise.
 	const scheduled = cfg.showBudgets
@@ -372,6 +385,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			label: `${MONTH_NAMES[Number(s.effectiveFrom.slice(5, 7)) - 1]} ${s.effectiveFrom.slice(0, 4)}`
 		})),
 		allCategories: allCategories.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
+		verdicts,
+		earnedMinor,
+		savedMinor,
 		isOwner: locals.member!.role === 'owner',
 		hasPrev: cfg.hasPrev,
 		hasNext: cfg.hasNext,

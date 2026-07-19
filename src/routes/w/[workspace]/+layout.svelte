@@ -64,6 +64,9 @@
 	});
 
 	let showSwitcher = $state(false);
+	// Measured, not guessed: the header's height varies with the safe-area inset,
+	// and anything docking beneath it needs the real number.
+	let headerH = $state(0);
 
 	// Resolved from the workspaces list by URL slug, for the same reason as
 	// wsName above: data.workspace lags during client-side navigation, so
@@ -95,8 +98,12 @@
 <svelte:head><title>{wsName} — Ledger</title></svelte:head>
 
 {#key slug}
-	<div class="min-h-viewport flex flex-col" style="--ws-accent: {accent}; --accent: {accent}">
+	<div
+		class="min-h-viewport flex flex-col"
+		style="--ws-accent: {accent}; --accent: {accent}; --header-h: {headerH}px"
+	>
 		<header
+			bind:clientHeight={headerH}
 			class="material sticky top-0 z-20"
 			style="padding-top: max(env(safe-area-inset-top, 0px), 8px)"
 		>

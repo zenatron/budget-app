@@ -114,71 +114,86 @@
 		<p class="section-label">Members</p>
 		<div class="mt-1">
 			{#each data.members as m (m.id)}
-				<div class="hairline flex items-center justify-between py-3 last:shadow-none">
-					<div class="min-w-0">
-						<p class="text-[16px]" style="color: var(--ink)">
-							{m.displayName}
-							<span class="ml-1 text-[13px]" style="color: var(--ink-4)"
-								>{roleLabel[m.role]}{m.status !== 'active' ? ` · ${m.status}` : ''}</span
+				<!-- One wrapper per member: the row and its policy editor belong
+				     together, and without it nothing scopes to a single member. -->
+				<div data-member={m.displayName}>
+					<div class="hairline flex items-center justify-between py-3 last:shadow-none">
+						<div class="min-w-0">
+							<p class="text-[16px]" style="color: var(--ink)">
+								{m.displayName}
+								<span class="ml-1 text-[13px]" style="color: var(--ink-4)"
+									>{roleLabel[m.role]}{m.status !== 'active' ? ` · ${m.status}` : ''}</span
+								>
+							</p>
+							<p class="text-[13px]" style="color: var(--ink-4)">{policySummary(m.policy)}</p>
+						</div>
+						{#if data.member.role === 'owner'}
+							<button
+								onclick={() => (editingPolicy = editingPolicy === m.id ? null : m.id)}
+								class="press shrink-0 text-[13px] font-medium"
+								style="color: var(--ws-accent)">{editingPolicy === m.id ? 'Done' : 'Policy'}</button
 							>
-						</p>
-						<p class="text-[13px]" style="color: var(--ink-4)">{policySummary(m.policy)}</p>
+						{/if}
 					</div>
-					{#if data.member.role === 'owner'}
-						<button
-							onclick={() => (editingPolicy = editingPolicy === m.id ? null : m.id)}
-							class="press shrink-0 text-[13px] font-medium"
-							style="color: var(--ws-accent)">{editingPolicy === m.id ? 'Done' : 'Policy'}</button
+					{#if editingPolicy === m.id}
+						<form
+							method="POST"
+							action="?/policy"
+							use:submit={{ success: 'Policy updated' }}
+							class="mt-1 mb-2 space-y-3 rounded-[14px] p-4"
+							style="background: var(--surface-2)"
 						>
+							<input type="hidden" name="memberId" value={m.id} />
+							<div class="grid grid-cols-2 gap-3">
+								<select
+									name="mode"
+									aria-label="Approval"
+									value={m.policy.mode}
+									class="field text-[16px]"
+								>
+									<option value="none">Never</option>
+									<option value="threshold">Above amount</option>
+									<option value="always">Always</option>
+								</select>
+								<input
+									name="threshold"
+									aria-label="Threshold"
+									use:money
+									inputmode="decimal"
+									placeholder="50.00"
+									value={m.policy.threshold_minor !== undefined
+										? (m.policy.threshold_minor / 100).toFixed(2)
+										: ''}
+									class="field text-[16px] tabular-nums"
+								/>
+							</div>
+							<select
+								name="routingMode"
+								aria-label="Routing"
+								value={m.policy.routing.mode}
+								class="field text-[16px]"
+							>
+								<option value="any_of">Any approver can decide</option>
+								<option value="specific">One specific approver</option>
+							</select>
+							<div class="flex flex-wrap gap-x-4 gap-y-2">
+								{#each data.members.filter((x: { status: string }) => x.status === 'active') as a (a.id)}
+									<label class="flex items-center gap-1.5 text-[15px]" style="color: var(--ink)">
+										<input
+											type="checkbox"
+											name="approverIds"
+											value={a.id}
+											checked={m.policy.routing.approver_ids.includes(a.id)}
+											class="rounded"
+										/>
+										{a.displayName}
+									</label>
+								{/each}
+							</div>
+							<button class="btn btn-accent px-5 py-2.5 text-[15px]">Save policy</button>
+						</form>
 					{/if}
 				</div>
-				{#if editingPolicy === m.id}
-					<form
-						method="POST"
-						action="?/policy"
-						use:submit={{ success: 'Policy updated' }}
-						class="mt-1 mb-2 space-y-3 rounded-[14px] p-4"
-						style="background: var(--surface-2)"
-					>
-						<input type="hidden" name="memberId" value={m.id} />
-						<div class="grid grid-cols-2 gap-3">
-							<select name="mode" value={m.policy.mode} class="field text-[16px]">
-								<option value="none">Never</option>
-								<option value="threshold">Above amount</option>
-								<option value="always">Always</option>
-							</select>
-							<input
-								name="threshold"
-								use:money
-								inputmode="decimal"
-								placeholder="50.00"
-								value={m.policy.threshold_minor !== undefined
-									? (m.policy.threshold_minor / 100).toFixed(2)
-									: ''}
-								class="field text-[16px] tabular-nums"
-							/>
-						</div>
-						<select name="routingMode" value={m.policy.routing.mode} class="field text-[16px]">
-							<option value="any_of">Any approver can decide</option>
-							<option value="specific">One specific approver</option>
-						</select>
-						<div class="flex flex-wrap gap-x-4 gap-y-2">
-							{#each data.members.filter((x: { status: string }) => x.status === 'active') as a (a.id)}
-								<label class="flex items-center gap-1.5 text-[15px]" style="color: var(--ink)">
-									<input
-										type="checkbox"
-										name="approverIds"
-										value={a.id}
-										checked={m.policy.routing.approver_ids.includes(a.id)}
-										class="rounded"
-									/>
-									{a.displayName}
-								</label>
-							{/each}
-						</div>
-						<button class="btn btn-accent px-5 py-2.5 text-[15px]">Save policy</button>
-					</form>
-				{/if}
 			{/each}
 		</div>
 	</div>

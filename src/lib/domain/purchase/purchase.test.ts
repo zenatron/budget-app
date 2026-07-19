@@ -270,6 +270,31 @@ describe('edit', () => {
 		expect(same.purchase.state).toBe('approved');
 	});
 
+	it('an auto-approved purchase edits in place instead of stranding itself', () => {
+		// "Ask first" under a policy that needs no approval lands here: approved
+		// with zero approvers. Invalidating would send it to pending_approval with
+		// nobody able to decide it, so the amount could never be corrected.
+		const autoApproved = approved({ approverMemberIds: [] });
+		const { purchase, event } = edit(
+			autoApproved,
+			'm-requester',
+			{ requestedAmount: usd(22000) },
+			NOW
+		);
+		expect(purchase.state).toBe('approved');
+		expect(purchase.requestedAmount.minor).toBe(22000n);
+		// The approved amount tracks the edit; leaving it stale would make the
+		// purchase look like a 4,000 overage the moment it completes.
+		expect(purchase.approvedAmount?.minor).toBe(22000n);
+		expect(event.reason).toBe('edited');
+	});
+
+	it('still invalidates when there is someone who can re-approve', () => {
+		const { purchase } = edit(approved(), 'm-requester', { requestedAmount: usd(22000) }, NOW);
+		expect(purchase.state).toBe('pending_approval');
+		expect(purchase.approvedAmount).toBeNull();
+	});
+
 	it('pending and draft edits keep their state', () => {
 		expect(edit(pending(), 'm-requester', { requestedAmount: usd(1) }, NOW).purchase.state).toBe(
 			'pending_approval'

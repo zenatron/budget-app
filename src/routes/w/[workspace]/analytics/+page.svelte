@@ -18,6 +18,8 @@
 	let touchStartY = $state(0);
 	let swiping = $state(false);
 	let swipeOffset = $state(0);
+	/** True from release until the view transition ends; suppresses the springback. */
+	let committing = $state(false);
 
 	function onTouchStart(e: TouchEvent) {
 		if (e.touches.length !== 1) return;
@@ -59,8 +61,24 @@
 		}
 		swiping = false;
 		const dx = e.changedTouches[0].clientX - touchStartX;
-		swipeOffset = 0;
-		if (Math.abs(dx) < 60) return;
+		const commit = Math.abs(dx) >= 60;
+		// On a commit the card must not spring back first: the eased return to
+		// centre and the view transition's slide are two separate motions, which
+		// on device reads as the card settling twice. Drop the offset with no
+		// transition so the slide is the only movement you see. A cancelled swipe
+		// still eases back, because there the springback IS the feedback.
+		if (!commit) {
+			// Didn't travel far enough: ease back to centre. Here the springback is
+			// the feedback, so it keeps its transition.
+			swipeOffset = 0;
+			return;
+		}
+		// Committed: leave the card where the finger left it. navigate() resets the
+		// offset inside the view transition's callback, so the outgoing snapshot is
+		// captured mid-gesture and slides on from there. Resetting first made the
+		// card jump ~100px back to centre and then slide forward again — two
+		// direction changes, which is the double settle you feel.
+		committing = true;
 		void navigate(dx > 0 ? 'prev' : 'next');
 	}
 
@@ -73,12 +91,10 @@
 	 */
 	async function navigate(dir: 'prev' | 'next') {
 		const href = navHref(dir);
-		if (!href) return;
-
-		// onTouchEnd sets swipeOffset = 0 and calls straight into here, but Svelte
-		// flushes the DOM asynchronously — without this the snapshot captures the
-		// card still translated under the finger, and it visibly jumps.
-		await tick();
+		if (!href) {
+			committing = false;
+			return;
+		}
 
 		const root = document.documentElement;
 		const start = (
@@ -87,13 +103,21 @@
 			}
 		).startViewTransition?.bind(document);
 
+		// Runs inside the transition, after the outgoing snapshot is taken: the
+		// card returns to centre here so the reset is never visible.
+		//
 		// noScroll: stepping through periods keeps your place on the page. Without
 		// it, SvelteKit's default scroll-to-top fired on every swipe, so comparing
 		// the category breakdown across months meant scrolling back down each time.
-		const step = () => goto(href, { noScroll: true });
+		const step = async () => {
+			swipeOffset = 0;
+			await tick();
+			await goto(href, { noScroll: true });
+		};
 
 		if (!start || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
 			await step();
+			committing = false;
 			return;
 		}
 
@@ -102,6 +126,7 @@
 			await start(step).finished;
 		} finally {
 			root.removeAttribute('data-vt-slide');
+			committing = false;
 		}
 	}
 
@@ -173,6 +198,44 @@
 	const barGap = $derived(period === 'year' ? 4 : period === 'week' ? 6 : 2);
 	const svgW = $derived(data.buckets.length * (barWidth + barGap));
 
+	/*
+	 * Colour follows the language the rest of the app already speaks: these are
+	 * the same tones the purchase state chips use, so the row doubles as a legend
+	 * for what you see on a purchase.
+	 *
+	 *   green  approved     blue  refunded
+	 *   red    denied       grey  cancelled
+	 *   purple set aside (matches "Saved" in net position above)
+	 *
+	 * Earned is deliberately the neutral espresso. Green was doing double duty —
+	 * "approved" on every chip and "In" in net position — and putting both in one
+	 * row made that read as a mistake. The coloured cards all mean something
+	 * happened to a request; income is the ground they sit against, not a verdict.
+	 */
+	const lifetimeStats = $derived([
+		{ label: 'Earned', minor: data.earnedMinor, tone: 'var(--ink)', hint: 'Income recorded' },
+		{
+			label: 'Approved',
+			minor: data.verdicts.approvedMinor,
+			tone: 'var(--approve)',
+			hint: 'Total spent'
+		},
+		{ label: 'Saved', minor: data.savedMinor, tone: 'var(--seal)', hint: 'Set aside' },
+		{
+			label: 'Refunded',
+			minor: data.verdicts.refundedMinor,
+			tone: 'var(--info)',
+			hint: 'Came back'
+		},
+		{ label: 'Denied', minor: data.verdicts.deniedMinor, tone: 'var(--deny)', hint: 'Turned down' },
+		{
+			label: 'Cancelled',
+			minor: data.verdicts.cancelledMinor,
+			tone: 'var(--ink-4)',
+			hint: 'Withdrawn'
+		}
+	]);
+
 	function pctOf(part: bigint, whole: bigint): number {
 		if (whole === 0n) return 0;
 		return Math.min(100, Number((part * 1000n) / whole) / 10);
@@ -232,7 +295,16 @@
 		</div>
 	</div>
 
-	<div class="-mx-1 flex items-center justify-between gap-1">
+	<!--
+		Docks under the workspace header once you scroll past it. The period being
+		viewed is the page's whole context, and the swipe works anywhere on the
+		page — so scrolling down to the category breakdown used to leave you
+		swiping months with no idea which one you'd landed on.
+	-->
+	<div
+		class="material sticky z-10 -mx-4 flex items-center justify-between gap-1 px-3 py-2"
+		style="top: var(--header-h, 0px); background: color-mix(in oklab, var(--paper) 94%, transparent); box-shadow: 0 0.5px 0 var(--hairline)"
+	>
 		{#if data.hasPrev}
 			<button
 				onclick={() => void navigate('prev')}
@@ -287,7 +359,8 @@
 	-->
 	<div
 		class="card-lg grain relative overflow-hidden p-6"
-		style="background: radial-gradient(120% 80% at 85% -10%, color-mix(in oklab, var(--ws-accent) 24%, transparent), transparent 60%), var(--surface); view-transition-name: vt-period-card; transform: translateX({swipeOffset}px); transition: transform {swiping
+		style="background: radial-gradient(120% 80% at 85% -10%, color-mix(in oklab, var(--ws-accent) 24%, transparent), transparent 60%), var(--surface); view-transition-name: vt-period-card; transform: translateX({swipeOffset}px); transition: transform {swiping ||
+		committing
 			? '0s'
 			: 'var(--dur) var(--ease-out)'}; will-change: {swiping ? 'transform' : 'auto'}"
 	>
@@ -718,5 +791,33 @@
 				{/each}
 			</div>
 		{/if}
+	</div>
+
+	<!--
+		Lifetime totals, deliberately outside the period navigation above — these
+		are running figures for the whole workspace, so they don't change as you
+		swipe through months.
+
+		Two rows that each mean something: what money did (in, out, set aside),
+		then what happened to requests (returned, refused, withdrawn).
+	-->
+	<div>
+		<p class="section-label mb-2 px-1">Lifetime</p>
+		<div class="grid grid-cols-3 gap-2">
+			{#each lifetimeStats as stat (stat.label)}
+				<div class="card p-3.5">
+					<p
+						class="text-[11px] font-semibold tracking-[0.08em] uppercase"
+						style="color: {stat.tone}"
+					>
+						{stat.label}
+					</p>
+					<p class="num mt-1.5 text-[16px] font-semibold" style="color: var(--ink)">
+						{formatMinor(stat.minor, currency)}
+					</p>
+					<p class="mt-0.5 text-[11px] leading-tight" style="color: var(--ink-4)">{stat.hint}</p>
+				</div>
+			{/each}
+		</div>
 	</div>
 </div>

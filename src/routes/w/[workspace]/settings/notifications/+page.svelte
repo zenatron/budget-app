@@ -98,7 +98,7 @@
 			<p class="mt-1.5 text-[13px] leading-relaxed" style="color: var(--ink-2)">
 				On iPhone, notifications only work for installed apps. In Safari, tap
 				<strong style="color: var(--ink)">Share</strong> (the square with the arrow) and choose
-				<strong style="color: var(--ink)">Add to Home Screen</strong>, then open Budget from your
+				<strong style="color: var(--ink)">Add to Home Screen</strong>, then open Ledger from your
 				home screen and come back here.
 			</p>
 		</section>

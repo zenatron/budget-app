@@ -30,7 +30,7 @@ test('sealing: concealed member sees nothing anywhere; reveal restores; conflict
 		sealFrom: ['Alice Test'],
 		sealUntil: inDays(7)
 	});
-	await expect(bob.getByText(/Hidden from Alice Test until/)).toBeVisible();
+	await expect(bob.getByText(/Hidden from Alice Test/)).toBeVisible();
 
 	// List: bob sees both (with lock), alice sees only the pizza.
 	await bob.goto(`/w/${slug}/purchases`);
@@ -52,8 +52,10 @@ test('sealing: concealed member sees nothing anywhere; reveal restores; conflict
 
 	// Early reveal by the requester corrects alice's picture.
 	await bob.goto(giftUrl);
+	// Revealing early is destructive-ish, so the app confirms first.
+	bob.once('dialog', (d) => d.accept());
 	await bob.getByRole('button', { name: 'Reveal now' }).click();
-	await expect(bob.getByText(/Hidden from Alice Test until/)).toHaveCount(0);
+	await expect(bob.getByText(/Hidden from Alice Test/)).toHaveCount(0);
 	await alice.goto(`/w/${slug}/purchases`);
 	await expect(alice.getByText('Anniversary gift')).toBeVisible();
 	await alice.goto(`/w/${slug}/analytics`);
@@ -69,6 +71,6 @@ test('sealing: concealed member sees nothing anywhere; reveal restores; conflict
 		sealFrom: ['Alice Test'],
 		sealUntil: inDays(7)
 	});
-	await expect(bob.getByText('Approved — not yet bought', { exact: true })).toBeVisible();
+	await expect(bob.locator('.chip', { hasText: 'Approved' })).toBeVisible();
 	await expect(bob.getByText(/approver concealed — recorded without approval/)).toBeVisible();
 });

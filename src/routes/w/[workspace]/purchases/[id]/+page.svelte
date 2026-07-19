@@ -125,11 +125,16 @@
 				>
 					<Icon name="reverse" class="h-6 w-6" />
 				</span>
+				<!--
+					Says what tapping does. "Reverses this purchase" read as though the
+					thing on screen were being reversed — the arrow already carries the
+					"this is a refund" meaning, so the label is free to be the action.
+				-->
 				<span
 					class="text-[13px] font-semibold"
 					style="color: {data.inheritedImage ? 'white' : 'var(--ink-3)'}"
 				>
-					Reverses this purchase
+					See original purchase
 				</span>
 			</span>
 		</a>
@@ -399,19 +404,26 @@
 					class="mt-3.5 space-y-3"
 				>
 					<div class="grid grid-cols-2 gap-3">
-						<input
-							name="finalAmount"
-							use:money
-							required
-							inputmode="decimal"
-							placeholder="Final amount"
-							value={formatMinor(
-								p.approvedAmountMinor ?? p.requestedAmountMinor,
-								p.currency
-							).replace(/[^0-9.]/g, '')}
-							class="field num text-[17px]"
-						/>
-						<input name="finalDate" type="date" class="field text-[16px]" />
+						<label class="block">
+							<span class="section-label mb-1.5 block">Actually spent</span>
+							<input
+								name="finalAmount"
+								aria-label="Final amount"
+								use:money
+								required
+								inputmode="decimal"
+								placeholder="Final amount"
+								value={formatMinor(
+									p.approvedAmountMinor ?? p.requestedAmountMinor,
+									p.currency
+								).replace(/[^0-9.]/g, '')}
+								class="field num text-[17px]"
+							/>
+						</label>
+						<label class="block">
+							<span class="section-label mb-1.5 block">On</span>
+							<input name="finalDate" type="date" aria-label="Date" class="field text-[16px]" />
+						</label>
 					</div>
 					<button class="btn btn-accent w-full">Complete purchase</button>
 				</form>
@@ -433,9 +445,14 @@
 					/>
 				</button>
 				{#if editing}
-					{#if p.state === 'approved'}
+					{#if p.state === 'approved' && p.approverNames.length > 0}
 						<p class="mt-3 text-[13px]" style="color: var(--pending)">
-							Changing item, amount, or category sends this back for approval.
+							Changing item, amount, or category sends this back to {p.approverNames.join(' or ')}
+							for approval.
+						</p>
+					{:else if p.state === 'approved'}
+						<p class="mt-3 text-[13px]" style="color: var(--ink-3)">
+							This didn't need approval, so changes apply straight away.
 						</p>
 					{/if}
 					<form
@@ -444,24 +461,45 @@
 						use:submit={{ success: 'Changes saved' }}
 						class="mt-3 space-y-3"
 					>
-						<input name="itemName" required value={p.itemName} class="field text-[16px]" />
-						<div class="grid grid-cols-2 gap-3">
+						<label class="block">
+							<span class="section-label mb-1.5 block">Item</span>
 							<input
-								name="amount"
-								use:money
+								name="itemName"
+								aria-label="Item"
 								required
-								inputmode="decimal"
-								value={formatMinor(p.requestedAmountMinor, p.currency).replace(/[^0-9.]/g, '')}
-								class="field num text-[16px]"
+								value={p.itemName}
+								class="field text-[16px]"
 							/>
-							<select name="categoryId" class="field text-[16px]">
-								<option value="">None</option>
-								{#each data.categories as c (c.id)}
-									<option value={c.id} selected={c.id === p.categoryId}>{c.icon} {c.name}</option>
-								{/each}
-							</select>
+						</label>
+						<div class="grid grid-cols-2 gap-3">
+							<label class="block">
+								<span class="section-label mb-1.5 block">Asking for</span>
+								<input
+									name="amount"
+									aria-label="Amount requested"
+									use:money
+									required
+									inputmode="decimal"
+									value={formatMinor(p.requestedAmountMinor, p.currency).replace(/[^0-9.]/g, '')}
+									class="field num text-[16px]"
+								/>
+							</label>
+							<label class="block">
+								<span class="section-label mb-1.5 block">Category</span>
+								<select name="categoryId" aria-label="Category" class="field text-[16px]">
+									<option value="">None</option>
+									{#each data.categories as c (c.id)}
+										<option value={c.id} selected={c.id === p.categoryId}>{c.icon} {c.name}</option>
+									{/each}
+								</select>
+							</label>
 						</div>
-						<textarea name="note" rows="2" class="field text-[16px]">{p.note ?? ''}</textarea>
+						<label class="block">
+							<span class="section-label mb-1.5 block">Note</span>
+							<textarea name="note" aria-label="Note" rows="2" class="field text-[16px]"
+								>{p.note ?? ''}</textarea
+							>
+						</label>
 						<button class="btn btn-ghost w-full">Save changes</button>
 					</form>
 				{/if}

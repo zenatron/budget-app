@@ -226,3 +226,58 @@ export async function budgetVsActual(
 				: (byCategory.find((s) => s.categoryId === b.categoryId)?.totalMinor ?? 0n)
 	}));
 }
+
+export interface VerdictTotals {
+	/** Completed spend, net of refunds. */
+	approvedMinor: bigint;
+	/** Money that came back, as a positive number. */
+	refundedMinor: bigint;
+	/** Requested amounts that were turned down. */
+	deniedMinor: bigint;
+	/** Requested amounts the requester withdrew before a decision. */
+	cancelledMinor: bigint;
+}
+
+/**
+ * Lifetime totals for the three settled outcomes. Only decided purchases
+ * count — pending and draft rows have no verdict yet, and `approved` is
+ * excluded because nothing has been spent until it completes.
+ *
+ * Refunds need no special arithmetic: a refund is a child row carrying a
+ * negative final amount, so summing completed and refunded rows subtracts it
+ * from the approved total on its own. The refunded figure is those children
+ * on their own, sign-flipped.
+ *
+ * Seal-filtered like every other aggregate — a concealed purchase must not
+ * show up in a lifetime number either.
+ */
+export async function verdictTotals(
+	db: Db,
+	scope: { workspaceId: string; viewerId: string },
+	now: Date
+): Promise<VerdictTotals> {
+	const [row] = await db
+		.select({
+			approved: sql<string>`coalesce(sum(${purchase.finalAmountMinor}) filter (
+				where ${purchase.state} in ('completed', 'refunded')
+			), 0)`,
+			refunded: sql<string>`coalesce(-sum(${purchase.finalAmountMinor}) filter (
+				where ${purchase.parentPurchaseId} is not null and ${purchase.finalAmountMinor} < 0
+			), 0)`,
+			denied: sql<string>`coalesce(sum(${purchase.requestedAmountMinor}) filter (
+				where ${purchase.state} = 'denied'
+			), 0)`,
+			cancelled: sql<string>`coalesce(sum(${purchase.requestedAmountMinor}) filter (
+				where ${purchase.state} = 'cancelled'
+			), 0)`
+		})
+		.from(purchase)
+		.where(and(eq(purchase.workspaceId, scope.workspaceId), visibleTo(scope.viewerId, now)));
+
+	return {
+		approvedMinor: BigInt(row?.approved ?? '0'),
+		refundedMinor: BigInt(row?.refunded ?? '0'),
+		deniedMinor: BigInt(row?.denied ?? '0'),
+		cancelledMinor: BigInt(row?.cancelled ?? '0')
+	};
+}
