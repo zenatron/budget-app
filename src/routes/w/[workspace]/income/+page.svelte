@@ -56,14 +56,14 @@
 				/>
 			</div>
 			<div class="grid grid-cols-2 gap-3">
-				<select name="repeat" bind:value={repeat} class="field text-[15px]">
+				<select name="repeat" bind:value={repeat} class="field text-[16px]">
 					<option value="once">One-off</option>
 					<option value="monthly">Monthly</option>
 				</select>
-				<input name="date" type="date" value={today} required class="field text-[15px]" />
+				<input name="date" type="date" value={today} required class="field text-[16px]" />
 			</div>
 			{#if repeat === 'monthly'}
-				<select name="monthDay" class="field text-[15px]">
+				<select name="monthDay" class="field text-[16px]">
 					{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}<option value={d}
 							>Day {d}</option
 						>{/each}
@@ -147,14 +147,14 @@
 						>
 							<input type="hidden" name="incomeId" value={e.id} />
 							<div class="grid grid-cols-[1fr_auto] gap-3">
-								<input name="source" required value={e.source} class="field text-[15px]" />
+								<input name="source" required value={e.source} class="field text-[16px]" />
 								<input
 									name="amount"
 									required
 									use:money
 									inputmode="decimal"
 									value={(Number(e.amountMinor) / 100).toFixed(2)}
-									class="field w-28 text-[15px] tabular-nums"
+									class="field w-28 text-[16px] tabular-nums"
 								/>
 							</div>
 							<div class="grid grid-cols-2 gap-3">
@@ -177,11 +177,11 @@
 									type="date"
 									value={e.receivedDate}
 									required
-									class="field text-[15px]"
+									class="field text-[16px]"
 								/>
 							</div>
 							{#if r === 'monthly'}
-								<select name="monthDay" class="field text-[15px]">
+								<select name="monthDay" class="field text-[16px]">
 									{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}
 										<option value={d} selected={e.monthDay === d}>Day {d}</option>
 									{/each}

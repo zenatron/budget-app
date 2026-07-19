@@ -1,4 +1,4 @@
-# Budget
+# Ledger
 
 Self-hosted workspace budget & approval tracker. SvelteKit 2 (Svelte 5 runes) + Bun +
 PostgreSQL 17 + Drizzle, auth via an external [Pocket ID](https://pocket-id.org) instance

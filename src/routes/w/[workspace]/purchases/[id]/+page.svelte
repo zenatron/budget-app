@@ -187,7 +187,7 @@
 						}}
 						class="space-y-2.5"
 					>
-						<input name="reason" placeholder="Reason (optional)" class="field text-[15px]" />
+						<input name="reason" placeholder="Reason (optional)" class="field text-[16px]" />
 						<button
 							class="btn w-full py-3.5 text-[16px]"
 							style="color: var(--deny); background: color-mix(in oklab, var(--deny) 12%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--deny) 30%, transparent)"
@@ -336,7 +336,7 @@
 							).replace(/[^0-9.]/g, '')}
 							class="field num text-[17px]"
 						/>
-						<input name="finalDate" type="date" class="field text-[15px]" />
+						<input name="finalDate" type="date" class="field text-[16px]" />
 					</div>
 					<button class="btn btn-accent w-full">Complete purchase</button>
 				</form>
@@ -369,7 +369,7 @@
 						use:submit={{ success: 'Changes saved' }}
 						class="mt-3 space-y-3"
 					>
-						<input name="itemName" required value={p.itemName} class="field text-[15px]" />
+						<input name="itemName" required value={p.itemName} class="field text-[16px]" />
 						<div class="grid grid-cols-2 gap-3">
 							<input
 								name="amount"
@@ -377,16 +377,16 @@
 								required
 								inputmode="decimal"
 								value={formatMinor(p.requestedAmountMinor, p.currency).replace(/[^0-9.]/g, '')}
-								class="field num text-[15px]"
+								class="field num text-[16px]"
 							/>
-							<select name="categoryId" class="field text-[15px]">
+							<select name="categoryId" class="field text-[16px]">
 								<option value="">None</option>
 								{#each data.categories as c (c.id)}
 									<option value={c.id} selected={c.id === p.categoryId}>{c.icon} {c.name}</option>
 								{/each}
 							</select>
 						</div>
-						<textarea name="note" rows="2" class="field text-[15px]">{p.note ?? ''}</textarea>
+						<textarea name="note" rows="2" class="field text-[16px]">{p.note ?? ''}</textarea>
 						<button class="btn btn-ghost w-full">Save changes</button>
 					</form>
 				{/if}
@@ -408,7 +408,7 @@
 						required
 						inputmode="decimal"
 						placeholder="Amount"
-						class="field num flex-1 text-[15px]"
+						class="field num flex-1 text-[16px]"
 					/>
 					<button class="btn btn-ghost shrink-0">Record</button>
 				</form>

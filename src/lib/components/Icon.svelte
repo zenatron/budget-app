@@ -342,16 +342,23 @@
 			/></svg
 		>
 	{:else if name === 'sparkle'}
-		<svg
-			xmlns="http://www.w3.org/2000/svg"
-			viewBox="0 0 24 24"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="1.5"
-			stroke-linecap="round"
-			stroke-linejoin="round"
-			class={cls}><path d="M12 3l1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5z" /></svg
-		>
+		<!--
+			Three four-point stars with concave sides (quadratic curves pulled to the
+			center), the way the ✨ glyph reads — a single convex star looked like a
+			rating widget, not an "ask me something" affordance. Filled, not stroked,
+			so it stays legible at 16px.
+		-->
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class={cls}>
+			<path
+				d="M9.5 2.2C10.1 6.4 11.1 7.4 15.3 8 11.1 8.6 10.1 9.6 9.5 13.8 8.9 9.6 7.9 8.6 3.7 8 7.9 7.4 8.9 6.4 9.5 2.2Z"
+			/>
+			<path
+				d="M17.5 12.4C17.8 15 18.3 15.5 20.9 15.8 18.3 16.1 17.8 16.6 17.5 19.2 17.2 16.6 16.7 16.1 14.1 15.8 16.7 15.5 17.2 15 17.5 12.4Z"
+			/>
+			<path
+				d="M7.2 16.6C7.4 18.4 7.7 18.7 9.5 18.9 7.7 19.1 7.4 19.4 7.2 21.2 7 19.4 6.7 19.1 4.9 18.9 6.7 18.7 7 18.4 7.2 16.6Z"
+			/>
+		</svg>
 	{:else if name === 'funnel'}
 		<svg
 			xmlns="http://www.w3.org/2000/svg"

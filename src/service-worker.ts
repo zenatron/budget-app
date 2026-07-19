@@ -87,7 +87,7 @@ sw.addEventListener('push', (event) => {
 		payload = { body: event.data?.text() };
 	}
 	event.waitUntil(
-		sw.registration.showNotification(payload.title ?? 'Budget', {
+		sw.registration.showNotification(payload.title ?? 'Ledger', {
 			body: payload.body,
 			tag: payload.tag,
 			icon: '/icons/icon-192.png',

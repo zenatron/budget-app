@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { fly } from 'svelte/transition';
 	import { formatMinor } from '$lib/money-format';
-	import { EXAMPLE_PROMPTS } from '$lib/intelligence/parser';
+	import { EXAMPLE_PROMPTS, understand } from '$lib/intelligence/parser';
 	import Icon from '$lib/components/Icon.svelte';
+	import { dismiss } from '$lib/actions/dismiss';
 	import {
 		paletteQuery,
 		paletteLoading,
@@ -10,55 +12,111 @@
 		close,
 		submit,
 		pickExample,
+		fillExample,
 		handleKeydown
 	} from '$lib/command-palette-state.svelte';
 
 	let { currency = 'USD' }: { currency?: string } = $props();
+
+	// The parser is pure and synchronous, so this runs on every keystroke with no
+	// network and no debounce — that's the whole point of showing it live.
+	const reading = $derived(understand(paletteQuery.value));
+
+	// Completing a half-typed command, versus offering cold-start examples.
+	const completing = $derived(reading.suggestions.length > 0 && paletteQuery.value.length > 0);
+	const prompts = $derived(completing ? reading.suggestions : EXAMPLE_PROMPTS);
 </script>
 
+<div class="fixed inset-0 z-50" style="background: oklch(0 0 0 / 0.18)" use:dismiss={close}></div>
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-	class="fixed inset-0 z-50"
-	style="background: oklch(0 0 0 / 0.18)"
-	onclick={close}
-	onkeydown={() => {}}
-></div>
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="fixed inset-x-4 top-[20vh] z-50 mx-auto max-w-lg" onkeydown={handleKeydown}>
+<div class="fixed inset-x-4 top-[16vh] z-50 mx-auto max-w-lg" onkeydown={handleKeydown}>
 	<div
 		class="card-lg overflow-hidden"
 		style="box-shadow: var(--shadow-float); background: var(--surface)"
 	>
-		<div class="flex items-center gap-3 border-b px-4 py-3" style="border-color: var(--hairline)">
-			<span
-				class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-				style="background: color-mix(in oklab, var(--ws-accent) 16%, transparent)"
-			>
-				<Icon name="sparkle" class="h-4 w-4" style="color: var(--ws-accent)" />
-			</span>
-			<input
-				bind:this={paletteInputEl.value}
-				bind:value={paletteQuery.value}
-				onkeydown={(e) => {
-					if (e.key === 'Enter') submit();
-				}}
-				placeholder="Ask anything..."
-				class="flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:opacity-40"
-				style="color: var(--ink)"
-			/>
-			<button
-				onclick={submit}
-				disabled={paletteLoading.value || !paletteQuery.value.trim()}
-				class="press shrink-0 rounded-full px-3 py-1.5 text-[13px] font-semibold"
-				style="background: var(--ink); color: var(--paper); opacity: {!paletteQuery.value.trim()
-					? '0.3'
-					: '1'}"
-			>
-				{paletteLoading.value ? '...' : 'Go'}
-			</button>
-			<button onclick={close} class="press shrink-0" style="color: var(--ink-4)" aria-label="Close">
-				<Icon name="xmark" class="h-4 w-4" />
-			</button>
+		<!--
+			The input is the hero of this panel, so it gets the full row: no border
+			box of its own, generous height, and the sparkle doubles as the focus
+			indicator by tinting with the workspace accent.
+		-->
+		<div class="relative">
+			<div class="flex items-center gap-3 px-4 pt-4 pb-3.5">
+				<span
+					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors"
+					style="background: color-mix(in oklab, var(--ws-accent) {paletteQuery.value
+						? '22'
+						: '14'}%, transparent)"
+				>
+					<Icon name="sparkle" class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+				</span>
+				<input
+					bind:this={paletteInputEl.value}
+					bind:value={paletteQuery.value}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' && reading.ready) submit();
+					}}
+					placeholder="Ask or command…"
+					autocomplete="off"
+					autocapitalize="off"
+					spellcheck="false"
+					aria-label="Ask anything"
+					class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] leading-tight outline-none placeholder:opacity-35 focus:ring-0"
+					style="color: var(--ink); box-shadow: none"
+				/>
+				{#if paletteQuery.value}
+					<button
+						onclick={submit}
+						disabled={paletteLoading.value || !reading.ready}
+						class="press shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-opacity"
+						style="background: var(--ws-accent); color: white; opacity: {reading.ready &&
+						!paletteLoading.value
+							? '1'
+							: '0.35'}"
+					>
+						{paletteLoading.value ? '…' : 'Go'}
+					</button>
+				{/if}
+				<button
+					onclick={close}
+					class="press shrink-0"
+					style="color: var(--ink-4)"
+					aria-label="Close"
+				>
+					<Icon name="xmark" class="h-4 w-4" />
+				</button>
+			</div>
+
+			<!-- Live reading of the query: what we think it means, before you commit. -->
+			{#if !paletteResponse.value && reading.label}
+				<div
+					class="flex flex-wrap items-center gap-1.5 px-4 pb-3.5"
+					transition:fly={{ y: -4, duration: 140 }}
+				>
+					<span
+						class="rounded-full px-2 py-[3px] text-[11px] font-semibold tracking-[0.04em] uppercase"
+						style="background: color-mix(in oklab, var(--ws-accent) 16%, transparent); color: color-mix(in oklab, var(--ws-accent) 75%, black)"
+						>{reading.label}</span
+					>
+					{#each reading.slots as slot (slot.label)}
+						<span
+							class="rounded-full px-2 py-[3px] text-[11px]"
+							style="background: var(--surface-2); color: var(--ink-2)"
+						>
+							<span style="color: var(--ink-4)">{slot.label}</span>
+							{slot.value}
+						</span>
+					{/each}
+					{#each reading.missing as m (m)}
+						<span
+							class="rounded-full px-2 py-[3px] text-[11px]"
+							style="background: color-mix(in oklab, var(--pending) 14%, transparent); color: color-mix(in oklab, var(--pending) 80%, black)"
+							>needs {m}</span
+						>
+					{/each}
+				</div>
+			{/if}
+
+			<div class="h-px" style="background: var(--hairline)"></div>
 		</div>
 
 		<div class="max-h-[50vh] overflow-y-auto">
@@ -91,19 +149,19 @@
 						Ask something else
 					</button>
 				</div>
-			{:else}
+			{:else if !reading.ready}
 				<div class="p-4">
 					<p
 						class="text-[11px] font-semibold tracking-[0.08em] uppercase"
 						style="color: var(--ink-4)"
 					>
-						Try asking
+						{completing ? 'Did you mean' : 'Try asking'}
 					</p>
-					<div class="mt-2 flex flex-wrap gap-2">
-						{#each EXAMPLE_PROMPTS as example (example)}
+					<div class="mt-2 flex flex-col items-start gap-1.5">
+						{#each prompts as example (example)}
 							<button
-								onclick={() => pickExample(example)}
-								class="press rounded-full px-3 py-1.5 text-[13px]"
+								onclick={() => (completing ? fillExample(example) : pickExample(example))}
+								class="press max-w-full rounded-full px-3 py-1.5 text-left text-[13px]"
 								style="background: var(--surface-2); color: var(--ink-2)"
 							>
 								{example}

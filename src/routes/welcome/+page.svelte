@@ -1,46 +1,19 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
-	import { dismiss } from '$lib/actions/dismiss';
 	import Icon from '$lib/components/Icon.svelte';
+	import AccentPicker from '$lib/components/AccentPicker.svelte';
+	import { ACCENTS, accentFor } from '$lib/accent';
 	let { data, form } = $props();
 	const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-	const accents = [
-		'#FF9F0A',
-		'#FF375F',
-		'#30D158',
-		'#0A84FF',
-		'#BF5AF2',
-		'#FF453A',
-		'#40C8E0',
-		'#FFD60A',
-		'#B4472B'
-	];
-
-	let selectedColor = $state(accents[0]);
-	let showPicker = $state(false);
-
-	function togglePicker() {
-		showPicker = !showPicker;
-	}
-
-	function selectColor(color: string) {
-		selectedColor = color;
-		showPicker = false;
-	}
-
-	function accentFor(ws: { slug: string; accentColor?: string | null }): string {
-		if (ws.accentColor) return ws.accentColor;
-		return accents[
-			ws.slug.split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) % accents.length
-		];
-	}
+	let selectedColor = $state<string>(ACCENTS[0]);
+	let wsName = $state('');
 </script>
 
-<svelte:head><title>Welcome — Budget</title></svelte:head>
+<svelte:head><title>Welcome — Ledger</title></svelte:head>
 
 <main
-	class="min-h-svh px-5 py-10"
+	class="min-h-viewport px-5 py-10"
 	style="padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 2.5rem)"
 >
 	<div class="mx-auto max-w-md space-y-6">
@@ -78,54 +51,31 @@
 		<div class="card space-y-4 p-5">
 			<form method="POST" action="?/create" use:submit class="space-y-4">
 				<div class="flex items-start gap-3">
-					<div class="relative">
-						<button
-							type="button"
-							onclick={togglePicker}
-							class="press flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-white transition-transform"
-							style="background: {selectedColor}"
-							aria-label="Choose accent color"
-						>
-							<Icon name="plus" class="h-4 w-4" />
-						</button>
-						{#if showPicker}
-							<div class="fixed inset-0 z-40" use:dismiss={() => (showPicker = false)}></div>
-							<div
-								class="card absolute top-full left-0 z-50 mt-2 grid grid-cols-5 gap-2 p-2.5"
-								style="box-shadow: var(--shadow-float)"
-							>
-								{#each accents as c (c)}
-									<button
-										type="button"
-										onclick={() => selectColor(c)}
-										class="press h-8 w-8 rounded-full"
-										style="background: {c}; outline: {c === selectedColor
-											? '2px solid var(--ink)'
-											: 'none'}; outline-offset: 2px"
-										aria-label="Select color"
-									></button>
-								{/each}
-							</div>
-						{/if}
-					</div>
+					<span
+						class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] font-[family-name:var(--font-display)] text-[18px] font-semibold text-white"
+						style="background: color-mix(in oklab, {selectedColor} 80%, black)"
+						aria-hidden="true">{(wsName.trim()[0] ?? 'W').toUpperCase()}</span
+					>
 					<div class="flex-1 space-y-1">
 						<p class="text-[17px] font-semibold" style="color: var(--ink)">Create a workspace</p>
 						<input
 							name="name"
+							bind:value={wsName}
 							required
 							maxlength="60"
 							placeholder="Our household"
-							class="field text-[15px]"
+							class="field text-[16px]"
 						/>
 					</div>
 				</div>
+				<AccentPicker bind:value={selectedColor} />
 				<input type="hidden" name="accentColor" value={selectedColor} />
 				<div class="grid grid-cols-2 gap-3">
-					<select name="currency" class="field text-[15px]">
+					<select name="currency" class="field text-[16px]">
 						{#each data.currencies as c (c)}<option value={c} selected={c === 'USD'}>{c}</option
 							>{/each}
 					</select>
-					<select name="timezone" class="field text-[15px]">
+					<select name="timezone" class="field text-[16px]">
 						{#each data.timezones as t (t)}<option value={t} selected={t === tz}>{t}</option>{/each}
 					</select>
 				</div>

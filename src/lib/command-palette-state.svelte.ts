@@ -39,9 +39,24 @@ export function close() {
 	paletteOpen.value = false;
 }
 
+/** Canned examples run straight away — the user picked a finished question. */
 export function pickExample(prompt: string) {
 	paletteQuery.value = prompt;
 	void submit();
+}
+
+/**
+ * Completions of a half-typed command go into the box instead of running, with
+ * the cursor at the end: the suggested amount is a placeholder the user almost
+ * always wants to change before committing.
+ */
+export function fillExample(prompt: string) {
+	paletteQuery.value = prompt;
+	const el = paletteInputEl.value;
+	requestAnimationFrame(() => {
+		el?.focus();
+		el?.setSelectionRange(prompt.length, prompt.length);
+	});
 }
 
 export async function submit() {

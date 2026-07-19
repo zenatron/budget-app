@@ -10,10 +10,10 @@
 	let x = $derived(m[status] ?? m[500]);
 </script>
 
-<svelte:head><title>{x.t} — Budget</title></svelte:head>
+<svelte:head><title>{x.t} — Ledger</title></svelte:head>
 
 <div
-	class="flex min-h-svh items-center justify-center px-6"
+	class="min-h-viewport flex items-center justify-center px-6"
 	style="--ws-accent: #B4472B; --accent: #B4472B"
 >
 	<div class="text-center">

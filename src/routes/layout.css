@@ -298,6 +298,16 @@
 	z-index: 1;
 }
 
+/*
+ * Full-viewport height for a page shell. Not `min-h-svh`: <body> already pads
+ * itself by the safe-area insets, so asking a child for a whole 100svh on top
+ * of that double-counts them — on a notched iPhone in standalone mode the page
+ * scrolled by exactly notch + home-indicator (~93px) with nothing to show.
+ */
+.min-h-viewport {
+	min-height: calc(100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+}
+
 .press {
 	transition: transform var(--dur-fast) var(--ease-out);
 	will-change: transform;

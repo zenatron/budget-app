@@ -186,7 +186,7 @@
 							<span class="text-[13px]" style="color: var(--ink-3)"
 								>Reveal on (max {data.maxSealDays} days)</span
 							>
-							<input type="date" name="sealUntil" class="field mt-1.5 text-[15px]" />
+							<input type="date" name="sealUntil" class="field mt-1.5 text-[16px]" />
 						</label>
 					</div>
 				{/if}

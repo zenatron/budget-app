@@ -257,14 +257,14 @@
 							>
 								<input type="hidden" name="bucketId" value={b.id} />
 								<div class="grid grid-cols-[1fr_auto] gap-3">
-									<input name="name" required value={b.name} class="field text-[15px]" />
+									<input name="name" required value={b.name} class="field text-[16px]" />
 									<input
 										name="amount"
 										required
 										use:money
 										inputmode="decimal"
 										value={(Number(b.monthlyAmountMinor) / 100).toFixed(2)}
-										class="field w-28 text-[15px] tabular-nums"
+										class="field w-28 text-[16px] tabular-nums"
 									/>
 								</div>
 								<div class="flex items-center gap-2">
@@ -273,7 +273,7 @@
 										style="color: var(--ink-3)"
 										for="editDayOfMonth-{b.id}">Accrues on day</label
 									>
-									<select id="editDayOfMonth-{b.id}" name="dayOfMonth" class="field text-[15px]">
+									<select id="editDayOfMonth-{b.id}" name="dayOfMonth" class="field text-[16px]">
 										{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}
 											<option value={d} selected={d === b.dayOfMonth}>{d}</option>
 										{/each}
@@ -285,7 +285,7 @@
 									inputmode="decimal"
 									value={b.goalCapMinor !== null ? (Number(b.goalCapMinor) / 100).toFixed(2) : ''}
 									placeholder="Save up to…"
-									class="field text-[15px]"
+									class="field text-[16px]"
 								/>
 								<p
 									class="text-[11px] font-medium tracking-[0.14em] uppercase"
@@ -336,14 +336,14 @@
 										use:money
 										inputmode="decimal"
 										placeholder={b.status === 'active' ? '50.00' : '500.00'}
-										class="field text-[15px]"
+										class="field text-[16px]"
 									/>
-									<select name="type" class="field text-[15px]">
+									<select name="type" class="field text-[16px]">
 										<option value="withdrawal">Take money out</option>
 										<option value="adjustment">Add money</option>
 									</select>
 								</div>
-								<input name="note" placeholder="Optional note" class="field text-[15px]" />
+								<input name="note" placeholder="Optional note" class="field text-[16px]" />
 								<div class="flex gap-2">
 									<button class="btn btn-accent flex-1 py-2.5 text-[14px]"> Save </button>
 									<button

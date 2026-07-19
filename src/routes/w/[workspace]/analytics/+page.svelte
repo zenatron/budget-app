@@ -504,7 +504,7 @@
 				>
 					<label class="flex-1">
 						<span class="text-[11px]" style="color: var(--ink-4)">Scope</span>
-						<select name="categoryId" class="field mt-1 text-[15px]">
+						<select name="categoryId" class="field mt-1 text-[16px]">
 							<option value="">Everything</option>
 							{#each data.allCategories as c (c.id)}
 								<option value={c.id}>{c.icon} {c.name}</option>
@@ -518,7 +518,7 @@
 							use:money
 							inputmode="decimal"
 							placeholder="500"
-							class="field num mt-1 text-[15px]"
+							class="field num mt-1 text-[16px]"
 						/>
 					</label>
 					<button class="btn btn-accent shrink-0 px-4 py-3 text-[15px]">Save</button>

@@ -158,12 +158,12 @@
 		<form method="POST" action="?/ntfy" use:submit class="mt-3.5 space-y-3">
 			<label class="block">
 				<span class="text-[12px]" style="color: var(--ink-4)">Server</span>
-				<input name="serverUrl" value={data.ntfy.serverUrl} class="field mt-1 text-[15px]" />
+				<input name="serverUrl" value={data.ntfy.serverUrl} class="field mt-1 text-[16px]" />
 			</label>
 			<label class="block">
 				<span class="text-[12px]" style="color: var(--ink-4)">Topic — treat it like a password</span
 				>
-				<input name="topic" value={data.ntfy.topic} class="field mt-1 font-mono text-[15px]" />
+				<input name="topic" value={data.ntfy.topic} class="field mt-1 font-mono text-[16px]" />
 			</label>
 			<div class="flex flex-wrap items-center gap-2.5">
 				<button class="btn btn-accent px-4 py-2 text-[14px]">Save</button>

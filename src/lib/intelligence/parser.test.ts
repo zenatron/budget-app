@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parse } from './parser';
+import { parse, understand } from './parser';
 
 // Pinned so relative periods ("last month") resolve deterministically.
 const NOW = new Date('2026-07-18T12:00:00Z');
@@ -118,9 +118,82 @@ describe('parse — create bucket', () => {
 		});
 	});
 
-	it('refuses a bucket with no monthly amount rather than inventing one', () => {
-		expect(at('create a travel bucket').intent).toBe('unknown');
-		expect(at('create a travel bucket of 500').intent).toBe('unknown');
+	it('reports what is missing instead of inventing an amount', () => {
+		// 'incomplete', not 'unknown': we know it's a bucket, so the palette can
+		// say which part is absent rather than shrugging at a valid attempt.
+		expect(at('create a travel bucket')).toMatchObject({
+			intent: 'incomplete',
+			of: 'create_bucket',
+			missing: ['amount']
+		});
+		expect(at('create a travel bucket of 500')).toMatchObject({
+			intent: 'incomplete',
+			missing: ['cadence']
+		});
+	});
+});
+
+describe('parse — create income', () => {
+	it('handles the phrasing that used to fall through entirely', () => {
+		expect(at('create a new income of 4800 per month every month on the first')).toEqual({
+			intent: 'create_income',
+			source: 'Income',
+			amount: 4800,
+			cadence: 'monthly',
+			dayOfMonth: 1
+		});
+	});
+
+	it('reads the source from "from X" and from a leading noun', () => {
+		expect(at('income from freelance of 900 per month')).toMatchObject({
+			source: 'Freelance',
+			amount: 900,
+			cadence: 'monthly'
+		});
+		expect(at('add a bonus income of 1200')).toMatchObject({ source: 'Bonus', cadence: 'once' });
+		expect(at('new salary 3200/mo on the 15th')).toMatchObject({
+			source: 'Salary',
+			dayOfMonth: 15
+		});
+	});
+
+	it('treats a bare amount as a one-off, not a recurring entry', () => {
+		expect(at('add income of 500')).toMatchObject({ cadence: 'once' });
+		expect(at('add income of 500 per month')).toMatchObject({ cadence: 'monthly' });
+	});
+
+	it('does not swallow navigation to the income page', () => {
+		expect(at('go to income')).toEqual({ intent: 'navigate', target: 'income' });
+	});
+});
+
+describe('understand — live feedback', () => {
+	it('marks a complete command ready and lists its slots', () => {
+		const u = understand('add income of 4800 per month on the first', NOW);
+		expect(u.ready).toBe(true);
+		expect(u.label).toBe('New income');
+		expect(u.slots.map((s) => s.label)).toEqual(['Source', 'Amount', 'Repeats']);
+		expect(u.suggestions).toEqual([]);
+	});
+
+	it('offers completions built from what the user already typed', () => {
+		const u = understand('add income', NOW);
+		expect(u.ready).toBe(false);
+		expect(u.missing[0]).toMatch(/amount/);
+		expect(u.suggestions.every((s) => s.startsWith('add income'))).toBe(true);
+	});
+
+	it('falls back to generic examples when nothing matched', () => {
+		const u = understand('the quick brown fox', NOW);
+		expect(u.ready).toBe(false);
+		expect(u.suggestions.length).toBeGreaterThan(0);
+	});
+
+	it('stays quiet on an empty box', () => {
+		const u = understand('', NOW);
+		expect(u.label).toBe('');
+		expect(u.slots).toEqual([]);
+		expect(u.suggestions).toEqual([]);
 	});
 });
 

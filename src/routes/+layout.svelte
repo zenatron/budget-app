@@ -1,6 +1,9 @@
 <script lang="ts">
 	import '@fontsource-variable/hanken-grotesk';
-	import '@fontsource/atkinson-hyperlegible';
+	// Both faces: the display font is used at semibold in 8 places, and with only
+	// the 400 loaded the browser was synthesizing a smeared faux-bold.
+	import '@fontsource/atkinson-hyperlegible/400.css';
+	import '@fontsource/atkinson-hyperlegible/700.css';
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import NavProgress from '$lib/components/NavProgress.svelte';

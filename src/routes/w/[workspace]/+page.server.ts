@@ -12,6 +12,7 @@ import {
 	type ApprovalPolicy
 } from '$lib/domain/approval/policy';
 import { Money, InvalidMoneyError } from '$lib/domain/money/money';
+import { ACCENTS } from '$lib/accent';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import pkg from '../../../../package.json';
@@ -36,6 +37,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	return {
 		pendingCount: pendingRow.count,
 		bucketChargesSkipApproval: locals.workspace!.bucketChargesSkipApproval,
+		accentColor: locals.workspace!.accentColor,
 		members: members.map((m) => ({
 			id: m.member.id,
 			displayName: m.user.displayName,
@@ -127,6 +129,22 @@ export const actions: Actions = {
 		await getDb()
 			.update(workspace)
 			.set({ bucketChargesSkipApproval: value })
+			.where(eq(workspace.id, locals.workspace!.id));
+		return { ok: true };
+	},
+
+	/** The accent is workspace-scoped, so changing it is an owner-only setting. */
+	accent: async ({ locals, request }) => {
+		if (locals.member!.role !== 'owner') error(403, 'Only the owner can change the accent');
+		const raw = String((await request.formData()).get('accentColor') ?? '');
+		// Whitelist, not just a hex check: this value is interpolated into a
+		// style attribute, so only the known palette may reach it.
+		if (!(ACCENTS as readonly string[]).includes(raw)) {
+			return fail(400, { error: 'Unknown accent color' });
+		}
+		await getDb()
+			.update(workspace)
+			.set({ accentColor: raw })
 			.where(eq(workspace.id, locals.workspace!.id));
 		return { ok: true };
 	}

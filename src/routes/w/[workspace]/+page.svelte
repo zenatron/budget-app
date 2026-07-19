@@ -4,8 +4,16 @@
 	import { money } from '$lib/actions/money';
 	import { formatMinor } from '$lib/money-format';
 	import Icon from '$lib/components/Icon.svelte';
+	import AccentPicker from '$lib/components/AccentPicker.svelte';
+	import { accentFor } from '$lib/accent';
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
+
+	// Writable $derived: the picker reassigns it so the swatch responds instantly,
+	// and it re-syncs to the stored value whenever the load data changes. The Save
+	// button only appears once the two diverge.
+	const currentAccent = $derived(accentFor({ slug: slug ?? '', accentColor: data.accentColor }));
+	let accent = $derived(currentAccent);
 	let editingPolicy: string | null = $state(null);
 	let copied: string | null = $state(null);
 
@@ -134,7 +142,7 @@
 					>
 						<input type="hidden" name="memberId" value={m.id} />
 						<div class="grid grid-cols-2 gap-3">
-							<select name="mode" value={m.policy.mode} class="field text-[15px]">
+							<select name="mode" value={m.policy.mode} class="field text-[16px]">
 								<option value="none">Never</option>
 								<option value="threshold">Above amount</option>
 								<option value="always">Always</option>
@@ -147,10 +155,10 @@
 								value={m.policy.threshold_minor !== undefined
 									? (m.policy.threshold_minor / 100).toFixed(2)
 									: ''}
-								class="field text-[15px] tabular-nums"
+								class="field text-[16px] tabular-nums"
 							/>
 						</div>
-						<select name="routingMode" value={m.policy.routing.mode} class="field text-[15px]">
+						<select name="routingMode" value={m.policy.routing.mode} class="field text-[16px]">
 							<option value="any_of">Any approver can decide</option>
 							<option value="specific">One specific approver</option>
 						</select>
@@ -202,6 +210,20 @@
 
 	{#if data.member.role === 'owner'}
 		<div class="card p-5">
+			<p class="text-[15px] font-medium" style="color: var(--ink)">Accent</p>
+			<p class="mt-0.5 mb-3.5 text-[13px]" style="color: var(--ink-4)">
+				Colors this workspace everywhere. Each workspace keeps its own.
+			</p>
+			<form method="POST" action="?/accent" use:submit={{ success: 'Accent updated' }}>
+				<AccentPicker bind:value={accent} label="" />
+				<input type="hidden" name="accentColor" value={accent} />
+				{#if accent !== currentAccent}
+					<button class="btn btn-tint mt-3.5 px-4 py-2 text-[14px]">Save accent</button>
+				{/if}
+			</form>
+		</div>
+
+		<div class="card p-5">
 			<div class="flex items-center justify-between">
 				<p class="section-label">Invites</p>
 				<form method="POST" action="?/invite" use:submit={{ success: 'Invite created' }}>
@@ -235,5 +257,5 @@
 		</div>
 	{/if}
 
-	<p class="pt-2 text-center text-[12px]" style="color: var(--ink-4)">Budget v{data.version}</p>
+	<p class="pt-2 text-center text-[12px]" style="color: var(--ink-4)">Ledger v{data.version}</p>
 </div>

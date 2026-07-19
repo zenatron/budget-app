@@ -22,9 +22,29 @@ export interface CreateBucketCommand {
 	dayOfMonth: number;
 }
 
+export interface CreateIncomeCommand {
+	intent: 'create_income';
+	source: string;
+	amount: number;
+	cadence: 'once' | 'monthly';
+	dayOfMonth: number;
+}
+
 export interface NavigateCommand {
 	intent: 'navigate';
 	target: 'analytics' | 'buckets' | 'recurring' | 'income' | 'purchases' | 'settings';
+}
+
+/**
+ * A command we routed but couldn't complete. Distinct from `unknown`: we know
+ * what the user is trying to do, so the UI can say what's missing instead of
+ * shrugging.
+ */
+export interface IncompleteResult {
+	intent: 'incomplete';
+	of: 'create_bucket' | 'create_income';
+	missing: string[];
+	raw: string;
 }
 
 export interface UnknownResult {
@@ -33,7 +53,13 @@ export interface UnknownResult {
 }
 
 export type ParsedIntent =
-	SpendingQuery | NetQuery | CreateBucketCommand | NavigateCommand | UnknownResult;
+	| SpendingQuery
+	| NetQuery
+	| CreateBucketCommand
+	| CreateIncomeCommand
+	| NavigateCommand
+	| IncompleteResult
+	| UnknownResult;
 
 export interface TimePeriod {
 	type: 'month' | 'year';
@@ -154,9 +180,32 @@ function extractAmount(lower: string): { amount: number; monthly: boolean } | nu
 	return null;
 }
 
+/** Articles and modifiers that are never the name of anything. */
+const FILLER_WORDS = new Set(['a', 'an', 'the', 'my', 'new', 'another', 'some', 'recurring']);
+
+/** Ordinal words people actually type for a day-of-month. */
+const ORDINAL_WORDS: Record<string, number> = {
+	first: 1,
+	second: 2,
+	third: 3,
+	fourth: 4,
+	fifth: 5,
+	tenth: 10,
+	fifteenth: 15,
+	twentieth: 20,
+	'twenty-fifth': 25
+};
+
 function extractDayOfMonth(lower: string): number {
 	// "on the 1st", "every 15th", "day 5", "first day", "last day"
-	if (/\blast\s+day\b/.test(lower)) return -1;
+	if (/\blast\s+day\b/.test(lower) || /\bthe\s+last\b/.test(lower)) return -1;
+
+	// Word ordinals: "on the first", "every fifteenth". Checked before the
+	// numeric patterns because "the first" has no digits to match at all.
+	const word = lower.match(
+		/\b(?:on|every|the)\s+(?:the\s+)?(first|second|third|fourth|fifth|tenth|fifteenth|twentieth|twenty-fifth)\b/
+	);
+	if (word) return ORDINAL_WORDS[word[1]];
 	if (/\bfirst\s+day\b/.test(lower)) return 1;
 
 	// Anchored first. The prefix used to be optional, which made this match the
@@ -249,7 +298,55 @@ export function parse(input: string, now: Date = new Date()): ParsedIntent {
 				dayOfMonth
 			};
 		}
-		return { intent: 'unknown', raw: input };
+		// Routed but unusable — say which part is missing rather than "unknown".
+		return {
+			intent: 'incomplete',
+			of: 'create_bucket',
+			missing: amt ? ['cadence'] : ['amount'],
+			raw: input
+		};
+	}
+
+	// Create income: "add income of 4800 per month on the first", "new salary
+	// 3200/mo", or a bare "income from freelance of 900 per month" — the noun
+	// plus a "from" source reads as a command even without a verb.
+	const INCOME_NOUN = /\b(?:income|salary|paycheck|pay\s?check|wage|earnings)\b/;
+	if (
+		INCOME_NOUN.test(lower) &&
+		(/\b(?:create|add|make|new|record|log)\b/.test(lower) ||
+			/\b(?:income|salary|paycheck|wage|earnings)\s+from\b/.test(lower))
+	) {
+		const amt = extractAmount(lower);
+		if (!amt) {
+			return { intent: 'incomplete', of: 'create_income', missing: ['amount'], raw: input };
+		}
+		// "every month", "per month", "/mo", "monthly" all mean recurring. A bare
+		// amount is a one-off entry, which is a real thing to want.
+		const recurring = amt.monthly || /\b(?:every\s+month|each\s+month|recurring)\b/.test(lower);
+
+		// Name: "income from freelance", "salary called acme", else the noun itself.
+		let source = '';
+		const named = lower.match(
+			/\b(?:income|salary|paycheck|wage|earnings)\s+(?:from|called|named|for)\s+([a-z0-9' -]+?)(?:\s+(?:of|at|worth|is|,)\b|\s*$)/
+		);
+		if (named) source = named[1].trim();
+		if (!source) {
+			const before = lower.match(
+				/\b(?:create|add|make|new|record|log)\s+(?:a\s+|an\s+|my\s+)?(?:new\s+)?([a-z0-9' -]+?)\s+(?:income|salary|paycheck|wage|earnings)\b/
+			);
+			if (before) source = before[1].trim();
+		}
+		// "create a new income" leaves the articles behind as the "name".
+		if (FILLER_WORDS.has(source)) source = '';
+		if (/\bsalary\b/.test(lower) && !source) source = 'Salary';
+
+		return {
+			intent: 'create_income',
+			source: source ? source.charAt(0).toUpperCase() + source.slice(1) : 'Income',
+			amount: amt.amount,
+			cadence: recurring ? 'monthly' : 'once',
+			dayOfMonth: extractDayOfMonth(lower)
+		};
 	}
 
 	// Net position / savings rate: "what's my net", "savings rate", "how much am i saving"
@@ -301,7 +398,161 @@ export const EXAMPLE_PROMPTS = [
 	'how much did I spend on groceries last month?',
 	'what did alice spend this month?',
 	'create a travel bucket of 500/mo on the 15th',
+	'add income of 4800 per month on the first',
 	"what's my net position?",
-	'show me activity',
-	'how much did I spend in June?'
+	'show me activity'
 ];
+
+/* ---------------------------------------------------------------------------
+ * Live understanding
+ *
+ * `parse` is pure and synchronous, so the UI can run it on every keystroke and
+ * show what it currently understands — no round trip, no debounce. This turns a
+ * guess-the-magic-words box into something you can steer while typing.
+ * ------------------------------------------------------------------------- */
+
+export interface Slot {
+	label: string;
+	value: string;
+}
+
+export interface Understanding {
+	/** Intent as parsed; 'incomplete' and 'unknown' are both non-actionable. */
+	intent: ParsedIntent['intent'];
+	/** Human-readable name of what we think this is. */
+	label: string;
+	/** The entities we pulled out, for display as chips. */
+	slots: Slot[];
+	/** Plain-language description of what's missing, when incomplete. */
+	missing: string[];
+	/** Completions to offer when we can't act on the input as typed. */
+	suggestions: string[];
+	/** Whether pressing Enter would do something useful. */
+	ready: boolean;
+}
+
+const DAY_LABEL = (d: number) => (d === -1 ? 'last day' : `day ${d}`);
+
+const MISSING_HELP: Record<string, string> = {
+	amount: 'an amount — try "of 500"',
+	cadence: 'how often — try "per month"'
+};
+
+/** Suggestions offered when nothing matched, ordered by how often they're wanted. */
+const FALLBACK_SUGGESTIONS = [
+	'how much did I spend last month?',
+	'add income of 4800 per month on the first',
+	'create a travel bucket of 500/mo on the 1st',
+	"what's my net position?"
+];
+
+export function understand(input: string, now: Date = new Date()): Understanding {
+	const raw = input.trim();
+	if (!raw) {
+		return {
+			intent: 'unknown',
+			label: '',
+			slots: [],
+			missing: [],
+			suggestions: [],
+			ready: false
+		};
+	}
+
+	const parsed = parse(input, now);
+
+	switch (parsed.intent) {
+		case 'spending_query': {
+			const slots: Slot[] = [{ label: 'Period', value: parsed.period.label }];
+			if (parsed.category) slots.push({ label: 'Category', value: parsed.category });
+			if (parsed.member) slots.push({ label: 'Person', value: parsed.member });
+			return {
+				intent: parsed.intent,
+				label: 'Spending',
+				slots,
+				missing: [],
+				suggestions: [],
+				ready: true
+			};
+		}
+
+		case 'net_position':
+			return {
+				intent: parsed.intent,
+				label: 'Net position',
+				slots: [{ label: 'Period', value: parsed.period.label }],
+				missing: [],
+				suggestions: [],
+				ready: true
+			};
+
+		case 'create_bucket':
+			return {
+				intent: parsed.intent,
+				label: 'New bucket',
+				slots: [
+					{ label: 'Name', value: parsed.name },
+					{ label: 'Monthly', value: String(parsed.amount) },
+					{ label: 'On', value: DAY_LABEL(parsed.dayOfMonth) }
+				],
+				missing: [],
+				suggestions: [],
+				ready: true
+			};
+
+		case 'create_income':
+			return {
+				intent: parsed.intent,
+				label: 'New income',
+				slots: [
+					{ label: 'Source', value: parsed.source },
+					{ label: 'Amount', value: String(parsed.amount) },
+					{
+						label: 'Repeats',
+						value:
+							parsed.cadence === 'monthly' ? `monthly, ${DAY_LABEL(parsed.dayOfMonth)}` : 'once'
+					}
+				],
+				missing: [],
+				suggestions: [],
+				ready: true
+			};
+
+		case 'navigate':
+			return {
+				intent: parsed.intent,
+				label: 'Open',
+				slots: [{ label: 'Page', value: parsed.target }],
+				missing: [],
+				suggestions: [],
+				ready: true
+			};
+
+		case 'incomplete': {
+			// We know the shape; offer the user's own words back, completed.
+			const base = raw.replace(/\s+$/, '');
+			const suggestions =
+				parsed.of === 'create_income'
+					? [`${base} of 4800 per month`, `${base} of 4800 per month on the first`]
+					: [`${base} of 500 per month`, `${base} of 500 per month on the 1st`];
+			return {
+				intent: parsed.intent,
+				label: parsed.of === 'create_income' ? 'New income' : 'New bucket',
+				slots: [],
+				missing: parsed.missing.map((m) => MISSING_HELP[m] ?? m),
+				suggestions,
+				ready: false
+			};
+		}
+
+		default:
+			return {
+				intent: 'unknown',
+				label: '',
+				slots: [],
+				missing: [],
+				suggestions: FALLBACK_SUGGESTIONS,
+				ready: false
+			};
+	}
+}

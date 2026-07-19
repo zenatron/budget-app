@@ -7,6 +7,7 @@
 	import { paletteOpen } from '$lib/command-palette-state.svelte';
 	import { dismiss } from '$lib/actions/dismiss';
 	import { toastError } from '$lib/toast-state.svelte';
+	import { accentFor } from '$lib/accent';
 
 	let { data, children } = $props();
 	let pathname = $derived(page.url.pathname);
@@ -64,21 +65,11 @@
 
 	let showSwitcher = $state(false);
 
-	const accents = [
-		'#FF9F0A',
-		'#FF375F',
-		'#30D158',
-		'#0A84FF',
-		'#BF5AF2',
-		'#FF453A',
-		'#40C8E0',
-		'#FFD60A'
-	];
+	// Resolved from the workspaces list by URL slug, for the same reason as
+	// wsName above: data.workspace lags during client-side navigation, so
+	// reading it directly painted the new workspace in the old one's accent.
 	const accent = $derived(
-		data.workspace.accentColor ??
-			accents[
-				slug.split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) % accents.length
-			]
+		accentFor(data.workspaces.find((w: { slug: string }) => w.slug === slug) ?? data.workspace)
 	);
 
 	const tabs = [
@@ -101,10 +92,10 @@
 	}
 </script>
 
-<svelte:head><title>{wsName} — Budget</title></svelte:head>
+<svelte:head><title>{wsName} — Ledger</title></svelte:head>
 
 {#key slug}
-	<div class="flex min-h-svh flex-col" style="--ws-accent: {accent}; --accent: {accent}">
+	<div class="min-h-viewport flex flex-col" style="--ws-accent: {accent}; --accent: {accent}">
 		<header
 			class="material sticky top-0 z-20"
 			style="padding-top: max(env(safe-area-inset-top, 0px), 8px)"
@@ -153,6 +144,7 @@
 					>
 						{#each data.workspaces as ws (ws.slug)}
 							{@const active = ws.slug === slug}
+							{@const wsAccent = accentFor(ws)}
 							<a
 								href="/w/{ws.slug}"
 								onclick={() => (showSwitcher = false)}
@@ -161,7 +153,7 @@
 							>
 								<span
 									class="flex h-8 w-8 items-center justify-center rounded-[9px] font-[family-name:var(--font-display)] text-[15px] font-semibold text-white"
-									style="background: color-mix(in oklab, var(--ws-accent) 80%, black)"
+									style="background: color-mix(in oklab, {wsAccent} 80%, black)"
 									>{ws.name.charAt(0)}</span
 								>
 								<span class="text-[17px]" style="color: var(--ink)">{ws.name}</span>

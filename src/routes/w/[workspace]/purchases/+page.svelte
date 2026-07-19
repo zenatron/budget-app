@@ -156,7 +156,7 @@
 				type="text"
 				placeholder="Search purchases..."
 				bind:value={search}
-				class="field pr-10 pl-10 text-[15px]"
+				class="field pr-10 pl-10 text-[16px]"
 			/>
 			{#if search}
 				<button

@@ -4,10 +4,11 @@ import { getEnv } from '$lib/server/env';
 import { createBucket, savingsInPeriod } from '$lib/server/repo/buckets';
 import { Money } from '$lib/domain/money/money';
 import { periodTotal, categoryBreakdown, memberBreakdown } from '$lib/server/repo/analytics';
-import { incomeInPeriod } from '$lib/server/repo/income';
+import { addIncome, incomeInPeriod } from '$lib/server/repo/income';
+import { formatRRule } from '$lib/domain/recurrence/rrule';
 import { monthPeriod, yearPeriod } from '$lib/domain/analytics/period';
 import { systemClock } from '$lib/infra/time/system-clock';
-import { calDateInZone } from '$lib/domain/time/zoned';
+import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { parse, type TimePeriod } from '$lib/intelligence/parser';
 import { formatPct } from '$lib/format';
@@ -153,6 +154,62 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 				answer: `Couldn't create bucket: ${(e as Error).message}`
 			});
 		}
+	}
+
+	if (parsed.intent === 'create_income') {
+		try {
+			const amount = Money.fromDecimal(String(parsed.amount), currency);
+			if (!amount.isPositive) {
+				return jsonSafe({ intent: parsed.intent, answer: 'Amount must be positive' });
+			}
+			// Recurring entries anchor on the requested day of the current month;
+			// one-offs land today. Both at 09:00 workspace-local, like the form does.
+			const day = parsed.dayOfMonth === -1 ? 28 : parsed.dayOfMonth;
+			const start =
+				parsed.cadence === 'monthly'
+					? { y: today.y, m: today.m, d: Math.min(day, 28) }
+					: { y: today.y, m: today.m, d: today.d };
+			const rrule =
+				parsed.cadence === 'monthly'
+					? formatRRule({ start, freq: 'monthly', interval: 1, byMonthDay: start.d })
+					: null;
+
+			await addIncome(
+				db,
+				{ clock: systemClock, ids: uuidv7 },
+				{
+					workspaceId: locals.workspace!.id,
+					memberId: locals.member!.id,
+					source: parsed.source,
+					amountMinor: amount.minor,
+					currency,
+					receivedAt: zonedTimeToUtc(start, 9, 0, scope.timezone),
+					rrule,
+					note: null
+				}
+			);
+
+			return jsonSafe({
+				intent: parsed.intent,
+				answer:
+					parsed.cadence === 'monthly'
+						? `Income "${parsed.source}" added — ${amount.format()} monthly on day ${start.d}`
+						: `Income "${parsed.source}" added — ${amount.format()}`,
+				target: 'income'
+			});
+		} catch (e) {
+			return jsonSafe({
+				intent: parsed.intent,
+				answer: `Couldn't add income: ${(e as Error).message}`
+			});
+		}
+	}
+
+	if (parsed.intent === 'incomplete') {
+		return jsonSafe({
+			intent: parsed.intent,
+			answer: `That needs ${parsed.missing.join(' and ')}.`
+		});
 	}
 
 	if (parsed.intent === 'navigate') {

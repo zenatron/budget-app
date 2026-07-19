@@ -132,7 +132,7 @@
 				>
 			</div>
 			<div class="grid grid-cols-3 gap-3">
-				<select name="freq" bind:value={freq} class="field text-[15px]">
+				<select name="freq" bind:value={freq} class="field text-[16px]">
 					<option value="daily">Daily</option>
 					<option value="weekly">Weekly</option>
 					<option value="monthly">Monthly</option>
@@ -144,9 +144,9 @@
 					min="1"
 					max="52"
 					bind:value={interval}
-					class="field text-[15px] tabular-nums"
+					class="field text-[16px] tabular-nums"
 				/>
-				<input name="startDate" type="date" value={today} required class="field text-[15px]" />
+				<input name="startDate" type="date" value={today} required class="field text-[16px]" />
 			</div>
 			{#if freq === 'weekly'}
 				<div class="flex flex-wrap gap-x-4 gap-y-2">
@@ -164,14 +164,14 @@
 					{/each}
 				</div>
 			{:else if freq === 'monthly' || freq === 'yearly'}
-				<select name="monthDay" bind:value={monthDay} class="field text-[15px]">
+				<select name="monthDay" bind:value={monthDay} class="field text-[16px]">
 					{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}<option value={String(d)}
 							>Day {d}</option
 						>{/each}
 					<option value="-1">Last day</option>
 				</select>
 			{/if}
-			<select name="categoryId" class="field text-[15px]">
+			<select name="categoryId" class="field text-[16px]">
 				<option value="">No category</option>
 				{#each data.categories as c (c.id)}<option value={c.id}>{c.icon} {c.name}</option>{/each}
 			</select>
@@ -272,14 +272,14 @@
 							>
 								<input type="hidden" name="ruleId" value={r.id} />
 								<div class="grid grid-cols-[1fr_auto] gap-3">
-									<input name="itemName" required value={r.itemName} class="field text-[15px]" />
+									<input name="itemName" required value={r.itemName} class="field text-[16px]" />
 									<input
 										name="amount"
 										required
 										use:money
 										inputmode="decimal"
 										value={(Number(r.amountMinor) / 100).toFixed(2)}
-										class="field w-28 text-[15px] tabular-nums"
+										class="field w-28 text-[16px] tabular-nums"
 									/>
 								</div>
 								<div class="grid grid-cols-3 gap-3">
@@ -305,14 +305,14 @@
 										min="1"
 										max="52"
 										value={r.interval}
-										class="field text-[15px] tabular-nums"
+										class="field text-[16px] tabular-nums"
 									/>
 									<input
 										name="startDate"
 										type="date"
 										value={today}
 										required
-										class="field text-[15px]"
+										class="field text-[16px]"
 									/>
 								</div>
 								{#if f === 'weekly'}
@@ -334,14 +334,14 @@
 										{/each}
 									</div>
 								{:else if f === 'monthly' || f === 'yearly'}
-									<select name="monthDay" bind:value={monthDay} class="field text-[15px]">
+									<select name="monthDay" bind:value={monthDay} class="field text-[16px]">
 										{#each Array.from({ length: 28 }, (_, i) => i + 1) as d (d)}
 											<option value={d} selected={r.monthDay === d}>Day {d}</option>
 										{/each}
 										<option value="-1" selected={r.monthDay === -1}>Last day</option>
 									</select>
 								{/if}
-								<select name="categoryId" class="field text-[15px]">
+								<select name="categoryId" class="field text-[16px]">
 									<option value="">No category</option>
 									{#each data.categories as c (c.id)}
 										<option value={c.id} selected={c.id === r.categoryId}>{c.icon} {c.name}</option>

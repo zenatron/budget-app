@@ -2,11 +2,11 @@
 	import Icon from '$lib/components/Icon.svelte';
 </script>
 
-<svelte:head><title>Budget</title></svelte:head>
+<svelte:head><title>Ledger</title></svelte:head>
 
 <main
-	class="flex min-h-svh flex-col justify-between px-7 py-12"
-	style="--ws-accent: #B4472B; --accent: #B4472B; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 3rem)"
+	class="min-h-viewport flex flex-col justify-between gap-8 px-7 py-12"
+	style="--ws-accent: #B4472B; --accent: #B4472B"
 >
 	<div class="flex items-center gap-2.5 pt-4">
 		<div
