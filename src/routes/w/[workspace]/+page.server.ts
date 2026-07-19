@@ -1,9 +1,10 @@
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import { and, eq, sql } from 'drizzle-orm';
 import { getDb } from '$lib/server/db';
 import { purchase, workspace } from '$lib/server/db/schema';
 import { listMembers } from '$lib/server/repo/workspaces';
 import { visibleTo } from '$lib/server/repo/purchases';
+import { deleteWorkspace } from '$lib/application/delete-workspace';
 import { ACCENTS } from '$lib/accent';
 import { systemClock } from '$lib/infra/time/system-clock';
 import pkg from '../../../../package.json';
@@ -70,5 +71,27 @@ export const actions: Actions = {
 			.set({ accentColor: raw })
 			.where(eq(workspace.id, locals.workspace!.id));
 		return { ok: true };
+	},
+
+	/**
+	 * Delete the workspace and everything in it. Owner-only, irreversible, and
+	 * gated on typing the exact name — the confirm dialog is the accident guard,
+	 * this is the "did you mean *this* workspace" guard, since the word people
+	 * type is far more specific than a yes/no they'll click through.
+	 */
+	deleteWorkspace: async ({ locals, request }) => {
+		if (locals.member!.role !== 'owner') error(403, 'Only an owner can delete the workspace');
+		const ws = locals.workspace!;
+		// The name is re-checked here, not just in the browser: the typed-name gate
+		// is only a real safeguard if the server enforces it, and the confirm
+		// dialog and disabled button are conveniences a crafted request skips.
+		const typed = String((await request.formData()).get('confirmName') ?? '').trim();
+		if (typed !== ws.name) {
+			return fail(400, { error: `Type the workspace name exactly to confirm: ${ws.name}` });
+		}
+		await deleteWorkspace(getDb(), ws.id);
+		// Back to the root, which re-picks a workspace or sends to /welcome. The
+		// session's activeWorkspaceId was nulled inside the delete.
+		redirect(303, '/');
 	}
 };

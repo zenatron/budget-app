@@ -13,6 +13,9 @@
 	const currentAccent = $derived(accentFor({ slug: slug ?? '', accentColor: data.accentColor }));
 	let accent = $derived(currentAccent);
 
+	let confirmingDelete = $state(false);
+	let deleteConfirmText = $state('');
+
 	const memberSummary = $derived(
 		`${data.memberCount} ${data.memberCount === 1 ? 'person' : 'people'} · approvals and invites`
 	);
@@ -181,6 +184,77 @@
 					<button class="btn btn-tint mt-3.5 px-4 py-2 text-[14px]">Save accent</button>
 				{/if}
 			</form>
+		</div>
+
+		<!--
+			Danger zone. Collapsed by default so the delete control isn't sitting
+			under your thumb during ordinary settings changes — you have to open it,
+			type the exact name, and clear a confirm. Three deliberate acts for one
+			irreversible one.
+		-->
+		<div
+			class="card p-5"
+			style="box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--deny) 30%, transparent)"
+		>
+			<p class="text-[15px] font-medium" style="color: var(--deny)">Delete workspace</p>
+			<p class="mt-0.5 text-[13px]" style="color: var(--ink-4)">
+				Permanently removes {data.workspace.name} — every purchase, bucket, budget and member. This cannot
+				be undone.
+			</p>
+
+			{#if !confirmingDelete}
+				<button
+					onclick={() => (confirmingDelete = true)}
+					class="press mt-3.5 rounded-[var(--r-sm)] px-4 py-2 text-[14px] font-medium"
+					style="color: var(--deny); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--deny) 40%, transparent)"
+				>
+					Delete this workspace…
+				</button>
+			{:else}
+				<form
+					method="POST"
+					action="?/deleteWorkspace"
+					use:submit={{
+						confirm: `Delete ${data.workspace.name} and everything in it? This cannot be undone.`
+					}}
+					class="mt-3.5 space-y-3"
+				>
+					<label class="block">
+						<span class="text-[13px]" style="color: var(--ink-3)">
+							Type <strong style="color: var(--ink)">{data.workspace.name}</strong> to confirm
+						</span>
+						<input
+							name="confirmName"
+							bind:value={deleteConfirmText}
+							autocomplete="off"
+							autocapitalize="off"
+							spellcheck="false"
+							class="field mt-1.5 text-[16px]"
+							placeholder={data.workspace.name}
+						/>
+					</label>
+					<div class="flex gap-2">
+						<button
+							disabled={deleteConfirmText.trim() !== data.workspace.name}
+							class="press rounded-[var(--r-sm)] px-4 py-2 text-[14px] font-semibold text-white disabled:opacity-40"
+							style="background: var(--deny)"
+						>
+							Delete forever
+						</button>
+						<button
+							type="button"
+							onclick={() => {
+								confirmingDelete = false;
+								deleteConfirmText = '';
+							}}
+							class="press rounded-[var(--r-sm)] px-4 py-2 text-[14px]"
+							style="color: var(--ink-3)"
+						>
+							Cancel
+						</button>
+					</div>
+				</form>
+			{/if}
 		</div>
 	{/if}
 

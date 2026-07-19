@@ -109,6 +109,21 @@ describe('approve', () => {
 		expect(approve(p, 'm-requester', NOW).purchase.state).toBe('approved');
 	});
 
+	it('does not call a first-time approval an overage', () => {
+		// A logged purchase ("already bought") carries its final amount from the
+		// start, so it reaches approval with finalAmount set but having never been
+		// approved. Approving it still completes — the money is spent — but there
+		// was no overage, and saying so confused people approving ordinary logs.
+		const loggedAwaitingApproval = pending({
+			finalAmount: usd(18000),
+			approvedAmount: null,
+			completedAt: NOW
+		});
+		const { purchase, event } = approve(loggedAwaitingApproval, 'm-approver', NOW);
+		expect(purchase.state).toBe('completed');
+		expect(event.reason).toBeNull();
+	});
+
 	it('completes directly when re-approving an overage', () => {
 		const p = pending({ finalAmount: usd(25000), approvedAmount: usd(18000), completedAt: NOW });
 		const { purchase, event } = approve(p, 'm-approver', NOW);

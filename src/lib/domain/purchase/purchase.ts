@@ -123,9 +123,22 @@ export function approve(p: Purchase, actorMemberId: string, now: Date): Transiti
 	if (!p.approverMemberIds.includes(actorMemberId)) {
 		throw new PurchaseStateError('Only a designated approver can approve this purchase');
 	}
-	// An overage re-approval carries the already-spent final amount: approving
-	// it completes the purchase, since the money is out the door.
+	/*
+	 * A final amount means the money is already out the door, so approving
+	 * completes rather than merely approves. Two different things arrive here
+	 * that way, and they are not the same event:
+	 *
+	 *   - an overage sent back for re-approval, which was approved once already
+	 *     and so carries an approvedAmount;
+	 *   - a logged purchase ("already bought") awaiting its *first* approval,
+	 *     which carries its final amount from creation and has never been
+	 *     approved.
+	 *
+	 * Treating the second as an overage labelled every ordinary log approval
+	 * "overage approved", which reads as though someone had overspent.
+	 */
 	if (p.finalAmount !== null) {
+		const isOverage = p.approvedAmount !== null;
 		return {
 			purchase: {
 				...p,
@@ -134,7 +147,14 @@ export function approve(p: Purchase, actorMemberId: string, now: Date): Transiti
 				decidedAt: now,
 				completedAt: p.completedAt ?? now
 			},
-			event: event(p, 'completed', actorMemberId, now, 'overage approved', p.finalAmount)
+			event: event(
+				p,
+				'completed',
+				actorMemberId,
+				now,
+				isOverage ? 'overage approved' : null,
+				p.finalAmount
+			)
 		};
 	}
 	return {

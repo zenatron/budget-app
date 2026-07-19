@@ -441,8 +441,20 @@ async function withPurchase(
 }
 
 export async function approvePurchase(db: Db, deps: Deps, scope: Scope, purchaseId: string) {
-	await withPurchase(db, deps, scope, purchaseId, (p) =>
-		approve(p, scope.memberId, deps.clock.now())
+	/*
+	 * Passes withdrawFromBucket because approving can *complete* a purchase, not
+	 * just approve it — a logged purchase or an overage arrives already carrying
+	 * its final amount. Without it, approving a bucket-charged log moved money in
+	 * the ledger and left the bucket balance untouched, so the bucket silently
+	 * overstated what was left in it.
+	 */
+	await withPurchase(
+		db,
+		deps,
+		scope,
+		purchaseId,
+		(p) => approve(p, scope.memberId, deps.clock.now()),
+		withdrawFromBucket
 	);
 }
 

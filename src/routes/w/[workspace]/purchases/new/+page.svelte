@@ -7,6 +7,7 @@
 	import { calDateInZone } from '$lib/domain/time/zoned';
 
 	import BillImport from '$lib/components/BillImport.svelte';
+	import BarcodeScanner from '$lib/components/BarcodeScanner.svelte';
 
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
@@ -26,19 +27,40 @@
 	 * that already sniffs magic bytes, caps pixels and strips metadata. A
 	 * DataTransfer is the only way to set an input's files programmatically.
 	 */
+	let scanning = $state(false);
+
+	/**
+	 * Stage one hands back the digits, nothing more. It goes in the item field so
+	 * it is visible and editable rather than hidden in a form value — you are
+	 * expected to type over it with what the thing actually is, and a barcode you
+	 * can see is at least a record of what you scanned.
+	 */
+	function applyScan(hit: { value: string; format: string }) {
+		scanning = false;
+		if (!itemName) itemName = hit.value;
+	}
+
+	/** Nothing read: keep the frame as the photo, which says more than digits. */
+	function applyScanPhoto(file: File) {
+		attachImage(file);
+	}
+
+	function attachImage(file: File) {
+		if (!photoInput) return;
+		const dt = new DataTransfer();
+		dt.items.add(file);
+		photoInput.files = dt.files;
+		if (photoPreview) URL.revokeObjectURL(photoPreview);
+		photoPreview = URL.createObjectURL(file);
+	}
+
 	function applyBill(v: { amount: string; vendor: string | null; image: File | null }) {
 		amount = v.amount;
 		if (v.vendor) {
 			if (!merchantName) merchantName = v.vendor;
 			if (!itemName) itemName = `${v.vendor} bill`;
 		}
-		if (v.image && photoInput) {
-			const dt = new DataTransfer();
-			dt.items.add(v.image);
-			photoInput.files = dt.files;
-			if (photoPreview) URL.revokeObjectURL(photoPreview);
-			photoPreview = URL.createObjectURL(v.image);
-		}
+		if (v.image) attachImage(v.image);
 	}
 	const symbol = $derived(
 		(0)
@@ -118,6 +140,35 @@
 	</a>
 
 	{#if data.billImportEnabled}
+		<button
+			type="button"
+			onclick={() => (scanning = true)}
+			class="press card flex w-full items-center gap-3 p-4 text-left"
+		>
+			<span
+				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+				style="background: color-mix(in oklab, var(--pending) 14%, var(--surface))"
+			>
+				<Icon name="search" class="h-[18px] w-[18px]" style="color: var(--pending)" />
+			</span>
+			<span class="min-w-0 flex-1">
+				<span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+					<span class="text-[15px] font-medium" style="color: var(--ink)">Scan a barcode</span>
+					<span
+						class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
+						style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
+						>Alpha</span
+					>
+				</span>
+				<span class="mt-0.5 block text-[13px]" style="color: var(--ink-4)"
+					>Reads the number. You still enter the price.</span
+				>
+			</span>
+			<Icon name="chevronRight" class="h-4 w-4 shrink-0" style="color: var(--ink-4)" />
+		</button>
+
+		<BarcodeScanner bind:open={scanning} onscan={applyScan} onphoto={applyScanPhoto} />
+
 		<BillImport currency={data.workspace.currency} dayFirst={data.dayFirst} onapply={applyBill} />
 	{/if}
 
