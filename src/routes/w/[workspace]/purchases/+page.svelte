@@ -288,6 +288,17 @@
 				</p>
 			{/if}
 			<a href="/w/{slug}/purchases/new" class="btn btn-accent mt-6">New purchase</a>
+			{#if !search && !category}
+				<!-- Empty states are the teaching moment: you're here precisely
+				     because you haven't done the thing yet. -->
+				<a
+					href="/w/{slug}/settings/help?s=logging"
+					class="press mt-4 flex items-center justify-center gap-1.5 text-[14px] font-medium"
+					style="color: var(--ws-accent)"
+				>
+					<Icon name="question" class="h-4 w-4" /> How this works
+				</a>
+			{/if}
 		</div>
 	{:else}
 		{#if pending.length > 0}

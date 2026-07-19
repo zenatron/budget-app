@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
+	import { page } from '$app/state';
 	import { money } from '$lib/actions/money';
 	import Icon from '$lib/components/Icon.svelte';
 	import Money from '$lib/components/Money.svelte';
 	import IncomeSchedule from '$lib/components/IncomeSchedule.svelte';
 	import { calDateInZone } from '$lib/domain/time/zoned';
 	let { data, form } = $props();
+	let slug = $derived(page.params.workspace);
 	let showNew = $state(false);
 	// Today in the *workspace* timezone. toISOString() is UTC, so after ~8pm in
 	// the Americas these forms defaulted to tomorrow's date.
@@ -97,6 +99,13 @@
 			<p class="mx-auto mt-1 max-w-[30ch] text-[15px] leading-relaxed" style="color: var(--ink-3)">
 				A budget without inflow can't tell you whether you're actually fine.
 			</p>
+			<a
+				href="/w/{slug}/settings/help?s=income"
+				class="press mt-4 inline-flex items-center gap-1.5 text-[14px] font-medium"
+				style="color: var(--ws-accent)"
+			>
+				<Icon name="question" class="h-4 w-4" /> How this works
+			</a>
 		</div>
 	{:else}
 		<div class="card overflow-hidden">

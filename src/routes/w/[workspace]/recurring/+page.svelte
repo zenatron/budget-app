@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
+	import { page } from '$app/state';
+	import PlanTabs from '$lib/components/PlanTabs.svelte';
 	import RecurrencePicker from '$lib/components/RecurrencePicker.svelte';
 	import { calDateInZone } from '$lib/domain/time/zoned';
 	import { money } from '$lib/actions/money';
 	import Icon from '$lib/components/Icon.svelte';
 	import Money from '$lib/components/Money.svelte';
 	let { data, form } = $props();
+	let slug = $derived(page.params.workspace);
 
 	let freq = $state('monthly');
 	let showNew = $state(false);
@@ -59,7 +62,8 @@
 </script>
 
 <div class="space-y-4">
-	<div class="flex items-center justify-between px-1 pt-1">
+	<PlanTabs />
+	<div class="flex items-center justify-between px-1">
 		<h1 class="text-[28px]">Recurring</h1>
 		<button
 			onclick={() => (showNew = !showNew)}
@@ -121,6 +125,13 @@
 			<p class="mx-auto mt-1 max-w-[28ch] text-[15px] leading-relaxed" style="color: var(--ink-3)">
 				Add subscriptions, bills, and rent so they track themselves.
 			</p>
+			<a
+				href="/w/{slug}/settings/help?s=recurring"
+				class="press mt-4 inline-flex items-center gap-1.5 text-[14px] font-medium"
+				style="color: var(--ws-accent)"
+			>
+				<Icon name="question" class="h-4 w-4" /> How this works
+			</a>
 		</div>
 	{:else}
 		<div class="card overflow-hidden">

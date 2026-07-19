@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
+	import { page } from '$app/state';
+	import PlanTabs from '$lib/components/PlanTabs.svelte';
 	import { money } from '$lib/actions/money';
 	import { formatMinor } from '$lib/money-format';
 	import { formatPct } from '$lib/format';
@@ -8,6 +10,7 @@
 	import DayOfMonthPicker from '$lib/components/DayOfMonthPicker.svelte';
 
 	let { data, form } = $props();
+	let slug = $derived(page.params.workspace);
 
 	const accents = [
 		'#FF9F0A',
@@ -52,7 +55,8 @@
 </script>
 
 <div class="space-y-4">
-	<div class="flex items-center justify-between px-1 pt-1">
+	<PlanTabs />
+	<div class="flex items-center justify-between px-1">
 		<h1 class="text-[28px]">Buckets</h1>
 		<button
 			onclick={() => (showNew = !showNew)}
@@ -139,6 +143,13 @@
 			<p class="mx-auto mt-1 max-w-[30ch] text-[15px] leading-relaxed" style="color: var(--ink-3)">
 				Create virtual savings envelopes for goals, trips, and rainy days.
 			</p>
+			<a
+				href="/w/{slug}/settings/help?s=buckets"
+				class="press mt-4 inline-flex items-center gap-1.5 text-[14px] font-medium"
+				style="color: var(--ws-accent)"
+			>
+				<Icon name="question" class="h-4 w-4" /> How this works
+			</a>
 		</div>
 	{:else}
 		<div class="card overflow-hidden">

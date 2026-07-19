@@ -36,6 +36,20 @@
 				rx="1"
 			/><rect x="17" y="3" width="4" height="18" rx="1" /></svg
 		>
+	{:else if name === 'question'}
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1.7"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			class={cls}
+			><circle cx="12" cy="12" r="9" /><path
+				d="M9.2 9.3a2.9 2.9 0 0 1 5.6 1c0 1.9-2.8 2.4-2.8 4"
+			/><path d="M12 17.6h.01" /></svg
+		>
 	{:else if name === 'reverse'}
 		<!-- Counterclockwise arrow: money going back the way it came. -->
 		<svg
@@ -77,6 +91,10 @@
 			/></svg
 		>
 	{:else if name === 'gear'}
+		<!--
+			An actual cog. The previous path was a circle with eight radiating
+			spokes — which is a sun, not a gear, and read as one at 20px.
+		-->
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
 			viewBox="0 0 24 24"
@@ -86,9 +104,9 @@
 			stroke-linecap="round"
 			stroke-linejoin="round"
 			class={cls}
-			><circle cx="12" cy="12" r="3" /><path
-				d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
-			/></svg
+			><path
+				d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+			/><circle cx="12" cy="12" r="3" /></svg
 		>
 	{:else if name === 'plus'}
 		<svg

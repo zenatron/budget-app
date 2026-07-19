@@ -75,13 +75,27 @@
 		accentFor(data.workspaces.find((w: { slug: string }) => w.slug === slug) ?? data.workspace)
 	);
 
+	/*
+	 * Four destinations either side of the new-purchase button, which sits in the
+	 * middle where a thumb actually reaches.
+	 *
+	 * Recurring and buckets share "Plan": both are money already claimed before
+	 * anything discretionary, so they read as one idea. Settings moved to the
+	 * header — it's configuration, visited rarely, and it was occupying prime
+	 * thumb real estate.
+	 */
 	const tabs = [
-		{ section: 'purchases', label: 'Wallet', icon: 'card' },
-		{ section: 'analytics', label: 'Activity', icon: 'chart' },
-		{ section: 'buckets', label: 'Buckets', icon: 'bank' },
-		{ section: 'recurring', label: 'Recurring', icon: 'repeat' },
-		{ section: 'income', label: 'Income', icon: 'dollar' }
+		{ section: 'purchases', label: 'Wallet', icon: 'card', also: [] as string[] },
+		{ section: 'analytics', label: 'Activity', icon: 'chart', also: [] as string[] },
+		{ section: 'recurring', label: 'Plan', icon: 'repeat', also: ['buckets'] },
+		{ section: 'income', label: 'Income', icon: 'dollar', also: [] as string[] }
 	];
+	const leftTabs = $derived(tabs.slice(0, 2));
+	const rightTabs = $derived(tabs.slice(2));
+
+	function tabActive(tab: { section: string; also: string[] }): boolean {
+		return isActive(tab.section) || tab.also.some((s) => isActive(s));
+	}
 
 	function isSettings(): boolean {
 		return (
@@ -133,12 +147,15 @@
 				<div class="flex items-center gap-2">
 					<CommandPalette />
 					<a
-						href="/w/{slug}/purchases/new"
+						href="/w/{slug}"
 						class="press flex h-8 w-8 items-center justify-center rounded-full"
-						style="background: var(--ink); color: var(--paper)"
-						aria-label="New purchase"
+						style="color: {isSettings() ? 'var(--ink)' : 'var(--ink-3)'}; background: {isSettings()
+							? 'var(--surface-2)'
+							: 'transparent'}"
+						aria-label="Settings"
+						aria-current={isSettings() ? 'page' : undefined}
 					>
-						<Icon name="plus" class="h-[18px] w-[18px]" />
+						<Icon name="gear" class="h-[20px] w-[20px]" />
 					</a>
 				</div>
 
@@ -213,12 +230,12 @@
 			class="material fixed right-0 bottom-0 left-0 z-20"
 			style="padding-bottom: max(env(safe-area-inset-bottom, 0px), 6px); box-shadow: 0 -0.5px 0 var(--hairline)"
 		>
-			<div class="mx-auto flex max-w-3xl justify-around px-2 pt-1.5">
-				{#each tabs as tab (tab.section)}
-					{@const active = isActive(tab.section)}
+			<div class="mx-auto flex max-w-3xl items-start justify-around px-2 pt-1.5">
+				{#each leftTabs as tab (tab.section)}
+					{@const active = tabActive(tab)}
 					<a
 						href="/w/{slug}/{tab.section}"
-						class="press flex flex-col items-center gap-1 py-1 text-[10px]"
+						class="press flex flex-1 flex-col items-center gap-1 py-1 text-[10px]"
 						style="color: {active ? 'var(--ink)' : 'var(--ink-4)'}"
 						aria-current={active ? 'page' : undefined}
 					>
@@ -226,15 +243,37 @@
 						<span class="font-medium tracking-tight">{tab.label}</span>
 					</a>
 				{/each}
+
+				<!--
+					An action, not a destination — so it looks like one: raised out of
+					the bar, filled with the workspace accent, no label competing with
+					the tab words either side.
+				-->
 				<a
-					href="/w/{slug}"
-					class="press flex flex-col items-center gap-1 py-1 text-[10px]"
-					style="color: {isSettings() ? 'var(--ink)' : 'var(--ink-4)'}"
-					aria-current={isSettings() ? 'page' : undefined}
+					href="/w/{slug}/purchases/new"
+					class="press flex flex-1 flex-col items-center"
+					aria-label="New purchase"
 				>
-					<Icon name="gear" class="h-[24px] w-[24px]" />
-					<span class="font-medium tracking-tight">Settings</span>
+					<span
+						class="flex h-[52px] w-[52px] -translate-y-3 items-center justify-center rounded-full text-white"
+						style="background: var(--ws-accent); box-shadow: 0 6px 16px -4px color-mix(in oklab, var(--ws-accent) 55%, transparent), 0 1px 2px oklch(0.28 0.03 65 / 0.18); outline: 3px solid var(--paper)"
+					>
+						<Icon name="plus" class="h-6 w-6" />
+					</span>
 				</a>
+
+				{#each rightTabs as tab (tab.section)}
+					{@const active = tabActive(tab)}
+					<a
+						href="/w/{slug}/{tab.section}"
+						class="press flex flex-1 flex-col items-center gap-1 py-1 text-[10px]"
+						style="color: {active ? 'var(--ink)' : 'var(--ink-4)'}"
+						aria-current={active ? 'page' : undefined}
+					>
+						<Icon name={tab.icon} class="h-[24px] w-[24px]" />
+						<span class="font-medium tracking-tight">{tab.label}</span>
+					</a>
+				{/each}
 			</div>
 		</nav>
 	</div>

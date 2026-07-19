@@ -86,6 +86,20 @@
 		</a>
 	{/if}
 
+	<a href="/w/{slug}/settings/help" class="press card flex items-center gap-3.5 p-4">
+		<span
+			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+		>
+			<Icon name="question" class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+		</span>
+		<div class="flex-1">
+			<p class="text-[15px] font-medium" style="color: var(--ink)">Help</p>
+			<p class="text-[13px]" style="color: var(--ink-4)">Approvals, gift mode, buckets, budgets</p>
+		</div>
+		<Icon name="chevronRight" class="h-4 w-4" style="color: var(--ink-4)" />
+	</a>
+
 	<a href="/w/{slug}/settings/notifications" class="press card flex items-center gap-3.5 p-4">
 		<span
 			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"

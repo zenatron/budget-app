@@ -142,12 +142,12 @@
 				<select
 					name="categoryId"
 					class="-mx-1 flex-1 border-none bg-transparent p-0 text-[17px] outline-none"
-					style="color: var(--ink); appearance: none"
+					style="color: var(--ink); appearance: none; background-image: none"
 				>
 					<option value="">No category</option>
 					{#each data.categories as c (c.id)}<option value={c.id}>{c.icon} {c.name}</option>{/each}
 				</select>
-				<Icon name="chevronRight" class="h-4 w-4" style="color: var(--ink-4)" />
+				<Icon name="chevronDown" class="h-4 w-4" style="color: var(--ink-4)" />
 			</div>
 			{#if data.buckets.length > 0}
 				<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
@@ -155,12 +155,12 @@
 					<select
 						name="bucketId"
 						class="-mx-1 flex-1 border-none bg-transparent p-0 text-[17px] outline-none"
-						style="color: var(--ink); appearance: none"
+						style="color: var(--ink); appearance: none; background-image: none"
 					>
 						<option value="">Charge to bucket</option>
 						{#each data.buckets as b (b.id)}<option value={b.id}>{b.name}</option>{/each}
 					</select>
-					<Icon name="chevronRight" class="h-4 w-4" style="color: var(--ink-4)" />
+					<Icon name="chevronDown" class="h-4 w-4" style="color: var(--ink-4)" />
 				</div>
 			{/if}
 			<!-- Photo (optional) -->
