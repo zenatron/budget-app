@@ -31,7 +31,7 @@ describe('parseRRule / formatRRule', () => {
 			RecurrenceError
 		);
 		expect(() => parseRRule('DTSTART=2026-02-30;FREQ=DAILY')).toThrow(RecurrenceError);
-		expect(() => parseRRule('DTSTART=2026-07-01;FREQ=MONTHLY;BYMONTHDAY=31')).toThrow(
+		expect(() => parseRRule('DTSTART=2026-07-01;FREQ=MONTHLY;BYMONTHDAY=32')).toThrow(
 			RecurrenceError
 		);
 		expect(() => parseRRule('DTSTART=2026-07-01;FREQ=DAILY;BYDAY=MO')).toThrow(RecurrenceError);
@@ -88,6 +88,23 @@ describe('nextOccurrence — monthly', () => {
 		expect(nextOccurrence(rec, d(2026, 2, 28))).toEqual(d(2026, 3, 31));
 		// 2028 is a leap year
 		expect(nextOccurrence(rec, d(2028, 1, 31))).toEqual(d(2028, 2, 29));
+	});
+
+	it('day 30 lands on the 30th, clamping only where the month is shorter', () => {
+		const rec = parseRRule('DTSTART=2026-01-30;FREQ=MONTHLY;BYMONTHDAY=30');
+		// 31-day months keep the 30th (not the last day) — the whole point.
+		expect(nextOccurrence(rec, d(2026, 2, 28))).toEqual(d(2026, 3, 30));
+		// February clamps to its last day…
+		expect(nextOccurrence(rec, d(2026, 1, 30))).toEqual(d(2026, 2, 28));
+		// …and doesn't drift: the clamp is recomputed per month, not carried.
+		expect(nextOccurrence(rec, d(2026, 2, 28))).toEqual(d(2026, 3, 30));
+	});
+
+	it('day 31 clamps per month without drifting', () => {
+		const rec = parseRRule('DTSTART=2026-01-31;FREQ=MONTHLY;BYMONTHDAY=31');
+		expect(nextOccurrence(rec, d(2026, 1, 31))).toEqual(d(2026, 2, 28));
+		expect(nextOccurrence(rec, d(2026, 2, 28))).toEqual(d(2026, 3, 31));
+		expect(nextOccurrence(rec, d(2026, 3, 31))).toEqual(d(2026, 4, 30));
 	});
 
 	it('every 3 months', () => {

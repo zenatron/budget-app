@@ -25,7 +25,11 @@ export interface Recurrence {
 	interval: number;
 	/** Weekly only: ISO weekdays 1 (Mon) … 7 (Sun). Defaults to start's weekday. */
 	byDay?: number[];
-	/** Monthly/yearly: 1..28 or -1 for the last day of the month. */
+	/**
+	 * Monthly/yearly: 1..31, or -1 for the last day of the month. A day past a
+	 * given month's length lands on that month's last day (the 30th → Feb 28/29),
+	 * which is how billing dates behave; the occurrence math clamps via clampDay.
+	 */
 	byMonthDay?: number;
 	/** Yearly only: month 1..12. Defaults to start's month. */
 	byMonth?: number;
@@ -129,9 +133,11 @@ export function parseRRule(text: string): Recurrence {
 			throw new RecurrenceError('BYMONTHDAY only applies to MONTHLY or YEARLY');
 		}
 		const day = Number(fields.get('BYMONTHDAY'));
-		// Cap at 28 so every month has the day; -1 means "last day".
-		if (!Number.isInteger(day) || day === 0 || day > 28 || day < -1) {
-			throw new RecurrenceError('BYMONTHDAY must be 1–28 or -1 (last day)');
+		// 1..31 or -1 (last day). Days longer than a given month clamp to its last
+		// day at occurrence time (clampDay), so "the 30th" means the 30th where it
+		// exists and the last day of February otherwise — how bills actually land.
+		if (!Number.isInteger(day) || day === 0 || day > 31 || day < -1) {
+			throw new RecurrenceError('BYMONTHDAY must be 1–31 or -1 (last day)');
 		}
 		rec.byMonthDay = day;
 	}

@@ -487,7 +487,8 @@ export const TOOLS: McpTool[] = [
 				},
 				day_of_month: {
 					type: 'integer',
-					description: 'Monthly/yearly only: day 1–28, or -1 for the last day of the month.'
+					description:
+						'Monthly/yearly only: day 1–31, or -1 for the last day of the month. A day longer than a given month (e.g. 30 in February) lands on that month’s last day.'
 				},
 				category_id: { type: 'string' },
 				auto_complete: {

@@ -4,7 +4,9 @@
 	 * Picking "the 15th" from a dropdown means scrolling a list of near-identical
 	 * strings; here the number is where you'd expect it on a calendar.
 	 *
-	 * Capped at 28 so every month has the day — "Last day" covers month ends.
+	 * Goes to 31 like a real calendar. A day longer than a given month lands on
+	 * that month's last day (the 30th → Feb 28), which is how bills fall; "Last
+	 * day" is the separate "always the month end, whatever its length" choice.
 	 */
 	let {
 		value = $bindable(),
@@ -12,7 +14,7 @@
 		label = 'Day of month'
 	}: { value: string; name?: string; label?: string } = $props();
 
-	const days = Array.from({ length: 28 }, (_, i) => String(i + 1));
+	const days = Array.from({ length: 31 }, (_, i) => String(i + 1));
 </script>
 
 <span class="section-label mb-1.5 block">{label}</span>
