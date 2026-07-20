@@ -71,7 +71,8 @@ import {
 	periodTotal,
 	categoryBreakdown,
 	memberBreakdown,
-	budgetVsActual
+	budgetVsActual,
+	monthlyTrend
 } from '$lib/server/repo/analytics';
 import { recurringRule } from '$lib/server/db/schema';
 import { and, eq, ne } from 'drizzle-orm';
@@ -442,6 +443,67 @@ export const TOOLS: McpTool[] = [
 				`Total ${data.period.replace('_', ' ')}: ${data.total}\n` +
 				`By category:\n${data.by_category.map((c) => `  - ${c.name}: ${c.amount}`).join('\n') || '  (none)'}\n` +
 				`By member:\n${data.by_member.map((m) => `  - ${m.name}: ${m.amount}`).join('\n') || '  (none)'}`;
+			return { text, data };
+		}
+	},
+	{
+		name: 'spending_trend',
+		description:
+			'Total spending per month over the last N months (default 6, max 24), oldest first — for spotting whether spending is rising or falling.',
+		scope: 'read',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				months: { type: 'integer', description: 'How many months back, 1–24 (default 6).' }
+			},
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const tz = ctx.authed.workspace.timezone;
+			const today = calDateInZone(ctx.now, tz);
+			const months = Math.min(Math.max(Math.trunc(Number(args.months) || 6), 1), 24);
+			// Window: first day of the month (months-1) back → first day of next month.
+			const startMonthIdx = today.y * 12 + (today.m - 1) - (months - 1);
+			const from = { y: Math.floor(startMonthIdx / 12), m: (startMonthIdx % 12) + 1, d: 1 };
+			const toExclusive =
+				today.m === 12 ? { y: today.y + 1, m: 1, d: 1 } : { y: today.y, m: today.m + 1, d: 1 };
+			const totals = await monthlyTrend(
+				ctx.db,
+				{ ...viewScope(ctx), timezone: tz },
+				{ from, toExclusive },
+				ctx.now
+			);
+			// Emit every month in the window, including zero months, so the series
+			// reads as a continuous trend rather than skipping quiet months.
+			const monthNames = [
+				'Jan',
+				'Feb',
+				'Mar',
+				'Apr',
+				'May',
+				'Jun',
+				'Jul',
+				'Aug',
+				'Sep',
+				'Oct',
+				'Nov',
+				'Dec'
+			];
+			const data: { month: string; label: string; total: string; totalMinor: number }[] = [];
+			for (let i = 0; i < months; i++) {
+				const idx = startMonthIdx + i;
+				const y = Math.floor(idx / 12);
+				const m = (idx % 12) + 1;
+				const key = `${y}-${String(m).padStart(2, '0')}`;
+				const minor = totals.get(key) ?? 0n;
+				data.push({
+					month: key,
+					label: `${monthNames[m - 1]} ${y}`,
+					total: fmt(minor, ctx),
+					totalMinor: Number(minor)
+				});
+			}
+			const text = data.map((d) => `- ${d.label}: ${d.total}`).join('\n');
 			return { text, data };
 		}
 	},
