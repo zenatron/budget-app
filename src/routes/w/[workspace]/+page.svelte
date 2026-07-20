@@ -169,6 +169,25 @@
 		</form>
 	</div>
 
+	<div class="card flex items-center justify-between gap-4 p-4">
+		<div>
+			<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
+				Intelligence
+				<span
+					class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
+					style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
+					>Alpha</span
+				>
+			</p>
+			<p class="text-[13px]" style="color: var(--ink-4)">
+				Ask questions in plain language, and get a spending summary each week or month.
+			</p>
+		</div>
+		<form method="POST" action="?/intelligence" use:submit={{ success: 'Setting saved' }}>
+			<Toggle on={data.intelligenceEnabled} label="Toggle intelligence features" />
+		</form>
+	</div>
+
 	<div class="card flex items-center justify-between p-4">
 		<div>
 			<p class="text-[15px] font-medium" style="color: var(--ink)">Bucket charges</p>
@@ -206,7 +225,7 @@
 			class="card p-5"
 			style="box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--deny) 30%, transparent)"
 		>
-			<p class="text-[15px] font-medium" style="color: var(--deny)">Delete workspace</p>
+			<p class="text-[15px] font-medium" style="color: var(--deny)">Danger zone</p>
 			<p class="mt-0.5 text-[13px]" style="color: var(--ink-4)">
 				Permanently removes {data.workspace.name} — every purchase, bucket, budget and member. This cannot
 				be undone.

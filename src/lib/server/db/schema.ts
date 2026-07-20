@@ -68,6 +68,9 @@ export const workspace = pgTable('workspace', {
 	bucketChargesSkipApproval: boolean('bucket_charges_skip_approval').notNull().default(false),
 	/** Alpha: read a bill PDF to prefill a purchase. Off until asked for. */
 	billImportEnabled: boolean('bill_import_enabled').notNull().default(false),
+	/** Alpha: the intelligence surface — the ask palette and periodic summaries.
+	 *  One flag for the whole suite so it promotes out of alpha together. */
+	intelligenceEnabled: boolean('intelligence_enabled').notNull().default(false),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull()
 });
 
@@ -84,6 +87,12 @@ export const workspaceMember = pgTable(
 		role: memberRole('role').notNull().default('member'),
 		approvalPolicy: jsonb('approval_policy').notNull(),
 		status: memberStatus('status').notNull().default('active'),
+		/** Intelligence summary cadence for this member: 'off' | 'weekly' | 'monthly'.
+		 *  Per-member because a summary is your own seal-filtered view. */
+		summaryCadence: text('summary_cadence').notNull().default('off'),
+		/** When their last summary was sent, so the sweep fires once per period and
+		 *  can catch up after downtime. */
+		summaryLastSentAt: timestamp('summary_last_sent_at', { withTimezone: true }),
 		joinedAt: timestamp('joined_at', { withTimezone: true }).notNull()
 	},
 	(t) => [uniqueIndex('workspace_member_workspace_user_uq').on(t.workspaceId, t.userId)]

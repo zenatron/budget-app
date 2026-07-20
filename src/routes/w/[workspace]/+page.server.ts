@@ -48,6 +48,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		confirmCount: confirmRow[0].count,
 		bucketChargesSkipApproval: locals.workspace!.bucketChargesSkipApproval,
 		billImportEnabled: locals.workspace!.billImportEnabled,
+		intelligenceEnabled: locals.workspace!.intelligenceEnabled,
 		accentColor: locals.workspace!.accentColor,
 		// Just the headline for the Members row. The list, the policies and the
 		// invites all live on settings/members now, which loads its own.
@@ -73,6 +74,16 @@ export const actions: Actions = {
 		await getDb()
 			.update(workspace)
 			.set({ billImportEnabled: value })
+			.where(eq(workspace.id, locals.workspace!.id));
+		return { ok: true };
+	},
+
+	intelligence: async ({ locals, request }) => {
+		if (locals.member!.role !== 'owner') error(403, 'Only the owner can change this setting');
+		const value = (await request.formData()).get('enabled') === 'true';
+		await getDb()
+			.update(workspace)
+			.set({ intelligenceEnabled: value })
 			.where(eq(workspace.id, locals.workspace!.id));
 		return { ok: true };
 	},

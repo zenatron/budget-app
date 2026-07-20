@@ -10,7 +10,8 @@ export type NotificationEventType =
 	| 'stale_nudge'
 	| 'seal_opened'
 	| 'recurring_due'
-	| 'budget_exceeded';
+	| 'budget_exceeded'
+	| 'periodic_summary';
 
 export interface NotificationMessage {
 	title: string;

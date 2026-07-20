@@ -47,6 +47,7 @@
 			title: 'Logging vs asking',
 			body: [
 				'**Log it** records something you already bought. **Ask first** requests permission before you spend.',
+				'Logging something from a while ago? Set **When** to the day it happened — it lands in that month’s figures, not today’s.',
 				'Which one needs approval is set per person in Settings → Members. If your policy says no approval is needed, "Ask first" is approved the moment you submit it.'
 			]
 		},
@@ -59,6 +60,17 @@
 				'Approval is not symmetric: being someone’s approver and needing approval yourself are independent settings.',
 				'**Spending more than approved sends it back.** If the final amount is well over what was approved, the purchase returns to waiting until the approver confirms the real price.',
 				'Editing the item, amount or category of an approved purchase also sends it back — unless it never needed approval, in which case the change just applies.'
+			]
+		},
+		{
+			id: 'needs',
+			icon: 'bell',
+			title: 'What needs you',
+			body: [
+				'Two kinds of thing can be waiting on you, and both sit at the top of the Ledger and add up on one card in Settings, so nothing slips down the list.',
+				'**Awaiting a decision** — purchases waiting for an approver to say yes or no.',
+				'**Confirm what you paid** — purchases that are approved but have no final amount yet: a recurring bill set to ask you, or a request you had approved for an estimate. Only you can confirm your own. Open one to enter what you were actually charged, and on which date.',
+				'These are dated by when they happened, not when they landed, so an older one shows its real month rather than today — and they’re listed oldest first, so you clear the backlog in order.'
 			]
 		},
 		{
@@ -80,7 +92,8 @@
 				'Budgets are monthly, set overall or per category, and can be scheduled up to a year ahead — useful when you know a month will be different.',
 				'Setting a new budget does not rewrite past months. Each month keeps the budget that applied at the time.',
 				'You get a notification when a budget passes 80% and again when it is exceeded.',
-				'Swipe the card on Activity to move between periods.'
+				'Swipe the card on Activity to move between periods.',
+				'Tap any category or person in a breakdown to open just those purchases in the Ledger, already filtered to the period you were looking at. You can also filter the Ledger yourself by date, person or category.'
 			]
 		},
 		{
@@ -89,7 +102,7 @@
 			title: 'Recurring charges',
 			body: [
 				'Rent, subscriptions, bills. Each rule generates purchases on its own schedule.',
-				'**Record automatically** posts them as already-paid at the set amount. Leave it off and each one waits for you to confirm what was actually charged.',
+				'**Record automatically** posts them as already-paid at the set amount. Leave it off — for a bill that changes each month — and each one lands under **Confirm what you paid** at the top of the Ledger, waiting for you to enter the real figure.',
 				'Recurring purchases do not go through approval — the decision was made when you created the rule.',
 				'If the app is offline for a while, missed occurrences are generated when it comes back.'
 			]
@@ -101,7 +114,7 @@
 			body: [
 				'A bucket sets money aside each month — a travel fund, a new laptop, an emergency float. It adds its monthly amount on the day you choose.',
 				'Buckets belong to the person who made them. Only that person can withdraw or adjust one.',
-				'You can charge a purchase to a bucket, which draws it down. The workspace can be set so bucket charges skip approval entirely.'
+				'You can charge a purchase to a bucket, which draws it down. The workspace has a default for whether bucket charges skip approval, and each person’s policy can override it — always skip, or always require — for their own charges.'
 			]
 		},
 		{
@@ -113,6 +126,17 @@
 				'A monthly entry is a template, not a stack of records — the occurrences are worked out when you look, so editing it corrects every month at once.',
 				'Income is visible to everyone in the workspace. Unlike purchases, it cannot be hidden.',
 				'It drives the net position on Activity: what came in, minus what went out and what you set aside.'
+			]
+		},
+		{
+			id: 'members',
+			icon: 'people',
+			title: 'Members & roles',
+			body: [
+				'Everyone is an **owner** or a **member**. Owners change workspace settings, budgets, invites and everyone’s approval policy; members do everything else.',
+				'Any owner can make another person an owner, or step someone — including themselves — back down to member, as long as one owner is always left. Promote first, then demote yourself: that’s how you hand a workspace over.',
+				'**Disable** someone to take away their access without erasing their history; **restore** brings them back. You can’t disable yourself, the last owner, or the only person left who can approve someone else’s spending.',
+				'**Deleting the workspace** removes everything in it and cannot be undone — it makes you type the name to confirm.'
 			]
 		},
 		{

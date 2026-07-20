@@ -64,6 +64,13 @@
       "when": 1784476131971,
       "tag": "0008_complex_pestilence",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784516125757,
+      "tag": "0009_brown_zarek",
+      "breakpoints": true
     }
   ]
 }

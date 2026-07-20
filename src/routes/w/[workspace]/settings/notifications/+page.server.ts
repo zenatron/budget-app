@@ -1,7 +1,9 @@
 import { fail } from '@sveltejs/kit';
 import { randomBytes } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
+import { workspaceMember } from '$lib/server/db/schema';
 import { getEnv } from '$lib/server/env';
 import {
 	deleteNtfyTarget,
@@ -41,9 +43,13 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 				},
 		subscriptionCount: subs.length,
 		disabled: disabled.map((d) => `${d.eventType}:${d.channel}`),
-		eventTypes: EVENT_TYPES.map((e) => ({ ...e }))
+		eventTypes: EVENT_TYPES.map((e) => ({ ...e })),
+		intelligenceEnabled: locals.workspace!.intelligenceEnabled,
+		summaryCadence: locals.member!.summaryCadence
 	};
 };
+
+const SUMMARY_CADENCES = ['off', 'weekly', 'monthly'] as const;
 
 const NtfySchema = v.object({
 	topic: v.pipe(
@@ -55,6 +61,24 @@ const NtfySchema = v.object({
 });
 
 export const actions: Actions = {
+	summary: async ({ locals, request }) => {
+		if (!locals.workspace!.intelligenceEnabled) return fail(403, { error: 'Intelligence is off' });
+		const cadence = String((await request.formData()).get('cadence') ?? '');
+		if (!(SUMMARY_CADENCES as readonly string[]).includes(cadence)) {
+			return fail(400, { error: 'Unknown cadence' });
+		}
+		// Turning it on re-bases the clock to now, so the first digest arrives at
+		// the end of the *next* full period rather than firing immediately.
+		await getDb()
+			.update(workspaceMember)
+			.set({
+				summaryCadence: cadence,
+				...(cadence !== 'off' ? { summaryLastSentAt: systemClock.now() } : {})
+			})
+			.where(eq(workspaceMember.id, locals.member!.id));
+		return { section: 'summary', ok: true };
+	},
+
 	ntfy: async ({ locals, request }) => {
 		const parsed = v.safeParse(NtfySchema, Object.fromEntries(await request.formData()));
 		if (!parsed.success) return fail(400, { section: 'ntfy', error: parsed.issues[0].message });
@@ -93,8 +117,13 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const enabledKeys = new Set(form.getAll('enabled').map(String));
 		const db = getDb();
+		// When ntfy isn't set up its checkboxes are disabled and don't submit, so
+		// rewriting ntfy prefs here would read them all as "off" and quietly
+		// disable the channel for good. Leave ntfy prefs alone until it exists.
+		const ntfy = await getNtfyTarget(db, locals.user!.id);
+		const channels = ntfy ? ['webpush', 'ntfy'] : ['webpush'];
 		for (const event of EVENT_TYPES) {
-			for (const channel of ['webpush', 'ntfy']) {
+			for (const channel of channels) {
 				await setPref(db, {
 					memberId: locals.member!.id,
 					eventType: event.id,

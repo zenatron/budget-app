@@ -20,7 +20,8 @@ export const load: LayoutServerLoad = async ({ locals, params }) => {
 			name: workspace!.name,
 			currency: workspace!.currency,
 			timezone: workspace!.timezone,
-			accentColor: workspace!.accentColor
+			accentColor: workspace!.accentColor,
+			intelligenceEnabled: workspace!.intelligenceEnabled
 		},
 		member: { id: member!.id, role: member!.role },
 		workspaces: memberships.map((m) => ({

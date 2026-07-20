@@ -15,6 +15,7 @@ import { findWorkspaceForMember } from '$lib/server/repo/workspaces';
 import { rateLimitOk } from '$lib/server/rate-limit';
 import { unsealDuePurchases } from '$lib/application/unseal-due';
 import { nudgeStaleRequests } from '$lib/application/nudge-stale';
+import { sendDueSummaries } from '$lib/application/summary-digest';
 import { materializeDueRules } from '$lib/application/recurring';
 import { checkBudgetAlerts } from '$lib/application/budget-alerts';
 import { materializeBucketAccruals } from '$lib/application/buckets';
@@ -115,6 +116,22 @@ export const init: ServerInit = async () => {
 				JSON.stringify({
 					level: 'error',
 					msg: 'sweep: budget alerts failed',
+					err: (e as Error).message
+				})
+			);
+		}
+		try {
+			const summaries = await sendDueSummaries(getDb(), deps);
+			if (summaries > 0) {
+				console.log(
+					JSON.stringify({ level: 'info', msg: 'sweep: summaries sent', count: summaries })
+				);
+			}
+		} catch (e) {
+			console.log(
+				JSON.stringify({
+					level: 'error',
+					msg: 'sweep: summaries failed',
 					err: (e as Error).message
 				})
 			);

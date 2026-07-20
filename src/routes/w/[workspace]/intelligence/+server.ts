@@ -39,6 +39,9 @@ function assertSameOrigin(request: Request): void {
 
 export const POST: RequestHandler = async ({ locals, request }) => {
 	assertSameOrigin(request);
+	// Alpha gate: the button is hidden when off, but the endpoint is the boundary
+	// that actually protects it.
+	if (!locals.workspace!.intelligenceEnabled) error(403, 'Intelligence is not enabled');
 
 	let body: unknown;
 	try {
