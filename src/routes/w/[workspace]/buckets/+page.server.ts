@@ -52,6 +52,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	};
 
 	return {
+		currency: ws.currency,
+		// Everything currently sitting in buckets (active + paused; archived are
+		// already excluded by listBuckets). This is money set aside, not spent.
+		totalSavedMinor: rows.reduce((sum, r) => sum + r.balanceMinor, 0n),
 		buckets: rows.map((r) => ({
 			id: r.bucket.id,
 			name: r.bucket.name,

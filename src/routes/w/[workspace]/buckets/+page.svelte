@@ -85,6 +85,18 @@
 		</button>
 	</div>
 
+	{#if data.buckets.length > 0}
+		<!-- Everything currently set aside across all buckets. -->
+		<div class="card flex items-center justify-between p-4">
+			<p class="section-label">Total saved</p>
+			<Money
+				minor={data.totalSavedMinor}
+				currency={data.currency}
+				class="num text-[22px] font-semibold"
+			/>
+		</div>
+	{/if}
+
 	{#if form?.error}
 		<div
 			class="card p-4 text-[15px]"

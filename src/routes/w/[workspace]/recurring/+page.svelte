@@ -90,6 +90,31 @@
 		</button>
 	</div>
 
+	{#if data.rules.length > 0}
+		<!-- What the active rules add up to, per month and annualized. -->
+		<div class="card flex items-stretch p-4">
+			<div class="flex-1 text-center">
+				<p class="section-label">Per month</p>
+				<Money
+					minor={data.monthlyTotalMinor}
+					currency={data.currency}
+					block
+					class="num mt-1 text-[22px] font-semibold"
+				/>
+			</div>
+			<div class="mx-2 w-px shrink-0" style="background: var(--hairline)"></div>
+			<div class="flex-1 text-center">
+				<p class="section-label">Per year</p>
+				<Money
+					minor={data.yearlyTotalMinor}
+					currency={data.currency}
+					block
+					class="num mt-1 text-[22px] font-semibold"
+				/>
+			</div>
+		</div>
+	{/if}
+
 	{#if form?.error}
 		<div
 			class="card p-4 text-[15px]"

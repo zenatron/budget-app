@@ -34,6 +34,26 @@ const deps = {
 	}
 };
 
+/**
+ * A rule's yearly cost in minor units, so we can total across mixed cadences.
+ * Weekly rules fire once per listed weekday, so a Mon+Thu rule counts twice a
+ * week. Uses the average year (365.25 days) — a display figure, not an invoice.
+ */
+function annualMinor(amountMinor: bigint, rec: Recurrence): number {
+	const a = Number(amountMinor);
+	const iv = rec.interval || 1;
+	switch (rec.freq) {
+		case 'daily':
+			return (a * 365.25) / iv;
+		case 'weekly':
+			return (a * (rec.byDay?.length || 1) * 365.25) / (7 * iv);
+		case 'monthly':
+			return (a * 12) / iv;
+		case 'yearly':
+			return a / iv;
+	}
+}
+
 export const load: PageServerLoad = async ({ locals, params }) => {
 	// Re-run this workspace-scoped load when the workspace in the URL changes;
 	// a locals-only load declares no such dependency. See +layout.server.ts.
@@ -43,7 +63,22 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		db.select().from(recurringRule).where(eq(recurringRule.workspaceId, locals.workspace!.id)),
 		listCategories(db, locals.workspace!.id)
 	]);
+
+	// Household outflow across every active rule, normalized to a common period.
+	let annual = 0;
+	for (const r of rules) {
+		if (r.status !== 'active') continue;
+		try {
+			annual += annualMinor(r.amountMinor, parseRRule(r.rrule));
+		} catch {
+			/* malformed rule — leave it out of the total rather than guess */
+		}
+	}
+
 	return {
+		currency: locals.workspace!.currency,
+		monthlyTotalMinor: BigInt(Math.round(annual / 12)),
+		yearlyTotalMinor: BigInt(Math.round(annual)),
 		rules: rules
 			.filter((r) => r.status !== 'ended')
 			.map((r) => {
