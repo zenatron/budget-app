@@ -1,3 +1,12 @@
+# Pin the Compose project name so it never depends on the folder it's deployed
+# from. Without this, `docker compose` derives the project from the directory
+# basename — so a rename (or a plugin that normalizes dashes vs underscores)
+# silently creates a *second*, parallel stack with its own empty volumes, and
+# `pull`/`up` update the wrong one. Everything (containers, network, volumes)
+# is namespaced under this name: containers `ledger-app-1`/`ledger-db-1`,
+# volumes `ledger_pgdata`/`ledger_blobs`.
+name: ledger
+
 services:
   app:
     build: .
