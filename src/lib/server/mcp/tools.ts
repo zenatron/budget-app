@@ -33,11 +33,29 @@ import {
 	completePurchase,
 	PurchaseNotFoundError
 } from '$lib/application/purchases';
+import {
+	createRule,
+	updateRule,
+	pauseRule,
+	resumeRule,
+	endRule,
+	materializeDueRules,
+	RecurringRuleError
+} from '$lib/application/recurring';
+import {
+	parseRRule,
+	formatRRule,
+	describeRecurrence,
+	RecurrenceError,
+	type Recurrence
+} from '$lib/domain/recurrence/rrule';
 import { listLedger } from '$lib/server/repo/ledger';
 import { listPurchases, loadPurchase, listEvents, memberNames } from '$lib/server/repo/purchases';
 import { listCategories, listMembers } from '$lib/server/repo/workspaces';
 import { listBuckets } from '$lib/server/repo/buckets';
 import { periodTotal, categoryBreakdown, memberBreakdown } from '$lib/server/repo/analytics';
+import { recurringRule } from '$lib/server/db/schema';
+import { and, eq, ne } from 'drizzle-orm';
 import type { ApiScope, AuthedToken } from '$lib/server/repo/api-tokens';
 
 export interface ToolContext {
@@ -93,6 +111,60 @@ function parseDateArg(raw: string | undefined, tz: string): Date | undefined {
 }
 function money(ctx: ToolContext, raw: string): Money {
 	return Money.fromDecimal(raw, ctx.authed.workspace.currency);
+}
+
+const WEEKDAY: Record<string, number> = {
+	mon: 1,
+	tue: 2,
+	wed: 3,
+	thu: 4,
+	fri: 5,
+	sat: 6,
+	sun: 7
+};
+
+/**
+ * Build a Recurrence from the tool's friendly fields (freq/interval/weekdays/
+ * day_of_month), mirroring exactly what the web form assembles before calling
+ * formatRRule. `base` lets an edit start from the rule's current schedule and
+ * override only the parts named, so "change it to weekly" doesn't lose the
+ * start date. Throws RecurrenceError on nonsense (surfaced as a tool error).
+ */
+function buildRecurrence(args: Record<string, unknown>, base?: Recurrence): Recurrence {
+	const freq = (str(args, 'freq') ?? base?.freq) as Recurrence['freq'] | undefined;
+	if (!freq || !['daily', 'weekly', 'monthly', 'yearly'].includes(freq)) {
+		throw new RecurrenceError('freq must be one of daily, weekly, monthly, yearly');
+	}
+	let start = base?.start;
+	const startRaw = str(args, 'start_date');
+	if (startRaw) {
+		if (!DATE_RE.test(startRaw)) throw new RecurrenceError(`Invalid start_date: ${startRaw}`);
+		const [y, m, d] = startRaw.split('-').map(Number);
+		start = { y, m, d };
+	}
+	if (!start) throw new RecurrenceError('start_date is required (YYYY-MM-DD)');
+
+	const interval =
+		args.interval !== undefined
+			? Math.min(Math.max(Math.trunc(Number(args.interval)), 1), 52)
+			: (base?.interval ?? 1);
+	if (!Number.isInteger(interval)) throw new RecurrenceError('interval must be a whole number');
+
+	const rec: Recurrence = { start, freq, interval };
+
+	if (freq === 'weekly') {
+		const raw = Array.isArray(args.weekdays) ? args.weekdays : undefined;
+		const days = raw
+			? raw.map((w) => WEEKDAY[String(w).toLowerCase()]).filter((n): n is number => !!n)
+			: base?.byDay;
+		if (days && days.length > 0) rec.byDay = [...new Set(days)].sort((a, b) => a - b);
+	} else if (freq === 'monthly' || freq === 'yearly') {
+		const dom =
+			args.day_of_month !== undefined ? Math.trunc(Number(args.day_of_month)) : base?.byMonthDay;
+		if (dom !== undefined) rec.byMonthDay = dom;
+		if (freq === 'yearly') rec.byMonth = base?.byMonth ?? start.m;
+	}
+	return rec;
 }
 
 // ---- tools ---------------------------------------------------------------
@@ -347,6 +419,232 @@ export const TOOLS: McpTool[] = [
 		}
 	},
 	{
+		name: 'list_recurring',
+		description:
+			'List active and paused recurring payment rules (subscriptions, regular bills), with cadence, next charge date, amount, and id.',
+		scope: 'read',
+		inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+		async handler(ctx) {
+			const rows = await ctx.db
+				.select()
+				.from(recurringRule)
+				.where(
+					and(
+						eq(recurringRule.workspaceId, ctx.authed.workspace.id),
+						ne(recurringRule.status, 'ended')
+					)
+				);
+			const data = rows.map((r) => {
+				let cadence: string;
+				try {
+					cadence = describeRecurrence(parseRRule(r.rrule));
+				} catch {
+					cadence = r.rrule;
+				}
+				return {
+					id: r.id,
+					item: r.itemName,
+					amount: fmt(r.amountMinor, ctx),
+					cadence,
+					next: r.nextOccurrenceAt?.toISOString().slice(0, 10) ?? null,
+					status: r.status,
+					auto_complete: r.autoComplete,
+					mine: r.memberId === ctx.authed.member.id
+				};
+			});
+			const text = data.length
+				? data
+						.map(
+							(r) =>
+								`- ${r.item} · ${r.amount} · ${r.cadence}${r.next ? ` · next ${r.next}` : ''} · ${r.status}${r.mine ? '' : ' (not yours)'} (${r.id})`
+						)
+						.join('\n')
+				: 'No recurring rules.';
+			return { text, data };
+		}
+	},
+	{
+		name: 'create_recurring',
+		description:
+			'Create a recurring payment rule (a subscription or regular bill). Generated charges skip approval by design. Set auto_complete=true for a fixed amount that posts as already spent; false to post each charge awaiting its real amount. Optionally backfill charges from the start date up to today.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				item: { type: 'string' },
+				amount: { type: 'string', description: 'Decimal amount in the workspace currency.' },
+				freq: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'yearly'] },
+				start_date: { type: 'string', description: 'First occurrence date, YYYY-MM-DD.' },
+				interval: {
+					type: 'integer',
+					description:
+						'Every N periods (1–52, default 1). E.g. freq=weekly, interval=2 = fortnightly.'
+				},
+				weekdays: {
+					type: 'array',
+					items: { type: 'string', enum: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] },
+					description: 'Weekly only: which weekday(s) it lands on.'
+				},
+				day_of_month: {
+					type: 'integer',
+					description: 'Monthly/yearly only: day 1–28, or -1 for the last day of the month.'
+				},
+				category_id: { type: 'string' },
+				auto_complete: {
+					type: 'boolean',
+					description:
+						'true = posts as completed spending; false = posts awaiting the real amount. Default false.'
+				},
+				backfill: {
+					type: 'boolean',
+					description: 'Also generate occurrences from start_date up to today. Default false.'
+				}
+			},
+			required: ['item', 'amount', 'freq', 'start_date'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const rec = buildRecurrence(args);
+			const { ruleId } = await createRule(ctx.db, ctx.deps, scopeOf(ctx), {
+				itemName: required(args, 'item'),
+				amount: money(ctx, required(args, 'amount')),
+				categoryId: str(args, 'category_id') ?? null,
+				rrule: formatRRule(rec),
+				autoComplete: args.auto_complete === true,
+				backfill: args.backfill === true
+			});
+			// Mirror the web form: land backfilled charges now rather than waiting for
+			// the next sweep, so a follow-up list_recurring / search reflects them.
+			if (args.backfill === true) await materializeDueRules(ctx.db, ctx.deps);
+			const cadence = describeRecurrence(rec);
+			return {
+				text: `Created recurring "${required(args, 'item')}" — ${cadence}. Rule id ${ruleId}.`,
+				data: { rule_id: ruleId, cadence }
+			};
+		}
+	},
+	{
+		name: 'update_recurring',
+		description:
+			'Update a recurring rule. Change item, amount (future charges only), category, or auto_complete. To change the schedule, pass freq plus any of start_date/interval/weekdays/day_of_month — omitted schedule fields keep their current value.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				rule_id: { type: 'string' },
+				item: { type: 'string' },
+				amount: { type: 'string' },
+				category_id: { type: 'string', description: 'Category id, or "none" to clear it.' },
+				auto_complete: { type: 'boolean' },
+				freq: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'yearly'] },
+				start_date: { type: 'string' },
+				interval: { type: 'integer' },
+				weekdays: {
+					type: 'array',
+					items: { type: 'string', enum: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] }
+				},
+				day_of_month: { type: 'integer' }
+			},
+			required: ['rule_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const ruleId = required(args, 'rule_id');
+			const cmd: {
+				itemName?: string;
+				amount?: Money;
+				categoryId?: string | null;
+				rrule?: string;
+				autoComplete?: boolean;
+			} = {};
+			if (str(args, 'item')) cmd.itemName = str(args, 'item');
+			if (str(args, 'amount')) cmd.amount = money(ctx, str(args, 'amount')!);
+			if (args.category_id !== undefined) {
+				const c = str(args, 'category_id');
+				cmd.categoryId = !c || c.toLowerCase() === 'none' ? null : c;
+			}
+			if (typeof args.auto_complete === 'boolean') cmd.autoComplete = args.auto_complete;
+
+			// A schedule change rebuilds the rule from its current schedule plus the
+			// named overrides, so "make it monthly" keeps the existing start date.
+			const scheduleTouched = ['freq', 'start_date', 'interval', 'weekdays', 'day_of_month'].some(
+				(k) => args[k] !== undefined
+			);
+			if (scheduleTouched) {
+				const [row] = await ctx.db
+					.select()
+					.from(recurringRule)
+					.where(
+						and(
+							eq(recurringRule.id, ruleId),
+							eq(recurringRule.workspaceId, ctx.authed.workspace.id)
+						)
+					)
+					.limit(1);
+				if (!row) return { text: `No recurring rule with id ${ruleId}.`, isError: true };
+				let base: Recurrence | undefined;
+				try {
+					base = parseRRule(row.rrule);
+				} catch {
+					base = undefined;
+				}
+				cmd.rrule = formatRRule(buildRecurrence(args, base));
+			}
+			await updateRule(ctx.db, ctx.deps, scopeOf(ctx), ruleId, cmd);
+			return { text: `Updated recurring rule ${ruleId}.`, data: { rule_id: ruleId } };
+		}
+	},
+	{
+		name: 'pause_recurring',
+		description: 'Pause a recurring rule — it stops generating charges until resumed.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: { rule_id: { type: 'string' } },
+			required: ['rule_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'rule_id');
+			await pauseRule(ctx.db, ctx.deps, scopeOf(ctx), id);
+			return { text: `Paused recurring rule ${id}.`, data: { rule_id: id, status: 'paused' } };
+		}
+	},
+	{
+		name: 'resume_recurring',
+		description:
+			'Resume a paused recurring rule. Charges missed while paused are skipped; the next one is future-only.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: { rule_id: { type: 'string' } },
+			required: ['rule_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'rule_id');
+			await resumeRule(ctx.db, ctx.deps, scopeOf(ctx), id);
+			return { text: `Resumed recurring rule ${id}.`, data: { rule_id: id, status: 'active' } };
+		}
+	},
+	{
+		name: 'end_recurring',
+		description:
+			'End a recurring rule permanently (e.g. a cancelled subscription). Past charges are kept; it stops generating new ones and cannot be resumed.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: { rule_id: { type: 'string' } },
+			required: ['rule_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'rule_id');
+			await endRule(ctx.db, ctx.deps, scopeOf(ctx), id);
+			return { text: `Ended recurring rule ${id}.`, data: { rule_id: id, status: 'ended' } };
+		}
+	},
+	{
 		name: 'log_purchase',
 		description:
 			'Record a purchase you have ALREADY made (money already spent). If your policy requires approval above a threshold it will be routed for approval automatically; otherwise it is recorded as completed.',
@@ -508,7 +806,9 @@ export function toToolError(e: unknown): string | null {
 		e instanceof PurchaseStateError ||
 		e instanceof InvalidMoneyError ||
 		e instanceof ApprovalRoutingError ||
-		e instanceof SealError
+		e instanceof SealError ||
+		e instanceof RecurringRuleError ||
+		e instanceof RecurrenceError
 	) {
 		return e.message;
 	}
