@@ -391,6 +391,36 @@ export const notificationPref = pgTable(
 	(t) => [primaryKey({ columns: [t.workspaceMemberId, t.eventType, t.channel] })]
 );
 
+// Personal access tokens for the MCP server (and any future API surface).
+// The secret is shown once at creation and never stored — only its SHA-256 hash
+// is kept, so a database leak can't be replayed. Scoped to a single
+// workspace_member, so every read/write acts as that person: seals, approval
+// routing and permissions all apply exactly as they do in the web app.
+export const apiToken = pgTable(
+	'api_token',
+	{
+		id: uuid('id').primaryKey(),
+		workspaceMemberId: uuid('workspace_member_id')
+			.notNull()
+			.references(() => workspaceMember.id),
+		name: text('name').notNull(),
+		/** SHA-256 hex of the secret. Unique so a lookup is a single indexed hit. */
+		tokenHash: text('token_hash').notNull().unique(),
+		/** First few visible chars (e.g. "ldg_A1b2") for the list — never the secret. */
+		prefix: text('prefix').notNull(),
+		/** Subset of ['read','write','approve']. Empty = no access (revoked shape). */
+		scopes: text('scopes')
+			.array()
+			.notNull()
+			.default(sql`'{}'::text[]`),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+		lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+		expiresAt: timestamp('expires_at', { withTimezone: true }),
+		revokedAt: timestamp('revoked_at', { withTimezone: true })
+	},
+	(t) => [index('api_token_member_idx').on(t.workspaceMemberId)]
+);
+
 // id is a high-entropy random token (not uuidv7 — session ids must be unguessable).
 export const session = pgTable(
 	'session',
