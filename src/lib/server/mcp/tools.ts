@@ -31,8 +31,22 @@ import {
 	approvePurchase,
 	denyPurchase,
 	completePurchase,
+	cancelPurchase,
+	refundPurchase,
+	editPurchase,
+	unsealPurchase,
 	PurchaseNotFoundError
 } from '$lib/application/purchases';
+import {
+	createBucket,
+	updateBucket,
+	pauseBucket,
+	resumeBucket,
+	archiveBucket,
+	addTransaction,
+	loadOwnBucket
+} from '$lib/server/repo/buckets';
+import { addIncome, listIncome } from '$lib/server/repo/income';
 import {
 	createRule,
 	updateRule,
@@ -53,7 +67,12 @@ import { listLedger } from '$lib/server/repo/ledger';
 import { listPurchases, loadPurchase, listEvents, memberNames } from '$lib/server/repo/purchases';
 import { listCategories, listMembers } from '$lib/server/repo/workspaces';
 import { listBuckets } from '$lib/server/repo/buckets';
-import { periodTotal, categoryBreakdown, memberBreakdown } from '$lib/server/repo/analytics';
+import {
+	periodTotal,
+	categoryBreakdown,
+	memberBreakdown,
+	budgetVsActual
+} from '$lib/server/repo/analytics';
 import { recurringRule } from '$lib/server/db/schema';
 import { and, eq, ne } from 'drizzle-orm';
 import type { ApiScope, AuthedToken } from '$lib/server/repo/api-tokens';
@@ -165,6 +184,38 @@ function buildRecurrence(args: Record<string, unknown>, base?: Recurrence): Recu
 		if (freq === 'yearly') rec.byMonth = base?.byMonth ?? start.m;
 	}
 	return rec;
+}
+
+/**
+ * Gift-mode seal from friendly args: hide_from (member ids) + reveal_on (date),
+ * both or neither. submitPurchase re-validates against the workspace's max seal
+ * window and active members (throwing SealError), so this only shapes the value.
+ */
+function buildSeal(
+	args: Record<string, unknown>,
+	tz: string
+): { sealedUntil: Date; sealedFromMemberIds: string[] } | undefined {
+	const hide = Array.isArray(args.hide_from) ? args.hide_from.map(String).filter(Boolean) : [];
+	const reveal = str(args, 'reveal_on');
+	if (hide.length === 0 && !reveal) return undefined;
+	if (hide.length === 0 || !reveal) {
+		throw new PurchaseStateError(
+			'Gift mode needs both hide_from (member ids) and reveal_on (date).'
+		);
+	}
+	if (!DATE_RE.test(reveal))
+		throw new PurchaseStateError(`reveal_on must be YYYY-MM-DD: ${reveal}`);
+	const [y, m, d] = reveal.split('-').map(Number);
+	return { sealedUntil: zonedTimeToUtc({ y, m, d }, 23, 59, tz), sealedFromMemberIds: hide };
+}
+
+/** Surface a domain error's message as a tool error; rethrow anything unexpected. */
+function domainErrText(e: unknown): string {
+	const mapped = toToolError(e);
+	if (mapped) return mapped;
+	// Bucket repo mutations throw plain Error with safe, user-facing copy.
+	if (e instanceof Error) return e.message;
+	throw e;
 }
 
 // ---- tools ---------------------------------------------------------------
@@ -391,6 +442,89 @@ export const TOOLS: McpTool[] = [
 				`Total ${data.period.replace('_', ' ')}: ${data.total}\n` +
 				`By category:\n${data.by_category.map((c) => `  - ${c.name}: ${c.amount}`).join('\n') || '  (none)'}\n` +
 				`By member:\n${data.by_member.map((m) => `  - ${m.name}: ${m.amount}`).join('\n') || '  (none)'}`;
+			return { text, data };
+		}
+	},
+	{
+		name: 'budget_status',
+		description:
+			'How spending tracks against category budgets for a month: budgeted, actual, and remaining (or over) per category.',
+		scope: 'read',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				period: {
+					type: 'string',
+					enum: ['this_month', 'last_month'],
+					description: 'Which month. Defaults to this_month.'
+				}
+			},
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const tz = ctx.authed.workspace.timezone;
+			const today = calDateInZone(ctx.now, tz);
+			const period = args.period === 'last_month' ? previousMonthPeriod(today) : monthPeriod(today);
+			const lines = await budgetVsActual(
+				ctx.db,
+				{ ...viewScope(ctx), timezone: tz },
+				period,
+				ctx.now
+			);
+			const data = lines.map((l) => {
+				const remaining = l.budgetMinor - l.actualMinor;
+				const over = remaining < 0n;
+				const pct =
+					l.budgetMinor > 0n
+						? Math.round((Number(l.actualMinor) / Number(l.budgetMinor)) * 100)
+						: 0;
+				return {
+					category: l.categoryName,
+					budget: fmt(l.budgetMinor, ctx),
+					spent: fmt(l.actualMinor, ctx),
+					remaining: fmt(over ? -remaining : remaining, ctx),
+					over,
+					percent: pct
+				};
+			});
+			const text = data.length
+				? data
+						.map(
+							(l) =>
+								`- ${l.category}: ${l.spent} of ${l.budget} (${l.percent}%) · ${l.over ? `over by ${l.remaining}` : `${l.remaining} left`}`
+						)
+						.join('\n')
+				: 'No category budgets set for this month.';
+			return { text, data };
+		}
+	},
+	{
+		name: 'list_income',
+		description: 'List income entries (paychecks and other money in), most recent first.',
+		scope: 'read',
+		inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+		async handler(ctx) {
+			const rows = await listIncome(ctx.db, ctx.authed.workspace.id);
+			const data = rows
+				.slice()
+				.reverse()
+				.map((r) => ({
+					id: r.entry.id,
+					source: r.entry.source,
+					amount: fmt(r.entry.amountMinor, ctx),
+					received: r.entry.receivedAt.toISOString().slice(0, 10),
+					who: r.memberName,
+					recurring: r.entry.rrule !== null,
+					note: r.entry.note
+				}));
+			const text = data.length
+				? data
+						.map(
+							(r) =>
+								`- ${r.received} · ${r.amount} · ${r.source} (${r.who})${r.recurring ? ' · recurring' : ''}`
+						)
+						.join('\n')
+				: 'No income recorded.';
 			return { text, data };
 		}
 	},
@@ -668,6 +802,16 @@ export const TOOLS: McpTool[] = [
 				spent_at: {
 					type: 'string',
 					description: 'Optional date the purchase happened, YYYY-MM-DD (defaults to now).'
+				},
+				hide_from: {
+					type: 'array',
+					items: { type: 'string' },
+					description:
+						'Gift mode: member ids (see list_members) this purchase is hidden from — invisible to them everywhere, including totals. Requires reveal_on.'
+				},
+				reveal_on: {
+					type: 'string',
+					description: 'Gift mode: date the seal opens, YYYY-MM-DD. Requires hide_from.'
 				}
 			},
 			required: ['item', 'amount'],
@@ -683,7 +827,8 @@ export const TOOLS: McpTool[] = [
 				intent: 'log',
 				spentAt: parseDateArg(str(args, 'spent_at'), tz),
 				merchantName: str(args, 'merchant') ?? null,
-				bucketId: str(args, 'bucket_id') ?? null
+				bucketId: str(args, 'bucket_id') ?? null,
+				seal: buildSeal(args, tz)
 			});
 			const p = await loadPurchase(ctx.db, viewScope(ctx), purchaseId, { now: ctx.now });
 			const state = p?.state ?? 'recorded';
@@ -708,7 +853,16 @@ export const TOOLS: McpTool[] = [
 				amount: { type: 'string', description: 'Decimal amount, e.g. "120.00".' },
 				category_id: { type: 'string' },
 				merchant: { type: 'string' },
-				note: { type: 'string' }
+				note: { type: 'string' },
+				hide_from: {
+					type: 'array',
+					items: { type: 'string' },
+					description: 'Gift mode: member ids to hide this from (requires reveal_on).'
+				},
+				reveal_on: {
+					type: 'string',
+					description: 'Gift mode: date the seal opens, YYYY-MM-DD (requires hide_from).'
+				}
 			},
 			required: ['item', 'amount'],
 			additionalProperties: false
@@ -720,7 +874,8 @@ export const TOOLS: McpTool[] = [
 				categoryId: str(args, 'category_id') ?? null,
 				note: str(args, 'note') ?? null,
 				intent: 'request',
-				merchantName: str(args, 'merchant') ?? null
+				merchantName: str(args, 'merchant') ?? null,
+				seal: buildSeal(args, ctx.authed.workspace.timezone)
 			});
 			const p = await loadPurchase(ctx.db, viewScope(ctx), purchaseId, { now: ctx.now });
 			return {
@@ -790,6 +945,322 @@ export const TOOLS: McpTool[] = [
 				at: parseDateArg(str(args, 'date'), tz) ?? ctx.now
 			});
 			return { text: `Marked purchase ${id} as bought.`, data: { purchase_id: id } };
+		}
+	},
+	{
+		name: 'edit_purchase',
+		description:
+			'Edit a purchase you requested — item, amount, category, or note — while it is draft, pending, or approved. Changing item/amount/category on an approved purchase sends it back for approval.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				purchase_id: { type: 'string' },
+				item: { type: 'string' },
+				amount: { type: 'string' },
+				category_id: { type: 'string', description: 'Category id, or "none" to clear it.' },
+				note: { type: 'string' }
+			},
+			required: ['purchase_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'purchase_id');
+			const changes: {
+				itemName?: string;
+				requestedAmount?: Money;
+				categoryId?: string | null;
+				note?: string | null;
+			} = {};
+			if (str(args, 'item')) changes.itemName = str(args, 'item');
+			if (str(args, 'amount')) changes.requestedAmount = money(ctx, str(args, 'amount')!);
+			if (args.category_id !== undefined) {
+				const c = str(args, 'category_id');
+				changes.categoryId = !c || c.toLowerCase() === 'none' ? null : c;
+			}
+			if (args.note !== undefined) changes.note = str(args, 'note') ?? null;
+			await editPurchase(ctx.db, ctx.deps, scopeOf(ctx), id, changes);
+			return { text: `Edited purchase ${id}.`, data: { purchase_id: id } };
+		}
+	},
+	{
+		name: 'cancel_purchase',
+		description: 'Cancel a purchase you requested (while it is draft, pending, or approved).',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: { purchase_id: { type: 'string' } },
+			required: ['purchase_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'purchase_id');
+			await cancelPurchase(ctx.db, ctx.deps, scopeOf(ctx), id);
+			return { text: `Cancelled purchase ${id}.`, data: { purchase_id: id, state: 'cancelled' } };
+		}
+	},
+	{
+		name: 'refund_purchase',
+		description:
+			'Record a refund against a completed purchase (partial or full). Once refunds cover the full amount the purchase is marked refunded.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				purchase_id: { type: 'string' },
+				amount: { type: 'string', description: 'Refund amount, decimal.' }
+			},
+			required: ['purchase_id', 'amount'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'purchase_id');
+			await refundPurchase(
+				ctx.db,
+				ctx.deps,
+				scopeOf(ctx),
+				id,
+				money(ctx, required(args, 'amount'))
+			);
+			return { text: `Recorded a refund on purchase ${id}.`, data: { purchase_id: id } };
+		}
+	},
+	{
+		name: 'unseal_purchase',
+		description:
+			'Reveal a gift-sealed purchase now, before its reveal date. Only the person who sealed it can.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: { purchase_id: { type: 'string' } },
+			required: ['purchase_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'purchase_id');
+			await unsealPurchase(ctx.db, ctx.deps, scopeOf(ctx), id);
+			return { text: `Revealed purchase ${id}.`, data: { purchase_id: id } };
+		}
+	},
+	{
+		name: 'create_bucket',
+		description:
+			'Create a savings/allocation bucket that automatically sets aside a fixed amount each month.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				name: { type: 'string' },
+				monthly_amount: { type: 'string', description: 'Amount set aside each month, decimal.' },
+				day_of_month: {
+					type: 'integer',
+					description: 'Day the monthly amount is added, 1–28 (default 1).'
+				},
+				goal: { type: 'string', description: 'Optional target/cap, decimal.' }
+			},
+			required: ['name', 'monthly_amount'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			try {
+				const b = await createBucket(ctx.db, ctx.deps, {
+					workspaceId: ctx.authed.workspace.id,
+					memberId: ctx.authed.member.id,
+					name: required(args, 'name'),
+					monthlyAmountMinor: money(ctx, required(args, 'monthly_amount')).minor,
+					currency: ctx.authed.workspace.currency,
+					dayOfMonth: Math.min(Math.max(Math.trunc(Number(args.day_of_month) || 1), 1), 28),
+					goalCapMinor: str(args, 'goal') ? money(ctx, str(args, 'goal')!).minor : null
+				});
+				return {
+					text: `Created bucket "${b.name}". Bucket id ${b.id}.`,
+					data: { bucket_id: b.id }
+				};
+			} catch (e) {
+				return { text: domainErrText(e), isError: true };
+			}
+		}
+	},
+	{
+		name: 'update_bucket',
+		description: 'Update a bucket you own — name, monthly amount, day of month, or goal.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				bucket_id: { type: 'string' },
+				name: { type: 'string' },
+				monthly_amount: { type: 'string' },
+				day_of_month: { type: 'integer' },
+				goal: { type: 'string', description: 'New target/cap, or "none" to clear it.' }
+			},
+			required: ['bucket_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'bucket_id');
+			try {
+				const changes: {
+					name?: string;
+					monthlyAmountMinor?: bigint;
+					dayOfMonth?: number;
+					goalCapMinor?: bigint | null;
+				} = {};
+				if (str(args, 'name')) changes.name = str(args, 'name');
+				if (str(args, 'monthly_amount'))
+					changes.monthlyAmountMinor = money(ctx, str(args, 'monthly_amount')!).minor;
+				if (args.day_of_month !== undefined)
+					changes.dayOfMonth = Math.min(Math.max(Math.trunc(Number(args.day_of_month)), 1), 28);
+				if (args.goal !== undefined) {
+					const g = str(args, 'goal');
+					changes.goalCapMinor = !g || g.toLowerCase() === 'none' ? null : money(ctx, g).minor;
+				}
+				const b = await updateBucket(ctx.db, scopeOf(ctx), id, changes);
+				if (!b) return { text: `No bucket ${id} that you own.`, isError: true };
+				return { text: `Updated bucket "${b.name}".`, data: { bucket_id: id } };
+			} catch (e) {
+				return { text: domainErrText(e), isError: true };
+			}
+		}
+	},
+	{
+		name: 'move_bucket_money',
+		description:
+			'Move money into or out of a bucket beyond its automatic monthly amount: deposit adds, withdraw removes.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				bucket_id: { type: 'string' },
+				amount: { type: 'string' },
+				direction: { type: 'string', enum: ['deposit', 'withdraw'] },
+				note: { type: 'string' }
+			},
+			required: ['bucket_id', 'amount', 'direction'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'bucket_id');
+			const dir = required(args, 'direction');
+			if (dir !== 'deposit' && dir !== 'withdraw') {
+				return { text: 'direction must be "deposit" or "withdraw".', isError: true };
+			}
+			const b = await loadOwnBucket(ctx.db, scopeOf(ctx), id);
+			if (!b) return { text: `No bucket ${id} that you own.`, isError: true };
+			try {
+				const m = Money.fromDecimal(required(args, 'amount'), b.currency);
+				const withdraw = dir === 'withdraw';
+				await addTransaction(ctx.db, ctx.deps, {
+					bucketId: id,
+					amountMinor: withdraw ? -m.minor : m.minor,
+					currency: b.currency,
+					type: withdraw ? 'withdrawal' : 'adjustment',
+					note: str(args, 'note') ?? null
+				});
+				return {
+					text: `${withdraw ? 'Withdrew' : 'Deposited'} ${m.format()} ${withdraw ? 'from' : 'into'} "${b.name}".`,
+					data: { bucket_id: id }
+				};
+			} catch (e) {
+				return { text: domainErrText(e), isError: true };
+			}
+		}
+	},
+	{
+		name: 'pause_bucket',
+		description: 'Pause a bucket — it stops setting aside its monthly amount until resumed.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: { bucket_id: { type: 'string' } },
+			required: ['bucket_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'bucket_id');
+			try {
+				await pauseBucket(ctx.db, scopeOf(ctx), id);
+				return { text: `Paused bucket ${id}.`, data: { bucket_id: id, status: 'paused' } };
+			} catch (e) {
+				return { text: domainErrText(e), isError: true };
+			}
+		}
+	},
+	{
+		name: 'resume_bucket',
+		description: 'Resume a paused bucket so it sets aside its monthly amount again.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: { bucket_id: { type: 'string' } },
+			required: ['bucket_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'bucket_id');
+			try {
+				await resumeBucket(ctx.db, scopeOf(ctx), id);
+				return { text: `Resumed bucket ${id}.`, data: { bucket_id: id, status: 'active' } };
+			} catch (e) {
+				return { text: domainErrText(e), isError: true };
+			}
+		}
+	},
+	{
+		name: 'archive_bucket',
+		description: 'Archive a bucket you no longer use. Its balance and history are kept.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: { bucket_id: { type: 'string' } },
+			required: ['bucket_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'bucket_id');
+			try {
+				await archiveBucket(ctx.db, scopeOf(ctx), id);
+				return { text: `Archived bucket ${id}.`, data: { bucket_id: id, status: 'archived' } };
+			} catch (e) {
+				return { text: domainErrText(e), isError: true };
+			}
+		}
+	},
+	{
+		name: 'add_income',
+		description: 'Record income received — a paycheck or other money in.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				source: { type: 'string', description: 'Where it came from, e.g. "Paycheck".' },
+				amount: { type: 'string', description: 'Amount received, decimal.' },
+				received_at: {
+					type: 'string',
+					description: 'Date received, YYYY-MM-DD (defaults to today).'
+				},
+				note: { type: 'string' }
+			},
+			required: ['source', 'amount'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const tz = ctx.authed.workspace.timezone;
+			const amount = money(ctx, required(args, 'amount'));
+			await addIncome(ctx.db, ctx.deps, {
+				workspaceId: ctx.authed.workspace.id,
+				memberId: ctx.authed.member.id,
+				source: required(args, 'source'),
+				amountMinor: amount.minor,
+				currency: ctx.authed.workspace.currency,
+				receivedAt: parseDateArg(str(args, 'received_at'), tz) ?? ctx.now,
+				rrule: null,
+				note: str(args, 'note') ?? null
+			});
+			return {
+				text: `Recorded ${amount.format()} from ${required(args, 'source')}.`,
+				data: { source: required(args, 'source'), amount: amount.format() }
+			};
 		}
 	}
 ];
