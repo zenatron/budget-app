@@ -241,7 +241,10 @@ function resolvePeriod(params: {
 	};
 }
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ locals, url, params }) => {
+	// Also depend on the workspace param so a switch always re-runs this load,
+	// independent of how finely SvelteKit tracks url/params. See +layout.server.ts.
+	void params.workspace;
 	const db = getDb();
 	const now = systemClock.now();
 	const ws = locals.workspace!;

@@ -233,6 +233,7 @@ export interface PurchaseListItem {
 	categoryId: string | null;
 	thumbBlobId: string | null;
 	requestedAt: Date | null;
+	decidedAt: Date | null;
 	completedAt: Date | null;
 	createdAt: Date;
 	canDecide: boolean;
@@ -331,6 +332,7 @@ export async function listPurchases(
 		categoryId: r.p.categoryId,
 		thumbBlobId: r.thumbBlobId,
 		requestedAt: r.p.requestedAt,
+		decidedAt: r.p.decidedAt,
 		completedAt: r.p.completedAt,
 		createdAt: r.p.createdAt,
 		canDecide: r.canDecide,

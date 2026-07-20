@@ -11,12 +11,16 @@ import { getBlobStore } from '$lib/server/blobs';
 import { getDb } from '$lib/server/db';
 import { listCategories, listMembers } from '$lib/server/repo/workspaces';
 import { listBuckets } from '$lib/server/repo/buckets';
+import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { getNotifier } from '$lib/server/notify';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, params }) => {
+	// Re-run this workspace-scoped load when the workspace in the URL changes;
+	// a locals-only load declares no such dependency. See +layout.server.ts.
+	void params.workspace;
 	const db = getDb();
 	const [categories, members, buckets] = await Promise.all([
 		listCategories(db, locals.workspace!.id),
@@ -50,7 +54,8 @@ const FormSchema = v.object({
 	categoryId: v.optional(v.string()),
 	note: v.optional(v.pipe(v.string(), v.maxLength(2000))),
 	intent: v.picklist(['request', 'log']),
-	sealUntil: v.optional(v.string())
+	sealUntil: v.optional(v.string()),
+	spentAt: v.optional(v.string())
 });
 
 export const actions: Actions = {
@@ -74,6 +79,29 @@ export const actions: Actions = {
 			return fail(400, { error: 'Pick who the purchase is hidden from' });
 		}
 
+		/*
+		 * Back-date a logged purchase. Only for the log path — a request hasn't
+		 * happened, so a date on it is meaningless and ignored. "Today" is left as
+		 * undefined so the app stamps the precise `now`; only a genuinely earlier
+		 * date sets completedAt, which is what analytics buckets on. Noon in the
+		 * workspace's zone keeps the instant on the intended calendar day either
+		 * side of a DST change.
+		 */
+		let spentAt: Date | undefined;
+		if (f.intent === 'log' && f.spentAt) {
+			const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(f.spentAt);
+			if (!m) return fail(400, { error: 'Invalid purchase date' });
+			const picked = { y: +m[1], m: +m[2], d: +m[3] };
+			const today = calDateInZone(systemClock.now(), locals.workspace!.timezone);
+			const toNum = (d: { y: number; m: number; d: number }) => d.y * 10000 + d.m * 100 + d.d;
+			if (toNum(picked) > toNum(today)) {
+				return fail(400, { error: "You can't log a purchase in the future" });
+			}
+			if (toNum(picked) < toNum(today)) {
+				spentAt = zonedTimeToUtc(picked, 12, 0, locals.workspace!.timezone);
+			}
+		}
+
 		let purchaseId: string;
 		try {
 			const amount = Money.fromDecimal(f.amount, locals.workspace!.currency);
@@ -87,6 +115,7 @@ export const actions: Actions = {
 					categoryId: f.categoryId || null,
 					note: f.note?.trim() || null,
 					intent: f.intent,
+					spentAt,
 					seal,
 					merchantName: form.get('merchantName')?.toString()?.trim() || null,
 					bucketId: form.get('bucketId')?.toString()?.trim() || null

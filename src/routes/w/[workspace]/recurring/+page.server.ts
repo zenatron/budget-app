@@ -34,7 +34,10 @@ const deps = {
 	}
 };
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, params }) => {
+	// Re-run this workspace-scoped load when the workspace in the URL changes;
+	// a locals-only load declares no such dependency. See +layout.server.ts.
+	void params.workspace;
 	const db = getDb();
 	const [rules, categories] = await Promise.all([
 		db.select().from(recurringRule).where(eq(recurringRule.workspaceId, locals.workspace!.id)),

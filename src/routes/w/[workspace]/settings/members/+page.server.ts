@@ -17,7 +17,10 @@ import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, params }) => {
+	// Re-run this workspace-scoped load when the workspace in the URL changes;
+	// a locals-only load declares no such dependency. See +layout.server.ts.
+	void params.workspace;
 	const db = getDb();
 	const now = systemClock.now();
 	const members = await listMembers(db, locals.workspace!.id);

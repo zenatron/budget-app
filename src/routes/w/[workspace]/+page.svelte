@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import Icon from '$lib/components/Icon.svelte';
 	import AccentPicker from '$lib/components/AccentPicker.svelte';
+	import Toggle from '$lib/components/Toggle.svelte';
 	import { accentFor } from '$lib/accent';
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
@@ -15,6 +16,29 @@
 
 	let confirmingDelete = $state(false);
 	let deleteConfirmText = $state('');
+	// The workspace the delete confirmation was opened for, frozen at that moment
+	// (not read live from data). It's submitted with the form and re-checked on
+	// the server, so an armed delete can never act on a workspace you switched to.
+	let armedWorkspaceId = $state<string | null>(null);
+
+	function armDelete() {
+		confirmingDelete = true;
+		armedWorkspaceId = data.workspace.id;
+		deleteConfirmText = '';
+	}
+	function disarmDelete() {
+		confirmingDelete = false;
+		deleteConfirmText = '';
+		armedWorkspaceId = null;
+	}
+
+	// Belt to the server's braces: if the workspace changes while a delete is
+	// armed — should never happen, since the layout recreates this page per
+	// workspace, but this doesn't depend on that — disarm so no stale, dangerous
+	// confirmation is ever left on screen.
+	$effect(() => {
+		if (confirmingDelete && armedWorkspaceId !== data.workspace.id) disarmDelete();
+	});
 
 	const memberSummary = $derived(
 		`${data.memberCount} ${data.memberCount === 1 ? 'person' : 'people'} · approvals and invites`
@@ -45,7 +69,19 @@
 		</form>
 	</div>
 
-	{#if data.pendingCount > 0}
+	<!--
+		One card for everything on your plate, not a stack of separate bubbles: two
+		different to-dos (record what you paid; wait on / give a decision) read as a
+		single "here's what needs you" so nothing is missed and nothing competes.
+		Amber throughout — the shared "attention" colour — with the parts spelled
+		out in the subtitle rather than colour-coded, which kept it calm.
+	-->
+	{#if data.confirmCount > 0 || data.pendingCount > 0}
+		{@const total = data.confirmCount + data.pendingCount}
+		{@const parts = [
+			data.confirmCount > 0 ? `${data.confirmCount} to confirm` : null,
+			data.pendingCount > 0 ? `${data.pendingCount} awaiting a decision` : null
+		].filter(Boolean)}
 		<a
 			href="/w/{slug}/purchases"
 			class="press card flex items-center gap-3.5 p-4"
@@ -53,13 +89,11 @@
 		>
 			<span
 				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-white"
-				style="background: var(--pending)">{data.pendingCount}</span
+				style="background: var(--pending)">{total}</span
 			>
 			<div class="flex-1">
-				<p class="text-[15px] font-semibold" style="color: var(--pending)">
-					{data.pendingCount} awaiting a decision
-				</p>
-				<p class="text-[13px]" style="color: var(--ink-3)">Tap to review in your Ledger</p>
+				<p class="text-[15px] font-semibold" style="color: var(--pending)">Needs your attention</p>
+				<p class="text-[13px]" style="color: var(--ink-3)">{parts.join(' · ')}</p>
 			</div>
 			<Icon name="chevronRight" class="h-4 w-4" style="color: var(--pending)" />
 		</a>
@@ -131,18 +165,7 @@
 			</p>
 		</div>
 		<form method="POST" action="?/billImport" use:submit={{ success: 'Setting saved' }}>
-			<button
-				name="enabled"
-				value={data.billImportEnabled ? 'false' : 'true'}
-				aria-label="Toggle reading bills from PDFs"
-				class="press relative inline-flex h-7 w-11 items-center rounded-full transition-colors"
-				style="background: {data.billImportEnabled ? 'var(--approve)' : 'var(--surface-hi)'}"
-			>
-				<span
-					class="inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform"
-					style="transform: translateX({data.billImportEnabled ? '22px' : '2px'})"
-				></span>
-			</button>
+			<Toggle on={data.billImportEnabled} label="Toggle reading bills from PDFs" />
 		</form>
 	</div>
 
@@ -154,20 +177,7 @@
 			</p>
 		</div>
 		<form method="POST" action="?/bucketSkipApproval" use:submit={{ success: 'Setting saved' }}>
-			<button
-				name="enabled"
-				value={data.bucketChargesSkipApproval ? 'false' : 'true'}
-				aria-label="Toggle bucket charges skip approval"
-				class="press relative inline-flex h-7 w-11 items-center rounded-full transition-colors"
-				style="background: {data.bucketChargesSkipApproval
-					? 'var(--approve)'
-					: 'var(--surface-hi)'}"
-			>
-				<span
-					class="inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform"
-					style="transform: translateX({data.bucketChargesSkipApproval ? '22px' : '2px'})"
-				></span>
-			</button>
+			<Toggle on={data.bucketChargesSkipApproval} label="Toggle bucket charges skip approval" />
 		</form>
 	</div>
 
@@ -204,7 +214,7 @@
 
 			{#if !confirmingDelete}
 				<button
-					onclick={() => (confirmingDelete = true)}
+					onclick={armDelete}
 					class="press mt-3.5 rounded-[var(--r-sm)] px-4 py-2 text-[14px] font-medium"
 					style="color: var(--deny); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--deny) 40%, transparent)"
 				>
@@ -219,6 +229,7 @@
 					}}
 					class="mt-3.5 space-y-3"
 				>
+					<input type="hidden" name="workspaceId" value={armedWorkspaceId} />
 					<label class="block">
 						<span class="text-[13px]" style="color: var(--ink-3)">
 							Type <strong style="color: var(--ink)">{data.workspace.name}</strong> to confirm
@@ -243,10 +254,7 @@
 						</button>
 						<button
 							type="button"
-							onclick={() => {
-								confirmingDelete = false;
-								deleteConfirmText = '';
-							}}
+							onclick={disarmDelete}
 							class="press rounded-[var(--r-sm)] px-4 py-2 text-[14px]"
 							style="color: var(--ink-3)"
 						>

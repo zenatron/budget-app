@@ -86,6 +86,18 @@
 	let sealFrom = $state<string[]>([]);
 	let sealUntil = $state('');
 
+	// When the purchase actually happened. Defaults to today and is capped there —
+	// you can't have already bought something in the future. Only relevant to the
+	// "Already bought" path; left at today it just means "now". This is what makes
+	// that label honest: you really can log a past purchase, on its real date.
+	const todayIso = $derived(iso(todayCal));
+	let spentAt = $state('');
+	// Seed once the timezone-derived today is known, and keep it from ever showing
+	// blank/future without overriding a date the user has chosen.
+	$effect(() => {
+		if (!spentAt) spentAt = todayIso;
+	});
+
 	function toggleSeal(id: string) {
 		sealFrom = sealFrom.includes(id) ? sealFrom.filter((x) => x !== id) : [...sealFrom, id];
 	}
@@ -284,6 +296,24 @@
 					class="flex-1 resize-none border-none bg-transparent p-0 pt-0.5 text-[16px] outline-none placeholder:opacity-40"
 					style="color: var(--ink)"></textarea>
 			</div>
+			<!--
+				Purchase date. Only used by "Already bought" — a request hasn't happened
+				yet, so the server ignores it there. Capped at today; left at today it
+				means "now", so the everyday case needs no interaction.
+			-->
+			<label class="row" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
+				<Icon name="calendar" class="h-5 w-5" style="color: var(--ink-4)" />
+				<span class="flex-1 text-[16px]" style="color: var(--ink-4)">When</span>
+				<input
+					type="date"
+					name="spentAt"
+					aria-label="When you bought it"
+					bind:value={spentAt}
+					max={todayIso}
+					class="border-none bg-transparent p-0 text-right text-[16px] outline-none"
+					style="color: var(--ink)"
+				/>
+			</label>
 		</div>
 
 		{#if data.sealableMembers.length > 0}

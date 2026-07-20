@@ -16,7 +16,10 @@ import type { Actions, PageServerLoad } from './$types';
 
 const deps = { clock: systemClock, ids: uuidv7 };
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, params }) => {
+	// Re-run this workspace-scoped load when the workspace in the URL changes;
+	// a locals-only load declares no such dependency. See +layout.server.ts.
+	void params.workspace;
 	const rows = await listIncome(getDb(), locals.workspace!.id);
 	return {
 		entries: rows.map((r) => {

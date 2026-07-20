@@ -36,6 +36,9 @@ const deps = {
 };
 
 export const load: PageServerLoad = async ({ locals, params }) => {
+	// Also depend on the workspace param so a switch always re-runs this load,
+	// independent of how finely SvelteKit tracks url/params. See +layout.server.ts.
+	void params.workspace;
 	const db = getDb();
 	const now = systemClock.now();
 	const scope = { workspaceId: locals.workspace!.id, viewerId: locals.member!.id };

@@ -167,7 +167,25 @@
 	const pending = $derived(
 		filtered.filter((e): e is P => isPurchase(e) && e.state === 'pending_approval')
 	);
-	const rest = $derived(filtered.filter((e) => !isPurchase(e) || e.state !== 'pending_approval'));
+
+	/*
+	 * "Confirm what you paid": your approved-but-unconfirmed purchases, served
+	 * whole (not from the paged feed) so an old backfilled one can't be missed.
+	 * Only shown on the default view — under a search or filter you want raw
+	 * results, not a standing to-do header — and there, those rows are left to
+	 * appear in Recent normally instead.
+	 */
+	// Filter to purchase-kind so the row snippet's type narrows; the server only
+	// ever puts purchases here, this just tells the compiler that.
+	const confirmItems = $derived(data.awaitingConfirmation.filter(isPurchase));
+	const showConfirm = $derived(!hasFilters && !activeQuery && confirmItems.length > 0);
+	const rest = $derived(
+		filtered.filter((e) => {
+			if (isPurchase(e) && e.state === 'pending_approval') return false;
+			if (showConfirm && isPurchase(e) && e.state === 'approved' && e.mine) return false;
+			return true;
+		})
+	);
 
 	async function loadMore() {
 		if (loadingMore) return;
@@ -601,6 +619,19 @@
 			<div class="mb-6">
 				{#each pending as p, i (p.id)}
 					{@render row(p, i === pending.length - 1)}
+				{/each}
+			</div>
+		{/if}
+
+		{#if showConfirm}
+			<!-- Green like the APPROVED chip these rows carry: greenlit, they just
+			     need the real amount recorded. -->
+			<p class="section-label mt-2 mb-1 px-1" style="color: var(--approve)">
+				Confirm what you paid · {confirmItems.length}
+			</p>
+			<div class="mb-6">
+				{#each confirmItems as p, i (p.id)}
+					{@render row(p, i === confirmItems.length - 1)}
 				{/each}
 			</div>
 		{/if}

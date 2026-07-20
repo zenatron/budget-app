@@ -4,7 +4,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import CommandPaletteOverlay from '$lib/components/CommandPaletteOverlay.svelte';
-	import { paletteOpen } from '$lib/command-palette-state.svelte';
+	import { paletteOpen, close as closePalette } from '$lib/command-palette-state.svelte';
 	import { dismiss } from '$lib/actions/dismiss';
 	import { toastError } from '$lib/toast-state.svelte';
 	import { accentFor } from '$lib/accent';
@@ -27,6 +27,14 @@
 		if (section === '') return pathname === base || pathname === `${base}/`;
 		return pathname.startsWith(`${base}/${section}`);
 	}
+
+	// The command palette is global state, not page state, so it survives a
+	// workspace switch — and its last answer is about the workspace you left.
+	// Close it on switch so a stale response can't linger under the new URL.
+	$effect(() => {
+		void slug;
+		closePalette();
+	});
 
 	$effect(() => {
 		const source = new EventSource(`/w/${slug}/events`);

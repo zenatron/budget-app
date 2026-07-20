@@ -64,7 +64,7 @@ export interface LedgerOpts {
 }
 
 /** Purchases sort by when they happened, falling back through their lifecycle. */
-const purchaseAt = sql`coalesce(${purchase.completedAt}, ${purchase.requestedAt}, ${purchase.createdAt})`;
+const purchaseAt = sql`coalesce(${purchase.completedAt}, ${purchase.decidedAt}, ${purchase.requestedAt}, ${purchase.createdAt})`;
 
 export async function listLedger(
 	db: Db,
