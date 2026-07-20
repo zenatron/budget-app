@@ -46,7 +46,8 @@ import {
 	addTransaction,
 	loadOwnBucket
 } from '$lib/server/repo/buckets';
-import { addIncome, listIncome } from '$lib/server/repo/income';
+import { addIncome, listIncome, updateIncome, deleteIncome } from '$lib/server/repo/income';
+import { setBudget, schedulableBudgetMonths } from '$lib/server/repo/budgets';
 import {
 	createRule,
 	updateRule,
@@ -558,6 +559,56 @@ export const TOOLS: McpTool[] = [
 						.join('\n')
 				: 'No category budgets set for this month.';
 			return { text, data };
+		}
+	},
+	{
+		name: 'set_budget',
+		description:
+			'Set a monthly budget for a category (or the overall budget). Only workspace owners can. Effective this month by default, or a future month (YYYY-MM, up to 12 months out). Replaces the budget in force from that month; past months are untouched.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				amount: { type: 'string', description: 'Budget amount, decimal.' },
+				category_id: {
+					type: 'string',
+					description: 'Category to budget (see list_categories). Omit for the overall budget.'
+				},
+				effective_month: {
+					type: 'string',
+					description: 'Month it takes effect, YYYY-MM. Defaults to this month.'
+				}
+			},
+			required: ['amount'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			if (ctx.authed.member.role !== 'owner') {
+				return { text: 'Only a workspace owner can set budgets.', isError: true };
+			}
+			const amount = money(ctx, required(args, 'amount'));
+			if (!amount.isPositive) return { text: 'Budget must be positive.', isError: true };
+
+			const tz = ctx.authed.workspace.timezone;
+			const today = calDateInZone(ctx.now, tz);
+			const allowed = schedulableBudgetMonths(today);
+			const chosen = str(args, 'effective_month') ?? allowed[0];
+			if (!allowed.includes(chosen)) {
+				return {
+					text: `effective_month must be between ${allowed[0]} and ${allowed.at(-1)} (this month through +12).`,
+					isError: true
+				};
+			}
+			await setBudget(ctx.db, ctx.deps.ids, {
+				workspaceId: ctx.authed.workspace.id,
+				categoryId: str(args, 'category_id') ?? null,
+				amountMinor: amount.minor,
+				effectiveFrom: `${chosen}-01`
+			});
+			return {
+				text: `Set ${str(args, 'category_id') ? 'category' : 'overall'} budget to ${amount.format()} effective ${chosen}.`,
+				data: { amount: amount.format(), effective_month: chosen }
+			};
 		}
 	},
 	{
@@ -1323,6 +1374,60 @@ export const TOOLS: McpTool[] = [
 				text: `Recorded ${amount.format()} from ${required(args, 'source')}.`,
 				data: { source: required(args, 'source'), amount: amount.format() }
 			};
+		}
+	},
+	{
+		name: 'update_income',
+		description:
+			'Update an income entry you recorded — its source, amount, date, or note. Get the id from list_income.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				income_id: { type: 'string' },
+				source: { type: 'string' },
+				amount: { type: 'string' },
+				received_at: { type: 'string', description: 'Date received, YYYY-MM-DD.' },
+				note: { type: 'string' }
+			},
+			required: ['income_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'income_id');
+			const tz = ctx.authed.workspace.timezone;
+			const changes: {
+				source?: string;
+				amountMinor?: bigint;
+				receivedAt?: Date;
+				note?: string | null;
+			} = {};
+			if (str(args, 'source')) changes.source = str(args, 'source');
+			if (str(args, 'amount')) changes.amountMinor = money(ctx, str(args, 'amount')!).minor;
+			if (str(args, 'received_at')) changes.receivedAt = parseDateArg(str(args, 'received_at'), tz);
+			if (args.note !== undefined) changes.note = str(args, 'note') ?? null;
+			const ok = await updateIncome(ctx.db, scopeOf(ctx), id, changes);
+			if (!ok) {
+				return { text: `No income ${id} that you recorded (nothing to change).`, isError: true };
+			}
+			return { text: `Updated income ${id}.`, data: { income_id: id } };
+		}
+	},
+	{
+		name: 'delete_income',
+		description: 'Delete an income entry you recorded. Get the id from list_income.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: { income_id: { type: 'string' } },
+			required: ['income_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'income_id');
+			const ok = await deleteIncome(ctx.db, scopeOf(ctx), id);
+			if (!ok) return { text: `No income ${id} that you recorded.`, isError: true };
+			return { text: `Deleted income ${id}.`, data: { income_id: id } };
 		}
 	}
 ];

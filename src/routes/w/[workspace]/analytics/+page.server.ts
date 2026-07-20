@@ -1,5 +1,5 @@
 import { error, fail } from '@sveltejs/kit';
-import { and, asc, eq, gt, isNull, lt, or } from 'drizzle-orm';
+import { and, asc, eq, gt, isNull } from 'drizzle-orm';
 import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
 import { budget, category } from '$lib/server/db/schema';
@@ -32,6 +32,7 @@ import {
 	verdictTotals
 } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
+import { setBudget } from '$lib/server/repo/budgets';
 import { savingsInPeriod, totalSaved } from '$lib/server/repo/buckets';
 import { listCategories } from '$lib/server/repo/workspaces';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
@@ -472,53 +473,13 @@ export const actions: Actions = {
 		}
 		const from = `${chosen}-01`;
 
-		const scope = and(
-			eq(budget.workspaceId, locals.workspace!.id),
-			eq(budget.period, 'month'),
-			categoryId === null ? isNull(budget.categoryId) : eq(budget.categoryId, categoryId)
-		);
-
-		/*
-		 * Budgets are a timeline, not a single value. Reads already select the row
-		 * effective for the month being viewed; the writer used to delete every row
-		 * and re-anchor to the current month, which both destroyed past months'
-		 * budget lines and made scheduling impossible.
-		 *
-		 * Insert closes the open range at `from` and inherits the start of whatever
-		 * is already scheduled after it, so ranges stay adjacent and non-overlapping.
-		 */
-		await db.transaction(async (tx) => {
-			// Replacing a budget that already starts exactly here.
-			await tx.delete(budget).where(and(scope, eq(budget.effectiveFrom, from)));
-
-			const [next] = await tx
-				.select({ from: budget.effectiveFrom })
-				.from(budget)
-				.where(and(scope, gt(budget.effectiveFrom, from)))
-				.orderBy(asc(budget.effectiveFrom))
-				.limit(1);
-
-			// Truncate the range this one starts inside of.
-			await tx
-				.update(budget)
-				.set({ effectiveTo: from })
-				.where(
-					and(
-						scope,
-						lt(budget.effectiveFrom, from),
-						or(isNull(budget.effectiveTo), gt(budget.effectiveTo, from))
-					)
-				);
-
-			await tx.insert(budget).values({
-				id: uuidv7.newId(),
-				workspaceId: locals.workspace!.id,
-				categoryId,
-				period: 'month',
-				amountMinor: amount.minor,
-				effectiveFrom: from,
-				effectiveTo: next?.from ?? null
-			});
+		// Timeline write (close the open range, inherit the next start, replace an
+		// exact match) lives in one place so the MCP set_budget tool shares it.
+		await setBudget(db, uuidv7, {
+			workspaceId: locals.workspace!.id,
+			categoryId,
+			amountMinor: amount.minor,
+			effectiveFrom: from
 		});
 		return { ok: true };
 	},
