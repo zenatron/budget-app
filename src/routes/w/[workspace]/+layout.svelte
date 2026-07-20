@@ -236,9 +236,16 @@
 			<CommandPaletteOverlay currency={data.workspace.currency} />
 		{/if}
 
+		<!--
+			translateZ(0) is load-bearing, not decoration: this bar is position:fixed
+			*and* carries a backdrop-filter (.material). On iOS Safari that pairing
+			detaches during momentum scroll — the bar renders at a stale offset until
+			the scroll settles, reading as the tab bar "floating up" from the bottom.
+			Promoting it to its own compositing layer keeps it pinned to the viewport.
+		-->
 		<nav
 			class="material fixed right-0 bottom-0 left-0 z-20"
-			style="padding-bottom: max(env(safe-area-inset-bottom, 0px), 6px); box-shadow: 0 -0.5px 0 var(--hairline)"
+			style="padding-bottom: max(env(safe-area-inset-bottom, 0px), 6px); box-shadow: 0 -0.5px 0 var(--hairline); transform: translateZ(0)"
 		>
 			<div class="mx-auto flex max-w-3xl items-start justify-around px-2 pt-1.5">
 				{#each leftTabs as tab (tab.section)}
