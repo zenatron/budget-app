@@ -40,6 +40,16 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 		setPending(true);
 
 		return async ({ result, update }) => {
+			if (result.type === 'redirect') {
+				// A successful action that redirects: we're leaving this page. Keep the
+				// form disabled through the navigation — clearing pending here flips the
+				// buttons back to live while the (often slow) destination load is still
+				// in flight, and a second tap then fires a duplicate submit that can
+				// wedge the navigation, stranding the progress bar on a page whose
+				// submit already succeeded.
+				await applyAction(result);
+				return;
+			}
 			setPending(false);
 			if (result.type === 'success') {
 				if (opts.success) toastSuccess(opts.success);
@@ -52,10 +62,8 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 				}
 				await update();
 			} else {
-				// Redirects and errors: let SvelteKit do its normal thing.
-				if (result.type === 'error') {
-					toastError(result.error?.message ?? 'Something went wrong. Try again.');
-				}
+				// result.type === 'error': let SvelteKit render its error page.
+				toastError(result.error?.message ?? 'Something went wrong. Try again.');
 				await applyAction(result);
 			}
 		};

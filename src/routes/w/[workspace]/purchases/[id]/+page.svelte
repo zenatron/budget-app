@@ -19,6 +19,14 @@
 	function fmtDate(iso: string) {
 		return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
+	// ISO instant -> the local calendar day, as a <input type="date"> value. Used to
+	// seed "Mark as bought" with the purchase's original date so completing it keeps
+	// that date instead of silently stamping today when the field is left untouched.
+	function toDateValue(iso: string) {
+		const d = new Date(iso);
+		const pad = (n: number) => String(n).padStart(2, '0');
+		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+	}
 	function fmtDateLong(iso: string) {
 		return new Date(iso).toLocaleDateString(undefined, {
 			weekday: 'long',
@@ -438,7 +446,13 @@
 						</label>
 						<label class="block">
 							<span class="section-label mb-1.5 block">On</span>
-							<input name="finalDate" type="date" aria-label="Date" class="field text-[16px]" />
+							<input
+								name="finalDate"
+								type="date"
+								aria-label="Date"
+								value={p.requestedAt ? toDateValue(p.requestedAt) : ''}
+								class="field text-[16px]"
+							/>
 						</label>
 					</div>
 					<button class="btn btn-accent w-full">Complete purchase</button>
