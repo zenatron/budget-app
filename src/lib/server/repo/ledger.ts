@@ -94,10 +94,17 @@ export async function listLedger(
 		if (opts.from) purchaseWhere.push(gte(purchase.completedAt, opts.from));
 		if (opts.to) purchaseWhere.push(lt(purchase.completedAt, opts.to));
 	} else {
-		// purchaseAt is an expression, not a column, so bind through sql`` rather
-		// than gte()/lt() — those want a column to infer the driver encoding from.
-		if (opts.from) purchaseWhere.push(sql`${purchaseAt} >= ${opts.from}`);
-		if (opts.to) purchaseWhere.push(sql`${purchaseAt} < ${opts.to}`);
+		// purchaseAt is an expression, not a column, so there's no timestamptz
+		// mapper to bind a Date through (gte()/lt() rely on the column for that).
+		// A bare `${opts.from}` here serializes the Date via Date.toString() —
+		// "Mon Jun 15 2026 …" — which Postgres can't parse as timestamptz, so the
+		// whole query 500s. Send an ISO string and cast it explicitly instead.
+		// This is the only date path a manual ledger filter takes (basis=activity);
+		// analytics drill-throughs pin basis=spend and hit the gte() path above,
+		// which is why the bug only surfaced when filtering by hand.
+		if (opts.from)
+			purchaseWhere.push(sql`${purchaseAt} >= ${opts.from.toISOString()}::timestamptz`);
+		if (opts.to) purchaseWhere.push(sql`${purchaseAt} < ${opts.to.toISOString()}::timestamptz`);
 	}
 
 	const purchaseKeys = db
