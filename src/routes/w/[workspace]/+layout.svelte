@@ -324,11 +324,23 @@
 	*/
 	nav {
 		transform: translateZ(0);
-		transition: transform 0.2s ease;
+		transition:
+			transform 0.2s ease,
+			opacity 0.2s ease,
+			visibility 0.2s;
 	}
-	/* Keyboard up: slide the bar fully off-screen (see keyboardOpen in the script). */
+	/*
+		Keyboard up: slide the bar down AND stop rendering it (opacity + visibility).
+		The translate alone isn't enough — the middle "+" is a raised FAB that
+		overflows the top of the nav's box, so sliding down by the nav's own height
+		leaves that overhang on screen, peeking above the keyboard. opacity +
+		visibility removes it regardless of the FAB's geometry; visibility is
+		transitioned so it flips to hidden only after the fade completes.
+	*/
 	nav.kb-hidden {
 		transform: translateY(100%);
+		opacity: 0;
+		visibility: hidden;
 		pointer-events: none;
 	}
 </style>
