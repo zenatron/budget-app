@@ -76,6 +76,30 @@
 	// and anything docking beneath it needs the real number.
 	let headerH = $state(0);
 
+	/*
+	 * Hide the bottom bar while the on-screen keyboard is up.
+	 *
+	 * On iOS a position:fixed element is anchored to the *layout* viewport, but
+	 * the keyboard only shrinks the *visual* viewport — so `bottom: 0` pins the
+	 * bar to the bottom of the full-height page, behind the keyboard, and Safari
+	 * shifts composited fixed elements during scroll, making it drift up and rest
+	 * above the keyboard. You don't need the tab nav while typing anyway, so we
+	 * detect the keyboard via visualViewport (the gap between it and the layout
+	 * viewport) and translate the bar out of view until the keyboard closes.
+	 */
+	let keyboardOpen = $state(false);
+	$effect(() => {
+		const vv = window.visualViewport;
+		if (!vv) return;
+		const onChange = () => {
+			// A gap this large is a keyboard, not browser chrome (which is < ~100px).
+			keyboardOpen = window.innerHeight - vv.height > 140;
+		};
+		vv.addEventListener('resize', onChange);
+		onChange();
+		return () => vv.removeEventListener('resize', onChange);
+	});
+
 	// Resolved from the workspaces list by URL slug, for the same reason as
 	// wsName above: data.workspace lags during client-side navigation, so
 	// reading it directly painted the new workspace in the old one's accent.
@@ -236,16 +260,12 @@
 			<CommandPaletteOverlay currency={data.workspace.currency} />
 		{/if}
 
-		<!--
-			translateZ(0) is load-bearing, not decoration: this bar is position:fixed
-			*and* carries a backdrop-filter (.material). On iOS Safari that pairing
-			detaches during momentum scroll — the bar renders at a stale offset until
-			the scroll settles, reading as the tab bar "floating up" from the bottom.
-			Promoting it to its own compositing layer keeps it pinned to the viewport.
-		-->
+		<!-- Bottom tab bar. Compositing + keyboard-hide behavior is in <style> below. -->
 		<nav
 			class="material fixed right-0 bottom-0 left-0 z-20"
-			style="padding-bottom: max(env(safe-area-inset-bottom, 0px), 6px); box-shadow: 0 -0.5px 0 var(--hairline); transform: translateZ(0)"
+			class:kb-hidden={keyboardOpen}
+			aria-hidden={keyboardOpen}
+			style="padding-bottom: max(env(safe-area-inset-bottom, 0px), 6px); box-shadow: 0 -0.5px 0 var(--hairline)"
 		>
 			<div class="mx-auto flex max-w-3xl items-start justify-around px-2 pt-1.5">
 				{#each leftTabs as tab (tab.section)}
@@ -295,3 +315,20 @@
 		</nav>
 	</div>
 {/key}
+
+<style>
+	/*
+		translateZ(0) is load-bearing, not decoration: the bar is position:fixed and
+		carries a backdrop-filter (.material), a pairing iOS Safari detaches during
+		momentum scroll. Its own compositing layer keeps it pinned.
+	*/
+	nav {
+		transform: translateZ(0);
+		transition: transform 0.2s ease;
+	}
+	/* Keyboard up: slide the bar fully off-screen (see keyboardOpen in the script). */
+	nav.kb-hidden {
+		transform: translateY(100%);
+		pointer-events: none;
+	}
+</style>
