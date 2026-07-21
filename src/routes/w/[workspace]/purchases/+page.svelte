@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
+	import { scale, fade } from 'svelte/transition';
 	import Icon from '$lib/components/Icon.svelte';
 	import Money from '$lib/components/Money.svelte';
 	import { dismiss } from '$lib/actions/dismiss';
@@ -24,6 +25,13 @@
 	const to = $derived(page.url.searchParams.get('to') ?? '');
 	const activeQuery = $derived(page.url.searchParams.get('q') ?? '');
 	let showFilter = $state(false);
+
+	// Filter-chip states. Selected = ink fill / paper text (ink is the primary
+	// action color in this theme); unselected = hairline outline on surface-2.
+	const SELECTED =
+		'color: var(--paper); background: var(--ink); box-shadow: none; font-weight: 600';
+	const UNSELECTED =
+		'color: var(--ink-2); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--hairline); font-weight: 500';
 	let loadingMore = $state(false);
 
 	/*
@@ -108,13 +116,14 @@
 		searchTimer = setTimeout(() => void navigateWith({ q: search }, { replace: true }), 250);
 	}
 
+	// These commit a filter but leave the modal open, so you can stack a date, a
+	// member and a category in one visit and see each selection land. The modal
+	// closes on Done / dismiss, not on each pick.
 	function pickCategory(id: string) {
-		showFilter = false;
 		void navigateWith({ category: id });
 	}
 
 	function pickMember(id: string) {
-		showFilter = false;
 		void navigateWith({ member: id });
 	}
 
@@ -130,13 +139,11 @@
 	}
 
 	function clearFilters() {
-		showFilter = false;
 		void navigateWith({ category: '', member: '', from: '', to: '', basis: '' });
 	}
 
 	/** Reloads from the server: it changes what gets paged over, not just shown. */
 	function toggleMovements() {
-		showFilter = false;
 		void navigateWith({ movements: data.includeMovements ? '' : '1' });
 	}
 
@@ -428,143 +435,173 @@
 	{/if}
 
 	{#if showFilter}
-		<div class="fixed inset-0 z-30" use:dismiss={() => (showFilter = false)}></div>
-		<!--
-			Scrolls rather than grows: with a date range, every member and every
-			category it is taller than a phone, and a menu that runs off the bottom
-			of the screen hides the rows you opened it to reach.
-		-->
+		<!-- Centered modal, mirroring the intelligence palette — a made object, not
+			a settings dropdown. Chips commit a filter on tap; the panel stays open so
+			you can stack a date, a member and a category in one visit. -->
 		<div
-			class="card-lg absolute right-4 z-40 mt-1 max-h-[70vh] w-72 overflow-y-auto p-1.5"
-			style="box-shadow: var(--shadow-float); background: var(--surface)"
-			role="menu"
+			class="fixed inset-0 z-50"
+			style="background: oklch(0 0 0 / 0.28)"
+			use:dismiss={() => (showFilter = false)}
+			transition:fade={{ duration: 140 }}
+		></div>
+		<div
+			class="fixed inset-x-4 top-[10vh] z-50 mx-auto flex max-h-[80vh] max-w-md flex-col"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Filter the ledger"
+			tabindex="-1"
+			onkeydown={(e) => {
+				if (e.key === 'Escape') showFilter = false;
+			}}
+			transition:scale={{ start: 0.96, duration: 170 }}
 		>
-			<!--
-				A checkmark, not a pill or a switch: this is a menu, so the row commits
-				on tap like every category below it. It used to carry a "Shown"/"Hidden"
-				caption *and* the tick — the state said twice, once in words that changed
-				under your thumb as you tapped.
-			-->
-			<button
-				onclick={toggleMovements}
-				role="menuitemcheckbox"
-				aria-checked={data.includeMovements}
-				class="press flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
+			<div
+				class="card-lg flex min-h-0 flex-col overflow-hidden"
+				style="box-shadow: var(--shadow-float); background: var(--surface)"
 			>
-				<span style="color: var(--ink)">Bucket activity</span>
-				<Icon
-					name="checkmark"
-					class="ml-auto h-4 w-4 shrink-0 {data.includeMovements ? '' : 'invisible'}"
-					style="color: var(--ink)"
-				/>
-			</button>
-			<div class="my-1 h-px" style="background: var(--hairline)"></div>
-
-			<p class="section-label px-3 pt-2 pb-1.5">Date range</p>
-			<div class="flex items-center gap-2 px-3 pb-2">
-				<label class="flex-1">
-					<span class="sr-only">From date</span>
-					<input
-						type="date"
-						value={from}
-						max={to || undefined}
-						onchange={(e) => setRange({ from: e.currentTarget.value })}
-						class="field px-2 py-1.5 text-[13px]"
-					/>
-				</label>
-				<span class="text-[13px]" style="color: var(--ink-4)">to</span>
-				<label class="flex-1">
-					<span class="sr-only">To date</span>
-					<input
-						type="date"
-						value={to}
-						min={from || undefined}
-						onchange={(e) => setRange({ to: e.currentTarget.value })}
-						class="field px-2 py-1.5 text-[13px]"
-					/>
-				</label>
-			</div>
-
-			{#if data.members.length > 1}
-				<div class="my-1 h-px" style="background: var(--hairline)"></div>
-				<p class="section-label px-3 pt-2 pb-1">Member</p>
-				<button
-					onclick={() => pickMember('')}
-					role="menuitemradio"
-					aria-checked={!member}
-					class="press flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
-					style={!member ? 'background: oklch(0.28 0.03 65 / 0.06)' : ''}
-				>
-					<span style="color: var(--ink)">Anyone</span>
-					<Icon
-						name="checkmark"
-						class="ml-auto h-4 w-4 shrink-0 {member ? 'invisible' : ''}"
-						style="color: var(--ink)"
-					/>
-				</button>
-				{#each data.members as m (m.id)}
+				<!-- Masthead header -->
+				<div class="flex items-center justify-between px-5 pt-4 pb-3.5">
+					<h2 class="font-[family-name:var(--font-display)] text-[22px]" style="color: var(--ink)">
+						Filter
+					</h2>
 					<button
-						onclick={() => pickMember(m.id)}
-						role="menuitemradio"
-						aria-checked={member === m.id}
-						class="press flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
-						style={member === m.id ? 'background: oklch(0.28 0.03 65 / 0.06)' : ''}
+						onclick={() => (showFilter = false)}
+						class="press -mr-1 flex h-8 w-8 items-center justify-center rounded-full"
+						style="color: var(--ink-4)"
+						aria-label="Close"
 					>
-						<span style="color: var(--ink)">{m.name}</span>
-						<Icon
-							name="checkmark"
-							class="ml-auto h-4 w-4 shrink-0 {member === m.id ? '' : 'invisible'}"
-							style="color: var(--ink)"
-						/>
+						<Icon name="xmark" class="h-4 w-4" />
 					</button>
-				{/each}
-			{/if}
+				</div>
+				<div class="h-px" style="background: var(--hairline)"></div>
 
-			<div class="my-1 h-px" style="background: var(--hairline)"></div>
-			<p class="section-label px-3 pt-2 pb-1">Category</p>
-			<button
-				onclick={() => pickCategory('')}
-				role="menuitemradio"
-				aria-checked={!category}
-				class="press flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
-				style={!category ? 'background: oklch(0.28 0.03 65 / 0.06)' : ''}
-			>
-				<span style="color: var(--ink)">All categories</span>
-				{#if !category}
-					<Icon name="checkmark" class="ml-auto h-4 w-4" style="color: var(--ink)" />
-				{/if}
-			</button>
-			{#each data.categories as c (c.id)}
-				<button
-					onclick={() => pickCategory(c.id)}
-					role="menuitemradio"
-					aria-checked={category === c.id}
-					class="press flex w-full items-center gap-2 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
-					style={category === c.id ? 'background: oklch(0.28 0.03 65 / 0.06)' : ''}
-				>
-					<span style="color: var(--ink)">{c.icon} {c.name}</span>
-					<Icon
-						name="checkmark"
-						class="ml-auto h-4 w-4 shrink-0 {category === c.id ? '' : 'invisible'}"
-						style="color: var(--ink)"
-					/>
-				</button>
-			{/each}
-			<!-- The rows with no category at all — what analytics totals as "Other". -->
-			<button
-				onclick={() => pickCategory(NO_CATEGORY)}
-				role="menuitemradio"
-				aria-checked={category === NO_CATEGORY}
-				class="press flex w-full items-center gap-2 rounded-[12px] px-3 py-2.5 text-left text-[15px]"
-				style={category === NO_CATEGORY ? 'background: oklch(0.28 0.03 65 / 0.06)' : ''}
-			>
-				<span style="color: var(--ink)">Other</span>
-				<Icon
-					name="checkmark"
-					class="ml-auto h-4 w-4 shrink-0 {category === NO_CATEGORY ? '' : 'invisible'}"
-					style="color: var(--ink)"
-				/>
-			</button>
+				<!-- Scrollable body -->
+				<div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+					<!-- Date range -->
+					<div>
+						<p class="section-label mb-2">Date range</p>
+						<div class="flex items-center gap-2">
+							<label class="flex-1">
+								<span class="sr-only">From date</span>
+								<input
+									type="date"
+									value={from}
+									max={to || undefined}
+									onchange={(e) => setRange({ from: e.currentTarget.value })}
+									class="field text-[14px]"
+								/>
+							</label>
+							<span class="text-[13px]" style="color: var(--ink-4)">to</span>
+							<label class="flex-1">
+								<span class="sr-only">To date</span>
+								<input
+									type="date"
+									value={to}
+									min={from || undefined}
+									onchange={(e) => setRange({ to: e.currentTarget.value })}
+									class="field text-[14px]"
+								/>
+							</label>
+						</div>
+					</div>
+
+					<!-- Member -->
+					{#if data.members.length > 1}
+						<div>
+							<p class="section-label mb-2">Member</p>
+							<div class="flex flex-wrap gap-2">
+								<button
+									onclick={() => pickMember('')}
+									role="radio"
+									aria-checked={!member}
+									class="press chip-btn"
+									style={!member ? SELECTED : UNSELECTED}>Anyone</button
+								>
+								{#each data.members as m (m.id)}
+									{@const on = member === m.id}
+									<button
+										onclick={() => pickMember(m.id)}
+										role="radio"
+										aria-checked={on}
+										class="press chip-btn"
+										style={on ? SELECTED : UNSELECTED}>{m.name}</button
+									>
+								{/each}
+							</div>
+						</div>
+					{/if}
+
+					<!-- Category -->
+					<div>
+						<p class="section-label mb-2">Category</p>
+						<div class="flex flex-wrap gap-2">
+							<button
+								onclick={() => pickCategory('')}
+								role="radio"
+								aria-checked={!category}
+								class="press chip-btn"
+								style={!category ? SELECTED : UNSELECTED}>All</button
+							>
+							{#each data.categories as c (c.id)}
+								{@const on = category === c.id}
+								<button
+									onclick={() => pickCategory(c.id)}
+									role="radio"
+									aria-checked={on}
+									class="press chip-btn"
+									style={on ? SELECTED : UNSELECTED}>{c.icon} {c.name}</button
+								>
+							{/each}
+							<button
+								onclick={() => pickCategory(NO_CATEGORY)}
+								role="radio"
+								aria-checked={category === NO_CATEGORY}
+								class="press chip-btn"
+								style={category === NO_CATEGORY ? SELECTED : UNSELECTED}>Other</button
+							>
+						</div>
+					</div>
+
+					<!-- Bucket activity toggle -->
+					<div class="h-px" style="background: var(--hairline)"></div>
+					<button
+						onclick={toggleMovements}
+						role="switch"
+						aria-checked={data.includeMovements}
+						class="press flex w-full items-center justify-between"
+					>
+						<span class="text-left">
+							<span class="block text-[15px]" style="color: var(--ink)">Bucket activity</span>
+							<span class="block text-[13px]" style="color: var(--ink-4)"
+								>Show money moving in and out of buckets</span
+							>
+						</span>
+						<span
+							class="relative h-[28px] w-[44px] shrink-0 rounded-full transition-colors"
+							style="background: {data.includeMovements ? 'var(--ink)' : 'var(--hairline-strong)'}"
+						>
+							<span
+								class="absolute top-1 left-0 h-5 w-5 rounded-full bg-white shadow-sm transition-transform"
+								style="transform: translateX({data.includeMovements ? '20px' : '4px'})"
+							></span>
+						</span>
+					</button>
+				</div>
+
+				<!-- Footer -->
+				<div class="h-px" style="background: var(--hairline)"></div>
+				<div class="flex items-center justify-between px-5 py-3">
+					<button
+						onclick={clearFilters}
+						disabled={!hasFilters}
+						class="press text-[14px] disabled:opacity-40"
+						style="color: var(--ink-4)">Clear all</button
+					>
+					<button onclick={() => (showFilter = false)} class="btn btn-accent px-5 py-2 text-[14px]"
+						>Done</button
+					>
+				</div>
+			</div>
 		</div>
 	{/if}
 
@@ -659,3 +696,18 @@
 		{/if}
 	{/if}
 </div>
+
+<style>
+	/* Filter chips: rounded, tactile, quick state transition. Selected/unselected
+	   colors are set inline (SELECTED/UNSELECTED) so the same class serves both. */
+	.chip-btn {
+		border-radius: var(--r-full);
+		padding: 0.5rem 0.85rem;
+		font-size: 14px;
+		line-height: 1.1;
+		transition:
+			background 0.12s ease,
+			color 0.12s ease,
+			box-shadow 0.12s ease;
+	}
+</style>
