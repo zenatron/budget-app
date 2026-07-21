@@ -18,7 +18,10 @@
 		on,
 		name = 'enabled',
 		label,
-		onColor = 'var(--approve)'
+		// Ink, not green: an enabled setting isn't a semantic "approved" state, and
+		// the theme reserves colour for state that must read instantly. Ink is the
+		// primary action colour, and matches the filter modal's toggle.
+		onColor = 'var(--ink)'
 	}: {
 		on: boolean;
 		/** Submitted form field name. */
