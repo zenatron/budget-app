@@ -12,6 +12,7 @@
 	let viewing = $state(false);
 	let slug = $derived(page.params.workspace);
 	let editing = $state(false);
+	let editingNote = $state(false);
 	let deciding = $state<'approve' | 'deny' | null>(null);
 	let showDeny = $state(false);
 	const p = $derived(data.purchase);
@@ -536,6 +537,42 @@
 			</div>
 		{/if}
 
+		{#if data.can.editNote}
+			<!-- The amount is settled, but the note is annotation — still editable, and
+			     the change is written to the history. -->
+			<div class="card p-5">
+				<button
+					onclick={() => (editingNote = !editingNote)}
+					class="press flex w-full items-center justify-between text-[15px]"
+					style="color: var(--ink)"
+				>
+					<span class="font-medium">{p.note ? 'Edit note' : 'Add a note'}</span>
+					<Icon
+						name="chevronDown"
+						class="h-4 w-4 transition-transform duration-200 {editingNote ? 'rotate-180' : ''}"
+						style="color: var(--ink-4)"
+					/>
+				</button>
+				{#if editingNote}
+					<form
+						method="POST"
+						action="?/editNote"
+						use:submit={{ success: 'Note saved', onSuccess: () => (editingNote = false) }}
+						class="mt-3 space-y-3"
+					>
+						<textarea
+							name="note"
+							aria-label="Note"
+							rows="3"
+							placeholder="Add a note…"
+							class="field text-[16px]">{p.note ?? ''}</textarea
+						>
+						<button class="btn btn-ghost w-full">Save note</button>
+					</form>
+				{/if}
+			</div>
+		{/if}
+
 		{#if data.can.refund}
 			<div class="card p-5">
 				<p class="text-[15px] font-semibold" style="color: var(--ink)">Record a refund</p>
@@ -562,10 +599,39 @@
 			<form
 				method="POST"
 				action="?/cancel"
-				use:submit={{ confirm: 'Cancel this purchase?', success: 'Purchase cancelled' }}
+				use:submit={{
+					confirm: {
+						title: 'Cancel this purchase?',
+						body: "It won't be requested or recorded.",
+						confirmLabel: 'Yes, cancel',
+						cancelLabel: "Don't cancel",
+						tone: 'danger'
+					},
+					success: 'Purchase cancelled'
+				}}
 				class="pt-1 text-center"
 			>
 				<button class="btn btn-plain" style="color: var(--ink-4)">Cancel this purchase</button>
+			</form>
+		{/if}
+
+		{#if data.can.delete}
+			<form
+				method="POST"
+				action="?/delete"
+				use:submit={{
+					confirm: {
+						title: 'Remove this entry?',
+						body: data.isRefund
+							? "The refund is deleted for everyone and the original goes back to paid. This can't be undone."
+							: "It's deleted for everyone, and any refunds against it go too. This can't be undone.",
+						confirmLabel: 'Remove',
+						tone: 'danger'
+					}
+				}}
+				class="text-center"
+			>
+				<button class="btn btn-plain" style="color: var(--deny)">Remove this entry</button>
 			</form>
 		{/if}
 

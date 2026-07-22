@@ -1,8 +1,8 @@
 import { fail } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { and, count, eq, isNotNull } from 'drizzle-orm';
 import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
-import { recurringRule } from '$lib/server/db/schema';
+import { purchase, recurringRule } from '$lib/server/db/schema';
 import { Money, InvalidMoneyError } from '$lib/domain/money/money';
 import {
 	RecurrenceError,
@@ -59,9 +59,22 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	// a locals-only load declares no such dependency. See +layout.server.ts.
 	void params.workspace;
 	const db = getDb();
-	const [rules, categories] = await Promise.all([
+	const [rules, categories, confirmRow] = await Promise.all([
 		db.select().from(recurringRule).where(eq(recurringRule.workspaceId, locals.workspace!.id)),
-		listCategories(db, locals.workspace!.id)
+		listCategories(db, locals.workspace!.id),
+		// My recurring charges that landed but still need the real amount recorded —
+		// the ledger's "Confirm what you paid" section is where you clear them.
+		db
+			.select({ count: count() })
+			.from(purchase)
+			.where(
+				and(
+					eq(purchase.workspaceId, locals.workspace!.id),
+					eq(purchase.memberId, locals.member!.id),
+					eq(purchase.state, 'approved'),
+					isNotNull(purchase.recurringRuleId)
+				)
+			)
 	]);
 
 	// Household outflow across every active rule, normalized to a common period.
@@ -75,42 +88,64 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		}
 	}
 
+	const view = rules
+		.filter((r) => r.status !== 'ended')
+		.map((r) => {
+			let parsed: Recurrence | null = null;
+			try {
+				parsed = parseRRule(r.rrule);
+			} catch {
+				/* malformed rule — skip pre-population */
+			}
+			// Every cadence normalized to a per-month figure, so a yearly charge
+			// can sit next to a monthly one on the same scale (and show a "/mo"
+			// subtitle). Falls back to the raw amount for an unparseable rule.
+			const monthlyMinor = parsed
+				? BigInt(Math.round(annualMinor(r.amountMinor, parsed) / 12))
+				: r.amountMinor;
+			return {
+				id: r.id,
+				itemName: r.itemName,
+				amountMinor: r.amountMinor,
+				monthlyMinor,
+				currency: r.currency,
+				cadence: describe(r.rrule),
+				nextAt: r.nextOccurrenceAt?.toISOString() ?? null,
+				status: r.status,
+				autoComplete: r.autoComplete,
+				categoryId: r.categoryId,
+				mine: r.memberId === locals.member!.id,
+				freq: parsed?.freq ?? 'monthly',
+				interval: parsed?.interval ?? 1,
+				monthDay: parsed?.byMonthDay ?? null,
+				byDay: parsed?.byDay ?? [],
+				// The rule's real anchor. The edit form used to default this to
+				// today, which silently re-anchored the schedule on every save —
+				// enough to move a weekly rule onto a different weekday.
+				startDate: parsed
+					? `${parsed.start.y}-${String(parsed.start.m).padStart(2, '0')}-${String(parsed.start.d).padStart(2, '0')}`
+					: null
+			};
+		});
+
+	// Active before paused; within each, soonest next-occurrence first (a rule
+	// with no next date sorts last). The view groups by cadence, but the sort
+	// still decides the order *inside* each group.
+	view.sort((a, b) => {
+		const pausedA = a.status === 'paused' ? 1 : 0;
+		const pausedB = b.status === 'paused' ? 1 : 0;
+		if (pausedA !== pausedB) return pausedA - pausedB;
+		const nextA = a.nextAt ?? '￿';
+		const nextB = b.nextAt ?? '￿';
+		return nextA < nextB ? -1 : nextA > nextB ? 1 : 0;
+	});
+
 	return {
 		currency: locals.workspace!.currency,
 		monthlyTotalMinor: BigInt(Math.round(annual / 12)),
 		yearlyTotalMinor: BigInt(Math.round(annual)),
-		rules: rules
-			.filter((r) => r.status !== 'ended')
-			.map((r) => {
-				let parsed: Recurrence | null = null;
-				try {
-					parsed = parseRRule(r.rrule);
-				} catch {
-					/* malformed rule — skip pre-population */
-				}
-				return {
-					id: r.id,
-					itemName: r.itemName,
-					amountMinor: r.amountMinor,
-					currency: r.currency,
-					cadence: describe(r.rrule),
-					nextAt: r.nextOccurrenceAt?.toISOString() ?? null,
-					status: r.status,
-					autoComplete: r.autoComplete,
-					categoryId: r.categoryId,
-					mine: r.memberId === locals.member!.id,
-					freq: parsed?.freq ?? 'monthly',
-					interval: parsed?.interval ?? 1,
-					monthDay: parsed?.byMonthDay ?? null,
-					byDay: parsed?.byDay ?? [],
-					// The rule's real anchor. The edit form used to default this to
-					// today, which silently re-anchored the schedule on every save —
-					// enough to move a weekly rule onto a different weekday.
-					startDate: parsed
-						? `${parsed.start.y}-${String(parsed.start.m).padStart(2, '0')}-${String(parsed.start.d).padStart(2, '0')}`
-						: null
-				};
-			}),
+		needsConfirmingCount: confirmRow[0].count,
+		rules: view,
 		categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon }))
 	};
 };

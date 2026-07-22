@@ -221,6 +221,7 @@ async function insertEvent(db: Db, ids: IdGenerator, purchaseId: string, ev: Tra
 export interface PurchaseListItem {
 	id: string;
 	itemName: string;
+	note: string | null;
 	merchantName: string | null;
 	state: PurchaseRow['state'];
 	amountMinor: bigint;
@@ -320,6 +321,7 @@ export async function listPurchases(
 	return rows.map((r) => ({
 		id: r.p.id,
 		itemName: r.p.itemName,
+		note: r.p.note,
 		merchantName: r.merchantName,
 		state: r.p.state,
 		amountMinor: r.p.finalAmountMinor ?? r.p.requestedAmountMinor,

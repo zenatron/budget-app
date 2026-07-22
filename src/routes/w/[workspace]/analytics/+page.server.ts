@@ -33,7 +33,7 @@ import {
 } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
 import { setBudget } from '$lib/server/repo/budgets';
-import { savingsInPeriod, totalSaved } from '$lib/server/repo/buckets';
+import { savingsInPeriod, lifetimeSaved } from '$lib/server/repo/buckets';
 import { listCategories } from '$lib/server/repo/workspaces';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
@@ -323,7 +323,7 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 	const [verdicts, earnedMinor, savedMinor] = await Promise.all([
 		verdictTotals(db, scope, now),
 		incomeInPeriod(db, ws.id, allTime, ws.timezone, today),
-		totalSaved(db, ws.id)
+		lifetimeSaved(db, ws.id)
 	]);
 
 	// Budgets that start after the current month — scheduled, not yet in force.

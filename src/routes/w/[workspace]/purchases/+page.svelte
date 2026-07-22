@@ -1,10 +1,13 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { untrack } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { scale, fade } from 'svelte/transition';
 	import Icon from '$lib/components/Icon.svelte';
 	import Money from '$lib/components/Money.svelte';
 	import { dismiss } from '$lib/actions/dismiss';
+	import { swipe } from '$lib/actions/swipe';
+	import { submit } from '$lib/actions/submit';
+	import type { ConfirmSpec } from '$lib/confirm-state.svelte';
 	import { goto } from '$app/navigation';
 	import { formatMinor } from '$lib/money-format';
 	import { NO_CATEGORY } from '$lib/ledger-filters';
@@ -142,10 +145,34 @@
 		void navigateWith({ category: '', member: '', from: '', to: '', basis: '' });
 	}
 
+	// The "Bucket activity" toggle is remembered per user: it's a lasting
+	// preference about how you read the ledger, not a per-visit filter.
+	const MOVEMENTS_KEY = 'ledger-movements';
+
 	/** Reloads from the server: it changes what gets paged over, not just shown. */
 	function toggleMovements() {
-		void navigateWith({ movements: data.includeMovements ? '' : '1' });
+		const next = data.includeMovements ? '' : '1';
+		try {
+			localStorage.setItem(MOVEMENTS_KEY, next === '1' ? '1' : '0');
+		} catch {
+			/* storage unavailable — still applies for this session */
+		}
+		void navigateWith({ movements: next });
 	}
+
+	// Apply the stored preference on first load, unless the URL already says
+	// (e.g. a shared or drill-through link, which wins and updates the pref).
+	onMount(() => {
+		try {
+			if (page.url.searchParams.has('movements')) {
+				localStorage.setItem(MOVEMENTS_KEY, data.includeMovements ? '1' : '0');
+			} else if (localStorage.getItem(MOVEMENTS_KEY) === '1') {
+				void navigateWith({ movements: '1' }, { replace: true });
+			}
+		} catch {
+			/* storage unavailable — no persistence this session */
+		}
+	});
 
 	function clearSearch() {
 		search = '';
@@ -174,6 +201,24 @@
 	const pending = $derived(
 		filtered.filter((e): e is P => isPurchase(e) && e.state === 'pending_approval')
 	);
+
+	// Confirmation shown before a swipe-to-decide finalizes — it surfaces the
+	// requester's note so the approver sees the reason before committing.
+	function decideBody(p: P): string {
+		const head = `${p.itemName} · ${formatMinor(p.amountMinor, p.currency)} · ${p.requesterName}`;
+		return p.note ? `${head}\n“${p.note}”` : `${head}\nNo note provided.`;
+	}
+	function approveSpec(p: P): ConfirmSpec {
+		return { title: 'Approve this request?', body: decideBody(p), confirmLabel: 'Approve' };
+	}
+	function denySpec(p: P): ConfirmSpec {
+		return {
+			title: 'Deny this request?',
+			body: decideBody(p),
+			confirmLabel: 'Deny',
+			tone: 'danger'
+		};
+	}
 
 	/*
 	 * "Confirm what you paid": your approved-but-unconfirmed purchases, served
@@ -271,87 +316,140 @@
 {/snippet}
 
 {#snippet row(p: P, last: boolean)}
-	<a
-		href="/w/{slug}/purchases/{p.id}"
-		class="press flex items-center gap-3 px-1 py-3 {last ? '' : 'hairline'}"
-		style="view-transition-name: vt-card-{p.id}"
+	<!-- Swipe left to reveal a row's primary action: Approve/Deny for a pending
+	     request you can decide, or Confirm for your own approved-but-unconfirmed
+	     charge. Deciding shows a confirmation with the requester's note first;
+	     Confirm opens the detail page to enter what you actually paid. -->
+	{@const decide = p.state === 'pending_approval' && p.canDecide}
+	{@const confirm = p.state === 'approved' && p.mine}
+	{@const swipeW = decide ? 176 : confirm ? 116 : 0}
+	<div
+		class="relative overflow-hidden {last ? '' : 'hairline'}"
+		use:swipe={{ width: swipeW, enabled: swipeW > 0 }}
 	>
-		<!--
+		{#if decide}
+			<div class="absolute inset-y-0 right-0 z-0 flex">
+				<form
+					method="POST"
+					action="/w/{slug}/purchases/{p.id}?/deny"
+					use:submit={{ confirm: denySpec(p), success: 'Denied' }}
+					class="contents"
+				>
+					<button
+						class="press flex h-full w-[88px] flex-col items-center justify-center gap-1 text-[13px] font-semibold"
+						style="background: var(--deny); color: var(--paper)"
+					>
+						<Icon name="xmark" class="h-4 w-4" /> Deny
+					</button>
+				</form>
+				<form
+					method="POST"
+					action="/w/{slug}/purchases/{p.id}?/approve"
+					use:submit={{ confirm: approveSpec(p), success: 'Approved' }}
+					class="contents"
+				>
+					<button
+						class="press flex h-full w-[88px] flex-col items-center justify-center gap-1 text-[13px] font-semibold"
+						style="background: var(--approve); color: var(--paper)"
+					>
+						<Icon name="checkmark" class="h-4 w-4" /> Approve
+					</button>
+				</form>
+			</div>
+		{:else if confirm}
+			<a
+				href="/w/{slug}/purchases/{p.id}"
+				class="absolute inset-y-0 right-0 z-0 flex items-center gap-1.5 pr-4 pl-5 text-[14px] font-semibold"
+				style="background: var(--approve); color: var(--paper)"
+			>
+				<Icon name="checkmark" class="h-4 w-4" /> Confirm
+			</a>
+		{/if}
+		<a
+			href="/w/{slug}/purchases/{p.id}"
+			data-swipe-content
+			class="press relative z-10 flex items-center gap-3 px-1 py-3"
+			style="view-transition-name: vt-card-{p.id}; background: var(--paper); touch-action: pan-y"
+		>
+			<!--
 			A refund borrows the original purchase's photo and dims it under a
 			reversal arrow: you recognize the item at a glance, and it can't be
 			mistaken for a second purchase of the same thing. With no original
 			photo, the arrow stands in for the generic bag.
 		-->
-		{#if p.thumbBlobId}
-			<span class="relative h-10 w-10 shrink-0">
-				<!--
+			{#if p.thumbBlobId}
+				<span class="relative h-10 w-10 shrink-0">
+					<!--
 					Cropped from the top, not the centre. At 40px a letterboxed thumb
 					would shrink the content to nothing, so the square crop stays — but
 					receipts, bills and product shots all carry the identifying thing
 					(logo, vendor, item) at the top, and centre-cropping a receipt
 					showed a band of blank paper.
 				-->
-				<img
-					src="/w/{slug}/blobs/{p.thumbBlobId}"
-					alt=""
-					class="h-10 w-10 rounded-[12px] object-cover object-top"
-					style="box-shadow: inset 0 0 0 0.5px var(--hairline); {p.isRefund
-						? 'filter: grayscale(0.45) brightness(0.82)'
-						: ''}"
-				/>
-				{#if p.isRefund}
-					<span class="absolute inset-0 flex items-center justify-center">
-						<Icon name="reverse" class="h-[18px] w-[18px] text-white drop-shadow" />
-					</span>
-				{/if}
-			</span>
-		{:else}
-			<span
-				class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] text-[18px]"
-				style="background: var(--surface-2); box-shadow: inset 0 0 0 0.5px var(--hairline)"
-			>
-				<Icon
-					name={p.isRefund ? 'reverse' : 'bag'}
-					class="h-[18px] w-[18px]"
-					style="color: var(--ink-4)"
-				/>
-			</span>
-		{/if}
-		<div class="min-w-0 flex-1">
-			<div class="flex items-center gap-1.5">
-				<span class="truncate text-[16px] font-medium" style="color: var(--ink)">{p.itemName}</span>
-				{#if p.sealed}
-					<span
-						role="img"
-						title="Sealed — hidden from some members"
-						aria-label="Sealed — hidden from some members"
-						class="contents"
-					>
-						<Icon name="lock" class="h-3 w-3 shrink-0" style="color: var(--seal)" />
-					</span>
-				{/if}
-			</div>
-			<div class="mt-0.5 flex items-center gap-1.5 text-[13px]" style="color: var(--ink-4)">
-				{#if p.categoryIcon}<span>{p.categoryIcon}</span>{/if}
-				<span>{p.requesterName}</span>
-				<span>· {fmtDate(p.at)}</span>
-				{#if p.state === 'pending_approval' && p.waitingDays > 0}
-					<span style={p.stale ? 'color: var(--pending)' : ''}
-						>· {p.waitingDays}d{p.stale ? ' · stale' : ''}</span
-					>
-				{/if}
-			</div>
-		</div>
-		<div class="flex shrink-0 flex-col items-end gap-0.5">
-			<Money minor={p.amountMinor} currency={p.currency} class="text-[16px] font-semibold" />
-			{#if p.state !== 'completed' && stateLabel[p.state]}
+					<img
+						src="/w/{slug}/blobs/{p.thumbBlobId}"
+						alt=""
+						class="h-10 w-10 rounded-[12px] object-cover object-top"
+						style="box-shadow: inset 0 0 0 0.5px var(--hairline); {p.isRefund
+							? 'filter: grayscale(0.45) brightness(0.82)'
+							: ''}"
+					/>
+					{#if p.isRefund}
+						<span class="absolute inset-0 flex items-center justify-center">
+							<Icon name="reverse" class="h-[18px] w-[18px] text-white drop-shadow" />
+						</span>
+					{/if}
+				</span>
+			{:else}
 				<span
-					class="text-[10px] font-semibold tracking-[0.04em] uppercase"
-					style="color: var({stateVar[p.state]})">{stateLabel[p.state]}</span
+					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] text-[18px]"
+					style="background: var(--surface-2); box-shadow: inset 0 0 0 0.5px var(--hairline)"
 				>
+					<Icon
+						name={p.isRefund ? 'reverse' : 'bag'}
+						class="h-[18px] w-[18px]"
+						style="color: var(--ink-4)"
+					/>
+				</span>
 			{/if}
-		</div>
-	</a>
+			<div class="min-w-0 flex-1">
+				<div class="flex items-center gap-1.5">
+					<span class="truncate text-[16px] font-medium" style="color: var(--ink)"
+						>{p.itemName}</span
+					>
+					{#if p.sealed}
+						<span
+							role="img"
+							title="Sealed — hidden from some members"
+							aria-label="Sealed — hidden from some members"
+							class="contents"
+						>
+							<Icon name="lock" class="h-3 w-3 shrink-0" style="color: var(--seal)" />
+						</span>
+					{/if}
+				</div>
+				<div class="mt-0.5 flex items-center gap-1.5 text-[13px]" style="color: var(--ink-4)">
+					{#if p.categoryIcon}<span>{p.categoryIcon}</span>{/if}
+					<span>{p.requesterName}</span>
+					<span>· {fmtDate(p.at)}</span>
+					{#if p.state === 'pending_approval' && p.waitingDays > 0}
+						<span style={p.stale ? 'color: var(--pending)' : ''}
+							>· {p.waitingDays}d{p.stale ? ' · stale' : ''}</span
+						>
+					{/if}
+				</div>
+			</div>
+			<div class="flex shrink-0 flex-col items-end gap-0.5">
+				<Money minor={p.amountMinor} currency={p.currency} class="text-[16px] font-semibold" />
+				{#if p.state !== 'completed' && stateLabel[p.state]}
+					<span
+						class="text-[10px] font-semibold tracking-[0.04em] uppercase"
+						style="color: var({stateVar[p.state]})">{stateLabel[p.state]}</span
+					>
+				{/if}
+			</div>
+		</a>
+	</div>
 {/snippet}
 
 <div>
@@ -618,9 +716,9 @@
 				/>
 			</div>
 			<p class="text-[19px] font-semibold" style="color: var(--ink)">
-				{activeQuery || category ? 'No matches' : 'Nothing here yet'}
+				{activeQuery || hasFilters ? 'No matches' : 'Nothing here yet'}
 			</p>
-			{#if activeQuery || category}
+			{#if activeQuery || hasFilters}
 				<p
 					class="mx-auto mt-1.5 max-w-[28ch] text-[15px] leading-relaxed"
 					style="color: var(--ink-3)"
@@ -636,7 +734,7 @@
 				</p>
 			{/if}
 			<a href="/w/{slug}/purchases/new" class="btn btn-accent mt-6">New purchase</a>
-			{#if !activeQuery && !category}
+			{#if !activeQuery && !hasFilters}
 				<!-- Empty states are the teaching moment: you're here precisely
 				     because you haven't done the thing yet. -->
 				<a

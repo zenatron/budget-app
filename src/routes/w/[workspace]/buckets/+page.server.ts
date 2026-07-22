@@ -7,6 +7,7 @@ import {
 	createBucket,
 	listBuckets,
 	bucketsAccruedInMonth,
+	lifetimeSaved,
 	loadOwnBucket,
 	updateBucket,
 	pauseBucket,
@@ -26,7 +27,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	void params.workspace;
 	const db = getDb();
 	const ws = locals.workspace!;
-	const rows = await listBuckets(db, ws.id);
+	const [rows, lifetimeSavedMinor] = await Promise.all([
+		listBuckets(db, ws.id),
+		lifetimeSaved(db, ws.id)
+	]);
 
 	/*
 	 * When each bucket next takes its monthly amount. Recurring charges have
@@ -53,9 +57,12 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 	return {
 		currency: ws.currency,
-		// Everything currently sitting in buckets (active + paused; archived are
-		// already excluded by listBuckets). This is money set aside, not spent.
-		totalSavedMinor: rows.reduce((sum, r) => sum + r.balanceMinor, 0n),
+		// What's actually in the visible buckets right now (active + paused;
+		// archived already excluded by listBuckets).
+		onHandMinor: rows.reduce((sum, r) => sum + r.balanceMinor, 0n),
+		// Gross ever set aside across the workspace — matches the Activity page's
+		// lifetime "Saved" figure. Bigger than on-hand once anything's been spent.
+		lifetimeSavedMinor,
 		buckets: rows.map((r) => ({
 			id: r.bucket.id,
 			name: r.bucket.name,

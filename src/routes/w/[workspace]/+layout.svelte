@@ -6,10 +6,17 @@
 	import CommandPaletteOverlay from '$lib/components/CommandPaletteOverlay.svelte';
 	import { paletteOpen, close as closePalette } from '$lib/command-palette-state.svelte';
 	import { dismiss } from '$lib/actions/dismiss';
+	import { longpress } from '$lib/actions/longpress';
 	import { toastError } from '$lib/toast-state.svelte';
 	import { accentFor } from '$lib/accent';
+	import QuickLog from '$lib/components/QuickLog.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	let { data, children } = $props();
+
+	// Long-pressing the FAB opens a quick-log sheet; a plain tap still opens the
+	// full new-purchase page.
+	let quickLogOpen = $state(false);
 	let pathname = $derived(page.url.pathname);
 
 	// Derive slug from the URL, not from data — data can be stale during
@@ -288,8 +295,9 @@
 				-->
 				<a
 					href="/w/{slug}/purchases/new"
+					use:longpress={() => (quickLogOpen = true)}
 					class="press flex flex-1 flex-col items-center"
-					aria-label="New purchase"
+					aria-label="New purchase (hold to quick-log)"
 				>
 					<span
 						class="flex h-[52px] w-[52px] -translate-y-3 items-center justify-center rounded-full text-white"
@@ -314,7 +322,11 @@
 			</div>
 		</nav>
 	</div>
+
+	<QuickLog bind:open={quickLogOpen} {slug} />
 {/key}
+
+<ConfirmDialog />
 
 <style>
 	/*

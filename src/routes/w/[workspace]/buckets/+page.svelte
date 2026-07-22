@@ -86,14 +86,28 @@
 	</div>
 
 	{#if data.buckets.length > 0}
-		<!-- Everything currently set aside across all buckets. -->
-		<div class="card flex items-center justify-between p-4">
-			<p class="section-label">Total saved</p>
-			<Money
-				minor={data.totalSavedMinor}
-				currency={data.currency}
-				class="num text-[22px] font-semibold"
-			/>
+		<!-- On hand = what's in the buckets now; Lifetime = gross ever set aside
+		     (matches the Activity page's "Saved"). They diverge once money's spent. -->
+		<div class="card flex items-stretch p-4">
+			<div class="flex-1 text-center">
+				<p class="section-label">On hand</p>
+				<Money
+					minor={data.onHandMinor}
+					currency={data.currency}
+					block
+					class="num mt-1 text-[22px] font-semibold"
+				/>
+			</div>
+			<div class="mx-2 w-px shrink-0" style="background: var(--hairline)"></div>
+			<div class="flex-1 text-center">
+				<p class="section-label">Lifetime saved</p>
+				<Money
+					minor={data.lifetimeSavedMinor}
+					currency={data.currency}
+					block
+					class="num mt-1 text-[22px] font-semibold"
+				/>
+			</div>
 		</div>
 	{/if}
 

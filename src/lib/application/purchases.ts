@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db';
 import {
 	purchase as purchaseTable,
@@ -6,7 +6,10 @@ import {
 	workspaceMember,
 	merchant,
 	bucket,
-	bucketTransaction
+	bucketTransaction,
+	purchaseImage,
+	purchaseApprover,
+	approvalEvent
 } from '$lib/server/db/schema';
 import { Money } from '$lib/domain/money/money';
 import type { ApprovalPolicy } from '$lib/domain/approval/policy';
@@ -364,6 +367,201 @@ export async function refundPurchase(
 	if (result.event) {
 		await announcePurchaseChange(db, deps.notifier, result.purchase, result.event);
 	}
+}
+
+/**
+ * How recent a purchase must be for its own author to remove it. The workspace
+ * owner is exempt — this window only guards a member against quietly erasing
+ * their own settled history from the shared ledger.
+ */
+export const RECENT_DELETE_HOURS = 72;
+
+/**
+ * Remove-a-mistake: a true hard delete, unlike cancel/refund which keep the row.
+ * A member may remove their *own* recent entries; the workspace owner may remove
+ * any. Mistakes happen to refunds too, so both a refund and a purchase that has
+ * refunds against it can be removed — the latter takes its refunds with it, and
+ * removing a refund un-refunds its parent when that leaves it fully paid again.
+ *
+ * Money any deleted row moved in or out of a bucket is put back with a
+ * compensating adjustment rather than deleting the original transaction (linked
+ * only by note) — the same pattern refundPurchase uses. `finalAmountMinor`
+ * already carries the right sign (a spend is positive, a refund negative), so
+ * crediting it back undoes whatever that row did. Child rows have no FK cascade,
+ * so we clear them by hand.
+ */
+export async function deletePurchase(
+	db: Db,
+	deps: Deps,
+	scope: Scope,
+	purchaseId: string
+): Promise<void> {
+	const now = deps.clock.now();
+	await db.transaction(async (tx) => {
+		const p = await loadPurchase(
+			tx,
+			{ workspaceId: scope.workspaceId, viewerId: scope.memberId },
+			purchaseId,
+			{ forUpdate: true, now }
+		);
+		if (!p) throw new PurchaseNotFoundError();
+
+		const [me] = await tx
+			.select({ role: workspaceMember.role })
+			.from(workspaceMember)
+			.where(eq(workspaceMember.id, scope.memberId))
+			.limit(1);
+		const isOwner = me?.role === 'owner';
+		const mine = p.memberId === scope.memberId;
+		if (!mine && !isOwner) {
+			throw new PurchaseStateError('You can only remove your own entries');
+		}
+
+		// The recency gate only binds a member removing their own entry.
+		if (!isOwner) {
+			const [row] = await tx
+				.select({ createdAt: purchaseTable.createdAt })
+				.from(purchaseTable)
+				.where(eq(purchaseTable.id, p.id))
+				.limit(1);
+			const ageMs = now.getTime() - row.createdAt.getTime();
+			if (ageMs > RECENT_DELETE_HOURS * 3_600_000) {
+				throw new PurchaseStateError('This entry is too old to remove — ask a workspace owner');
+			}
+		}
+
+		// Deleting a purchase takes any refunds recorded against it too.
+		const children = await tx
+			.select({
+				id: purchaseTable.id,
+				bucketId: purchaseTable.bucketId,
+				finalAmountMinor: purchaseTable.finalAmountMinor,
+				currency: purchaseTable.currency,
+				itemName: purchaseTable.itemName
+			})
+			.from(purchaseTable)
+			.where(eq(purchaseTable.parentPurchaseId, p.id));
+
+		const removed = [
+			{
+				id: p.id,
+				bucketId: p.bucketId,
+				finalAmountMinor: p.finalAmount?.minor ?? null,
+				currency: p.requestedAmount.currency,
+				itemName: p.itemName
+			},
+			...children
+		];
+
+		// Put back what each removed row moved through a bucket.
+		for (const r of removed) {
+			if (r.bucketId && r.finalAmountMinor !== null && r.finalAmountMinor !== 0n) {
+				await tx.insert(bucketTransaction).values({
+					id: deps.ids.newId(),
+					bucketId: r.bucketId,
+					amountMinor: r.finalAmountMinor,
+					currency: r.currency,
+					type: 'adjustment',
+					note: `Removed: ${r.itemName}`,
+					createdAt: now
+				});
+			}
+		}
+
+		// Removing a refund can leave its parent no longer fully refunded.
+		if (p.parentPurchaseId) {
+			const [parent] = await tx
+				.select({
+					id: purchaseTable.id,
+					state: purchaseTable.state,
+					finalAmountMinor: purchaseTable.finalAmountMinor
+				})
+				.from(purchaseTable)
+				.where(eq(purchaseTable.id, p.parentPurchaseId))
+				.for('update')
+				.limit(1);
+			if (parent && parent.state === 'refunded') {
+				const [rem] = await tx
+					.select({
+						sum: sql<string>`coalesce(sum(${purchaseTable.finalAmountMinor}), 0)`
+					})
+					.from(purchaseTable)
+					.where(
+						and(eq(purchaseTable.parentPurchaseId, parent.id), sql`${purchaseTable.id} <> ${p.id}`)
+					);
+				// parent (+X) plus the refunds still standing (each negative). Anything
+				// left over means it's no longer fully paid back → back to completed.
+				const leftover = (parent.finalAmountMinor ?? 0n) + BigInt(rem.sum);
+				if (leftover > 0n) {
+					await tx
+						.update(purchaseTable)
+						.set({ state: 'completed' })
+						.where(eq(purchaseTable.id, parent.id));
+					await appendEvent(tx, deps.ids, parent.id, {
+						fromState: 'refunded',
+						toState: 'completed',
+						actorMemberId: scope.memberId,
+						reason: 'refund removed',
+						amountSnapshot: null,
+						at: now
+					});
+				}
+			}
+		}
+
+		const ids = removed.map((r) => r.id);
+		await tx.delete(purchaseImage).where(inArray(purchaseImage.purchaseId, ids));
+		await tx.delete(purchaseApprover).where(inArray(purchaseApprover.purchaseId, ids));
+		await tx.delete(approvalEvent).where(inArray(approvalEvent.purchaseId, ids));
+		// Children reference the parent, so they go first.
+		if (children.length > 0) {
+			await tx.delete(purchaseTable).where(
+				inArray(
+					purchaseTable.id,
+					children.map((c) => c.id)
+				)
+			);
+		}
+		await tx.delete(purchaseTable).where(eq(purchaseTable.id, p.id));
+	});
+}
+
+/**
+ * Edit just the note, allowed in any state the purchase is yours — including
+ * completed and refunded, where the full edit is closed because the amount is
+ * settled. The note is annotation, not ledger data, so changing it never moves
+ * money; the change is still audited so the history shows a note was revised.
+ */
+export async function editPurchaseNote(
+	db: Db,
+	deps: Deps,
+	scope: Scope,
+	purchaseId: string,
+	note: string | null
+): Promise<void> {
+	const now = deps.clock.now();
+	await db.transaction(async (tx) => {
+		const p = await loadPurchase(
+			tx,
+			{ workspaceId: scope.workspaceId, viewerId: scope.memberId },
+			purchaseId,
+			{ forUpdate: true, now }
+		);
+		if (!p) throw new PurchaseNotFoundError();
+		if (p.memberId !== scope.memberId) {
+			throw new PurchaseStateError('Only the requester can edit the note');
+		}
+		if ((p.note ?? '') === (note ?? '')) return;
+		await tx.update(purchaseTable).set({ note }).where(eq(purchaseTable.id, p.id));
+		await appendEvent(tx, deps.ids, p.id, {
+			fromState: p.state,
+			toState: p.state,
+			actorMemberId: scope.memberId,
+			reason: note ? 'note edited' : 'note cleared',
+			amountSnapshot: null,
+			at: now
+		});
+	});
 }
 
 /** Early unseal by the requester — the only person who may open it before time. */

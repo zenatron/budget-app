@@ -219,10 +219,27 @@ export async function hasAccrualForMonth(
 	return (rows[0]?.count ?? 0) > 0;
 }
 
+/** Net balance across every bucket — what's actually on hand right now. */
 export async function totalSaved(db: Db, workspaceId: string): Promise<bigint> {
 	const rows = await db
 		.select({
 			total: sql<string>`coalesce(sum(${bucketTransaction.amountMinor}), 0)`
+		})
+		.from(bucketTransaction)
+		.innerJoin(bucket, eq(bucketTransaction.bucketId, bucket.id))
+		.where(eq(bucket.workspaceId, workspaceId));
+	return BigInt(rows[0]?.total ?? '0');
+}
+
+/**
+ * Gross of everything ever put into buckets — accruals, deposits, credits — not
+ * reduced by what's since been spent. "How much you've set aside over time",
+ * versus totalSaved's "what's left". The difference is what's been withdrawn.
+ */
+export async function lifetimeSaved(db: Db, workspaceId: string): Promise<bigint> {
+	const rows = await db
+		.select({
+			total: sql<string>`coalesce(sum(${bucketTransaction.amountMinor}) filter (where ${bucketTransaction.amountMinor} > 0), 0)`
 		})
 		.from(bucketTransaction)
 		.innerJoin(bucket, eq(bucketTransaction.bucketId, bucket.id))

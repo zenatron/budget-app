@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { Money, InvalidMoneyError } from '$lib/domain/money/money';
 import { PurchaseStateError } from '$lib/domain/purchase/purchase';
@@ -10,18 +10,21 @@ import { ImageValidationError } from '$lib/infra/images/process';
 import { getBlobStore } from '$lib/server/blobs';
 import {
 	PurchaseNotFoundError,
+	RECENT_DELETE_HOURS,
 	approvePurchase,
 	cancelPurchase,
 	completePurchase,
+	deletePurchase,
 	denyPurchase,
 	editPurchase,
+	editPurchaseNote,
 	refundPurchase,
 	unsealPurchase
 } from '$lib/application/purchases';
 import { getDb } from '$lib/server/db';
 import { listEvents, loadPurchase, memberNames } from '$lib/server/repo/purchases';
 import { listCategories } from '$lib/server/repo/workspaces';
-import { merchant } from '$lib/server/db/schema';
+import { merchant, purchase as purchaseTable } from '$lib/server/db/schema';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { getNotifier } from '$lib/server/notify';
@@ -45,12 +48,19 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const p = await loadPurchase(db, scope, params.id, { now });
 	if (!p) error(404, 'Not found');
 
-	const [events, names, categories, images] = await Promise.all([
+	const [events, names, categories, images, createdRows] = await Promise.all([
 		listEvents(db, p.id),
 		memberNames(db, [p.memberId, ...p.approverMemberIds, ...p.sealedFromMemberIds]),
 		listCategories(db, locals.workspace!.id),
-		listImages(db, scope, p.id, now)
+		listImages(db, scope, p.id, now),
+		// createdAt for the recency gate on the delete affordance.
+		db
+			.select({ createdAt: purchaseTable.createdAt })
+			.from(purchaseTable)
+			.where(eq(purchaseTable.id, p.id))
+			.limit(1)
 	]);
+	const createdRow = createdRows[0];
 
 	// A refund owns no photo; borrow the original's. listImages applies the seal
 	// predicate to the parent, so an unreadable parent yields nothing rather than
@@ -107,7 +117,17 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			// Photos (receipts) can be attached in any state the requester owns.
 			addPhoto: mine && p.state !== 'cancelled',
 			unseal: mine && sealed,
-			refund: mine && p.state === 'completed' && !sealed && p.parentPurchaseId === null
+			// Note stays editable after the amount is settled; the full edit doesn't.
+			editNote: mine && ['completed', 'refunded'].includes(p.state),
+			refund: mine && p.state === 'completed' && !sealed && p.parentPurchaseId === null,
+			// Remove-a-mistake: own recent entries, or anything for the owner. Refunds
+			// and purchases with refunds against them are removable too (the server
+			// takes the refunds with the parent, or un-refunds the parent).
+			delete:
+				locals.member!.role === 'owner' ||
+				(mine &&
+					createdRow !== undefined &&
+					now.getTime() - createdRow.createdAt.getTime() <= RECENT_DELETE_HOURS * 3_600_000)
 		},
 		images: images.map((i) => ({
 			id: i.id,
@@ -160,6 +180,19 @@ export const actions: Actions = {
 
 	cancel: async ({ locals, params }) =>
 		run(() => cancelPurchase(getDb(), deps, scopeOf(locals), params.id)),
+
+	editNote: async ({ locals, params, request }) => {
+		const raw = String((await request.formData()).get('note') ?? '').trim();
+		if (raw.length > 2000) return fail(400, { error: 'Note is too long' });
+		return run(() => editPurchaseNote(getDb(), deps, scopeOf(locals), params.id, raw || null));
+	},
+
+	delete: async ({ locals, params }) => {
+		const failed = await run(() => deletePurchase(getDb(), deps, scopeOf(locals), params.id));
+		if (failed) return failed;
+		// Row is gone — send them back to the ledger rather than a 404 detail page.
+		redirect(303, `/w/${params.workspace}/purchases`);
+	},
 
 	unseal: async ({ locals, params }) =>
 		run(() => unsealPurchase(getDb(), deps, scopeOf(locals), params.id)),

@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, ilike, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { unionAll } from 'drizzle-orm/pg-core';
 import type { Db } from '$lib/server/db';
-import { bucket, bucketTransaction, purchase } from '$lib/server/db/schema';
+import { bucket, bucketTransaction, merchant, purchase } from '$lib/server/db/schema';
 import { listPurchases, visibleTo, type PurchaseListItem } from './purchases';
 
 /**
@@ -81,7 +81,16 @@ export async function listLedger(
 		eq(purchase.workspaceId, scope.workspaceId),
 		visibleTo(scope.viewerId, now)
 	];
-	if (opts.search) purchaseWhere.push(ilike(purchase.itemName, `%${opts.search}%`));
+	// Match the item name or the merchant it was bought from — the merchant is
+	// left-joined below so this OR can see merchant.name.
+	if (opts.search) {
+		purchaseWhere.push(
+			or(
+				ilike(purchase.itemName, `%${opts.search}%`),
+				ilike(merchant.name, `%${opts.search}%`)
+			)!
+		);
+	}
 	if (opts.categoryId) purchaseWhere.push(eq(purchase.categoryId, opts.categoryId));
 	if (opts.uncategorized) purchaseWhere.push(isNull(purchase.categoryId));
 	if (opts.memberId) purchaseWhere.push(eq(purchase.memberId, opts.memberId));
@@ -114,6 +123,7 @@ export async function listLedger(
 			at: sql<string>`${purchaseAt}`.as('at')
 		})
 		.from(purchase)
+		.leftJoin(merchant, eq(purchase.merchantId, merchant.id))
 		.where(and(...purchaseWhere));
 
 	/*

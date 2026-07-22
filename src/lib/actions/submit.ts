@@ -1,9 +1,14 @@
 import { applyAction, enhance } from '$app/forms';
 import { toastError, toastSuccess } from '$lib/toast-state.svelte';
+import { requestConfirm, type ConfirmSpec } from '$lib/confirm-state.svelte';
 
 export interface SubmitOptions {
-	/** Prompt text for destructive actions. Declining cancels the submit. */
-	confirm?: string;
+	/**
+	 * Confirmation gate for destructive actions. A string is shown as the prompt
+	 * title; an object gives a title, body and button styling. Declining cancels
+	 * the submit. Rendered by the app's ConfirmDialog, not window.confirm.
+	 */
+	confirm?: string | ConfirmSpec;
 	/** Toast shown when the action succeeds. Omit when the page shows the result. */
 	success?: string;
 	/** Runs after a successful submit; use for page-local state resets. */
@@ -32,11 +37,24 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 		for (const b of buttons()) b.disabled = pending;
 	};
 
+	// Set once the styled confirm has been accepted, so the re-submit it triggers
+	// sails past the gate instead of prompting again.
+	let confirmed = false;
+
 	const enhanced = enhance(node, ({ cancel }) => {
-		if (opts.confirm && !window.confirm(opts.confirm)) {
+		if (opts.confirm && !confirmed) {
 			cancel();
+			const spec: ConfirmSpec =
+				typeof opts.confirm === 'string' ? { title: opts.confirm } : opts.confirm;
+			void requestConfirm(spec).then((ok) => {
+				if (ok) {
+					confirmed = true;
+					node.requestSubmit();
+				}
+			});
 			return;
 		}
+		confirmed = false;
 		setPending(true);
 
 		return async ({ result, update }) => {
