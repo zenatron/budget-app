@@ -38,6 +38,13 @@ import {
 	PurchaseNotFoundError
 } from '$lib/application/purchases';
 import {
+	holdPurchase,
+	wakePurchase,
+	extendHoldPurchase,
+	letGoPurchase
+} from '$lib/application/hold';
+import { addDays } from '$lib/domain/recurrence/rrule';
+import {
 	createBucket,
 	updateBucket,
 	pauseBucket,
@@ -132,6 +139,19 @@ function parseDateArg(raw: string | undefined, tz: string): Date | undefined {
 }
 function money(ctx: ToolContext, raw: string): Money {
 	return Money.fromDecimal(raw, ctx.authed.workspace.currency);
+}
+/** A positive number argument, e.g. how many days to sleep on a purchase. */
+function posNum(args: Record<string, unknown>, key: string): number {
+	const v = Number(args[key]);
+	if (!Number.isFinite(v) || v <= 0)
+		throw new PurchaseStateError(`${key} must be a positive number`);
+	return v;
+}
+/** Days → wake instant. Under a day wakes at 9am tomorrow in the workspace zone. */
+function holdUntil(days: number, ctx: ToolContext): Date {
+	const tz = ctx.authed.workspace.timezone;
+	if (days < 1) return zonedTimeToUtc(addDays(calDateInZone(ctx.now, tz), 1), 9, 0, tz);
+	return new Date(ctx.now.getTime() + days * 86_400_000);
 }
 
 const WEEKDAY: Record<string, number> = {
@@ -1153,6 +1173,86 @@ export const TOOLS: McpTool[] = [
 			const id = required(args, 'purchase_id');
 			await unsealPurchase(ctx.db, ctx.deps, scopeOf(ctx), id);
 			return { text: `Revealed purchase ${id}.`, data: { purchase_id: id } };
+		}
+	},
+	{
+		name: 'sleep_on_purchase',
+		description:
+			'Put a pending (or approved) purchase to sleep for a cooling-off period, then resurface it to decide later. Either the requester or an approver can. Use `days` (0.5 wakes at 9am tomorrow).',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				purchase_id: { type: 'string' },
+				days: { type: 'number', description: 'How long to pause, in days. 0.5 = overnight.' }
+			},
+			required: ['purchase_id', 'days'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'purchase_id');
+			const until = holdUntil(posNum(args, 'days'), ctx);
+			await holdPurchase(ctx.db, ctx.deps, scopeOf(ctx), id, until);
+			return {
+				text: `Put purchase ${id} to sleep until ${until.toISOString()}.`,
+				data: { purchase_id: id, state: 'held', held_until: until.toISOString() }
+			};
+		}
+	},
+	{
+		name: 'extend_hold',
+		description: 'Give a sleeping purchase more time before it resurfaces.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				purchase_id: { type: 'string' },
+				days: { type: 'number', description: 'New pause length from now, in days.' }
+			},
+			required: ['purchase_id', 'days'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'purchase_id');
+			const until = holdUntil(posNum(args, 'days'), ctx);
+			await extendHoldPurchase(ctx.db, ctx.deps, scopeOf(ctx), id, until);
+			return {
+				text: `Extended the pause on purchase ${id} until ${until.toISOString()}.`,
+				data: { purchase_id: id, state: 'held', held_until: until.toISOString() }
+			};
+		}
+	},
+	{
+		name: 'wake_purchase',
+		description:
+			'Wake a sleeping purchase — still want it. It returns to waiting for approval, or to approved if it never needed a decision.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: { purchase_id: { type: 'string' } },
+			required: ['purchase_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'purchase_id');
+			await wakePurchase(ctx.db, ctx.deps, scopeOf(ctx), id);
+			return { text: `Woke purchase ${id}.`, data: { purchase_id: id } };
+		}
+	},
+	{
+		name: 'let_go_purchase',
+		description: 'Let a sleeping purchase go — cancel it. The decided-not-to-buy outcome.',
+		scope: 'write',
+		inputSchema: {
+			type: 'object',
+			properties: { purchase_id: { type: 'string' } },
+			required: ['purchase_id'],
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const id = required(args, 'purchase_id');
+			await letGoPurchase(ctx.db, ctx.deps, scopeOf(ctx), id);
+			return { text: `Let go of purchase ${id}.`, data: { purchase_id: id, state: 'cancelled' } };
 		}
 	},
 	{
