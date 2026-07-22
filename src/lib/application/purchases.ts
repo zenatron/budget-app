@@ -195,7 +195,9 @@ export async function submitPurchase(
 			parentPurchaseId: null,
 			approverMemberIds: [],
 			bucketId: cmd.bucketId ?? null,
-			merchantId
+			merchantId,
+			heldUntil: null,
+			heldBy: null
 		};
 
 		// The bucket carve-out is part of what the policy means, so it is decided

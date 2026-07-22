@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { ACCENTS, accentName } from '$lib/accent';
-	import Icon from '$lib/components/Icon.svelte';
+	import { Check } from '@lucide/svelte';
 
 	let { value = $bindable(), label = 'Accent color' }: { value: string; label?: string } = $props();
 </script>
@@ -32,7 +32,7 @@
 						: 'inset 0 0 0 1px oklch(0 0 0 / 0.08)'}"
 				>
 					{#if selected}
-						<Icon name="checkmark" class="h-3.5 w-3.5 text-white" />
+						<Check class="h-3.5 w-3.5 text-white" />
 					{/if}
 				</span>
 			</button>

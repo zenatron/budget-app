@@ -13,7 +13,7 @@
 	 * barcode at all, a shelf tag — a photo of the thing still tells whoever is
 	 * approving it everything they need, and that path already exists.
 	 */
-	import Icon from '$lib/components/Icon.svelte';
+	import { Camera, X } from '@lucide/svelte';
 	import { browser } from '$app/environment';
 	import { onDestroy } from 'svelte';
 	import { Confirmer, isValidEanUpc, type ScanHit } from '$lib/scan/barcode';
@@ -165,7 +165,7 @@
 				class="press absolute flex h-10 w-10 items-center justify-center rounded-full backdrop-blur"
 				style="top: calc(env(safe-area-inset-top, 0px) + 12px); right: 12px; background: oklch(1 0 0 / 0.16); color: white"
 			>
-				<Icon name="xmark" class="h-5 w-5" />
+				<X class="h-5 w-5" />
 			</button>
 		</div>
 
@@ -199,7 +199,7 @@
 					style="background: white"
 					aria-label="Take a photo instead"
 				>
-					<Icon name="camera" class="h-7 w-7" style="color: var(--ink)" />
+					<Camera class="h-7 w-7" style="color: var(--ink)" />
 				</button>
 			{/if}
 

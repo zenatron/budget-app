@@ -2,7 +2,7 @@
 	import { fly } from 'svelte/transition';
 	import { formatMinor } from '$lib/money-format';
 	import { EXAMPLE_PROMPTS, understand } from '$lib/intelligence/parser';
-	import Icon from '$lib/components/Icon.svelte';
+	import { Sparkles, X } from '@lucide/svelte';
 	import { dismiss } from '$lib/actions/dismiss';
 	import {
 		paletteQuery,
@@ -47,7 +47,7 @@
 						? '22'
 						: '14'}%, transparent)"
 				>
-					<Icon name="sparkle" class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+					<Sparkles class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
 				</span>
 				<input
 					bind:this={paletteInputEl.value}
@@ -82,7 +82,7 @@
 					style="color: var(--ink-4)"
 					aria-label="Close"
 				>
-					<Icon name="xmark" class="h-4 w-4" />
+					<X class="h-4 w-4" />
 				</button>
 			</div>
 

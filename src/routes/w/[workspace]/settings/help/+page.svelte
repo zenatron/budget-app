@@ -1,6 +1,33 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import Icon from '$lib/components/Icon.svelte';
+	import {
+		ChevronLeft,
+		ChevronDown,
+		CreditCard,
+		Check,
+		Bell,
+		Gift,
+		Moon,
+		ChartNoAxesColumnIncreasing,
+		Repeat,
+		Landmark,
+		CircleDollarSign,
+		Users,
+		Sparkles
+	} from '@lucide/svelte';
+	const HELP_ICONS = {
+		card: CreditCard,
+		checkmark: Check,
+		bell: Bell,
+		gift: Gift,
+		moon: Moon,
+		chart: ChartNoAxesColumnIncreasing,
+		repeat: Repeat,
+		bank: Landmark,
+		dollar: CircleDollarSign,
+		people: Users,
+		sparkle: Sparkles
+	};
 
 	/**
 	 * The app's rules in one place. Written against how it actually behaves —
@@ -71,6 +98,17 @@
 				'**Awaiting a decision** — purchases waiting for an approver to say yes or no.',
 				'**Confirm what you paid** — purchases that are approved but have no final amount yet: a recurring bill set to ask you, or a request you had approved for an estimate. Only you can confirm your own. Open one to enter what you were actually charged, and on which date.',
 				'These are dated by when they happened, not when they landed, so an older one shows its real month rather than today — and they’re listed oldest first, so you clear the backlog in order.'
+			]
+		},
+		{
+			id: 'sleep',
+			icon: 'moon',
+			title: 'Sleep on it',
+			body: [
+				'Not sure about a purchase? Put it to sleep instead of deciding now. The request pauses for a set time, then comes back so you can decide with a clearer head — a gentle guard against impulse buys.',
+				'On a request that’s waiting, tap **Sleep on it** and choose how long. The length is suggested from the amount — bigger buys wait a bit longer — and you can spin the dial to change it. Either the person who asked or an approver can start a pause.',
+				'While it’s asleep it can’t be approved or bought, and it shows on the Ledger under **Sleeping on it** with a countdown. You can wake it early or let it go at any time.',
+				'When the time is up it’s marked **Ready to decide** and you get a reminder. From there it’s **Buy it** (back in the approval queue), **a few more days**, or **let it go** — and changing your mind is a perfectly good outcome.'
 			]
 		},
 		{
@@ -169,7 +207,7 @@
 		class="press -ml-1 inline-flex items-center gap-0.5 text-[14px] font-medium"
 		style="color: var(--ink-3)"
 	>
-		<Icon name="chevronLeft" class="h-4 w-4" /> Settings
+		<ChevronLeft class="h-4 w-4" /> Settings
 	</a>
 
 	<div class="px-1">
@@ -181,6 +219,7 @@
 
 	<div class="space-y-2">
 		{#each sections as s (s.id)}
+			{@const SIcon = HELP_ICONS[s.icon as keyof typeof HELP_ICONS]}
 			<details id={s.id} class="card overflow-hidden">
 				<summary
 					class="press flex cursor-pointer list-none items-center gap-3.5 p-4 [&::-webkit-details-marker]:hidden"
@@ -189,10 +228,10 @@
 						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
 						style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
 					>
-						<Icon name={s.icon} class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+						<SIcon class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
 					</span>
 					<span class="flex-1 text-[16px] font-medium" style="color: var(--ink)">{s.title}</span>
-					<Icon name="chevronDown" class="chevron h-4 w-4" style="color: var(--ink-4)" />
+					<ChevronDown class="chevron h-4 w-4" style="color: var(--ink-4)" />
 				</summary>
 				<div class="space-y-2.5 px-4 pb-4" style="padding-left: 4.25rem">
 					{#each s.body as para (para)}

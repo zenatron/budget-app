@@ -37,6 +37,7 @@ export function toLedgerView(
 		 */
 		at: (e.completedAt ?? e.decidedAt ?? e.requestedAt ?? e.createdAt).toISOString(),
 		createdAt: e.createdAt.toISOString(),
+		heldUntil: e.heldUntil?.toISOString() ?? null,
 		stale:
 			e.state === 'pending_approval' &&
 			e.requestedAt !== null &&

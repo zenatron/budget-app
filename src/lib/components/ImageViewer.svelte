@@ -10,7 +10,7 @@
 	 * field reads as a different application. Dark enough that the photo is what
 	 * your eye lands on, warm enough that it still belongs here.
 	 */
-	import Icon from '$lib/components/Icon.svelte';
+	import { X } from '@lucide/svelte';
 
 	let {
 		src,
@@ -72,7 +72,7 @@
 		class="press absolute flex h-10 w-10 items-center justify-center rounded-full backdrop-blur"
 		style="top: calc(env(safe-area-inset-top, 0px) + 12px); right: 12px; background: oklch(1 0 0 / 0.16); color: white"
 	>
-		<Icon name="xmark" class="h-5 w-5" />
+		<X class="h-5 w-5" />
 	</button>
 </dialog>
 

@@ -21,6 +21,14 @@ import {
 	refundPurchase,
 	unsealPurchase
 } from '$lib/application/purchases';
+import {
+	holdPurchase,
+	wakePurchase,
+	extendHoldPurchase,
+	letGoPurchase
+} from '$lib/application/hold';
+import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
+import { addDays } from '$lib/domain/recurrence/rrule';
 import { getDb } from '$lib/server/db';
 import { listEvents, loadPurchase, memberNames } from '$lib/server/repo/purchases';
 import { listCategories } from '$lib/server/repo/workspaces';
@@ -107,7 +115,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			isOverageReapproval: pending && p.finalAmount !== null,
 			sealed,
 			sealedUntil: sealed ? p.sealedUntil!.toISOString() : null,
-			sealedFromNames: sealed ? p.sealedFromMemberIds.map((id) => names.get(id) ?? 'Unknown') : []
+			sealedFromNames: sealed ? p.sealedFromMemberIds.map((id) => names.get(id) ?? 'Unknown') : [],
+			heldUntil: p.heldUntil?.toISOString() ?? null,
+			// The pause has lifted but nobody's decided yet — show the resurface.
+			heldReady:
+				p.state === 'held' && p.heldUntil !== null && p.heldUntil.getTime() <= now.getTime()
 		},
 		can: {
 			decide: pending && p.approverMemberIds.includes(locals.member!.id),
@@ -127,7 +139,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 				locals.member!.role === 'owner' ||
 				(mine &&
 					createdRow !== undefined &&
-					now.getTime() - createdRow.createdAt.getTime() <= RECENT_DELETE_HOURS * 3_600_000)
+					now.getTime() - createdRow.createdAt.getTime() <= RECENT_DELETE_HOURS * 3_600_000),
+			// Sleep on it: either the requester or an approver, on a pending request.
+			hold: pending && (mine || p.approverMemberIds.includes(locals.member!.id)),
+			// While asleep, either side can wake it, extend it, or let it go.
+			manageHold: p.state === 'held' && (mine || p.approverMemberIds.includes(locals.member!.id))
 		},
 		images: images.map((i) => ({
 			id: i.id,
@@ -154,6 +170,20 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 function scopeOf(locals: App.Locals) {
 	return { workspaceId: locals.workspace!.id, memberId: locals.member!.id };
+}
+
+/**
+ * Turn a chosen duration into a wake instant. "1 night" (< 1 day) is special:
+ * it wakes at 9am the next morning in the workspace's timezone, so "sleep on it"
+ * is literally that. Everything else is a plain offset from now.
+ */
+function untilFromDays(days: number, timezone: string): Date {
+	const now = systemClock.now();
+	if (days < 1) {
+		const tomorrow = addDays(calDateInZone(now, timezone), 1);
+		return zonedTimeToUtc(tomorrow, 9, 0, timezone);
+	}
+	return new Date(now.getTime() + days * 86_400_000);
 }
 
 async function run(fn: () => Promise<void>) {
@@ -193,6 +223,26 @@ export const actions: Actions = {
 		// Row is gone — send them back to the ledger rather than a 404 detail page.
 		redirect(303, `/w/${params.workspace}/purchases`);
 	},
+
+	hold: async ({ locals, params, request }) => {
+		const days = Number((await request.formData()).get('days'));
+		if (!Number.isFinite(days) || days <= 0) return fail(400, { error: 'Pick how long' });
+		const until = untilFromDays(days, locals.workspace!.timezone);
+		return run(() => holdPurchase(getDb(), deps, scopeOf(locals), params.id, until));
+	},
+
+	extendHold: async ({ locals, params, request }) => {
+		const days = Number((await request.formData()).get('days'));
+		if (!Number.isFinite(days) || days <= 0) return fail(400, { error: 'Pick how long' });
+		const until = untilFromDays(days, locals.workspace!.timezone);
+		return run(() => extendHoldPurchase(getDb(), deps, scopeOf(locals), params.id, until));
+	},
+
+	wake: async ({ locals, params }) =>
+		run(() => wakePurchase(getDb(), deps, scopeOf(locals), params.id)),
+
+	letGo: async ({ locals, params }) =>
+		run(() => letGoPurchase(getDb(), deps, scopeOf(locals), params.id)),
 
 	unseal: async ({ locals, params }) =>
 		run(() => unsealPurchase(getDb(), deps, scopeOf(locals), params.id)),

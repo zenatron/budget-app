@@ -2,7 +2,7 @@
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
 	import { money } from '$lib/actions/money';
-	import Icon from '$lib/components/Icon.svelte';
+	import { ArrowUpRight, CircleHelp, Pencil, Trash2, Wallet } from '@lucide/svelte';
 	import Money from '$lib/components/Money.svelte';
 	import IncomeSchedule from '$lib/components/IncomeSchedule.svelte';
 	import { calDateInZone } from '$lib/domain/time/zoned';
@@ -93,7 +93,7 @@
 				class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
 				style="background: color-mix(in oklab, var(--approve) 16%, var(--surface-2))"
 			>
-				<Icon name="wallet" class="h-7 w-7" style="color: var(--approve)" />
+				<Wallet class="h-7 w-7" style="color: var(--approve)" />
 			</div>
 			<p class="text-[18px] font-semibold" style="color: var(--ink)">No income yet</p>
 			<p class="mx-auto mt-1 max-w-[30ch] text-[15px] leading-relaxed" style="color: var(--ink-3)">
@@ -104,7 +104,7 @@
 				class="press mt-4 inline-flex items-center gap-1.5 text-[14px] font-medium"
 				style="color: var(--ws-accent)"
 			>
-				<Icon name="question" class="h-4 w-4" /> How this works
+				<CircleHelp class="h-4 w-4" /> How this works
 			</a>
 		</div>
 	{:else}
@@ -116,7 +116,7 @@
 							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px]"
 							style="background: color-mix(in oklab, var(--approve) 18%, transparent)"
 						>
-							<Icon name="arrowUpRight" class="h-4 w-4" style="color: var(--approve)" />
+							<ArrowUpRight class="h-4 w-4" style="color: var(--approve)" />
 						</span>
 						<div class="min-w-0 flex-1">
 							<p class="text-[16px]" style="color: var(--ink)">{e.source}</p>
@@ -139,7 +139,7 @@
 								style="color: var(--ink-2)"
 								aria-label="Edit"
 							>
-								<Icon name="pencil" class="h-3.5 w-3.5" />
+								<Pencil class="h-3.5 w-3.5" />
 							</button>
 							<form
 								method="POST"
@@ -148,7 +148,7 @@
 							>
 								<input type="hidden" name="incomeId" value={e.id} />
 								<button class="press ml-0.5" style="color: var(--ink-4)" aria-label="Remove">
-									<Icon name="trash" class="h-4 w-4" />
+									<Trash2 class="h-4 w-4" />
 								</button>
 							</form>
 						{/if}

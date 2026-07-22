@@ -34,7 +34,7 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 	 * months old (a backfilled bill), so they'd otherwise sort into a later page
 	 * and be exactly the thing this section exists to stop getting lost.
 	 */
-	const [feed, categories, members, awaitingIds] = await Promise.all([
+	const [feed, categories, members, awaitingIds, sleepingIds] = await Promise.all([
 		listLedger(db, scope, now, { ...opts, limit: LIMIT }),
 		listCategories(db, ws.id),
 		listMembers(db, ws.id),
@@ -47,7 +47,12 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 					eq(purchase.state, 'approved'),
 					eq(purchase.memberId, locals.member!.id)
 				)
-			)
+			),
+		// "Sleep on it": everything paused in the workspace, its own to-do.
+		db
+			.select({ id: purchase.id })
+			.from(purchase)
+			.where(and(eq(purchase.workspaceId, ws.id), eq(purchase.state, 'held')))
 	]);
 
 	const ctx = {
@@ -62,6 +67,15 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		.map((pp) => toLedgerView({ kind: 'purchase' as const, ...pp }, ctx))
 		// Oldest first: clear the backlog in the order it built up.
 		.sort((a, b) => a.at.localeCompare(b.at));
+
+	const sleeping = (await listPurchases(db, scope, now, { ids: sleepingIds.map((r) => r.id) }))
+		.map((pp) => toLedgerView({ kind: 'purchase' as const, ...pp }, ctx))
+		// Soonest to wake first — the ones nearest a decision lead.
+		.sort((a, b) => {
+			const ax = a.kind === 'purchase' ? (a.heldUntil ?? '') : '';
+			const bx = b.kind === 'purchase' ? (b.heldUntil ?? '') : '';
+			return ax.localeCompare(bx);
+		});
 	return {
 		entries: feed.entries.map((e) => toLedgerView(e, ctx)),
 		categories,
@@ -70,6 +84,7 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 			.map((m) => ({ id: m.member.id, name: m.user.displayName })),
 		hasMore: feed.hasMore,
 		includeMovements: opts.includeMovements ?? false,
-		awaitingConfirmation
+		awaitingConfirmation,
+		sleeping
 	};
 };

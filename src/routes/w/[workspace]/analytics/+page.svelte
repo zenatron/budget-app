@@ -7,7 +7,7 @@
 	import { formatPct } from '$lib/format';
 	import Money from '$lib/components/Money.svelte';
 	import CategoryRing from '$lib/components/CategoryRing.svelte';
-	import Icon from '$lib/components/Icon.svelte';
+	import { ChevronRight, X } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { ledgerLink } from '$lib/ledger-filters';
 	let { data } = $props();
@@ -236,6 +236,12 @@
 			minor: data.verdicts.cancelledMinor,
 			tone: 'var(--ink-4)',
 			hint: 'Voided'
+		},
+		{
+			label: 'Let go',
+			minor: data.verdicts.letGoMinor,
+			tone: 'var(--seal)',
+			hint: 'Slept on, then passed'
 		}
 	]);
 
@@ -702,7 +708,7 @@
 									>
 										<input type="hidden" name="budgetId" value={s.id} />
 										<button class="press" style="color: var(--ink-4)" aria-label="Remove">
-											<Icon name="xmark" class="h-3.5 w-3.5" />
+											<X class="h-3.5 w-3.5" />
 										</button>
 									</form>
 								{/if}
@@ -780,11 +786,7 @@
 									{formatMinor(c.totalMinor, currency)}
 									<span class="ml-1 text-[12px]" style="color: var(--ink-4)">{formatPct(pct)}</span>
 								</span>
-								<Icon
-									name="chevronRight"
-									class="h-3.5 w-3.5 self-center"
-									style="color: var(--ink-4)"
-								/>
+								<ChevronRight class="h-3.5 w-3.5 self-center" style="color: var(--ink-4)" />
 							</span>
 						</div>
 						<div
@@ -829,11 +831,7 @@
 							<span class="num text-[15px] font-medium" style="color: var(--ink)"
 								>{formatMinor(m.totalMinor, currency)}</span
 							>
-							<Icon
-								name="chevronRight"
-								class="h-3.5 w-3.5 self-center"
-								style="color: var(--ink-4)"
-							/>
+							<ChevronRight class="h-3.5 w-3.5 self-center" style="color: var(--ink-4)" />
 						</span>
 					</a>
 				{/each}

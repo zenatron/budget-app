@@ -85,10 +85,7 @@ export async function listLedger(
 	// left-joined below so this OR can see merchant.name.
 	if (opts.search) {
 		purchaseWhere.push(
-			or(
-				ilike(purchase.itemName, `%${opts.search}%`),
-				ilike(merchant.name, `%${opts.search}%`)
-			)!
+			or(ilike(purchase.itemName, `%${opts.search}%`), ilike(merchant.name, `%${opts.search}%`))!
 		);
 	}
 	if (opts.categoryId) purchaseWhere.push(eq(purchase.categoryId, opts.categoryId));

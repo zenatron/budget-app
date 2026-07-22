@@ -2,7 +2,18 @@
 	import { page } from '$app/state';
 	import { onMount, untrack } from 'svelte';
 	import { scale, fade } from 'svelte/transition';
-	import Icon from '$lib/components/Icon.svelte';
+	import {
+		Check,
+		CircleHelp,
+		Funnel,
+		Landmark,
+		Lock,
+		Moon,
+		RotateCcw,
+		Search,
+		ShoppingBag,
+		X
+	} from '@lucide/svelte';
 	import Money from '$lib/components/Money.svelte';
 	import { dismiss } from '$lib/actions/dismiss';
 	import { swipe } from '$lib/actions/swipe';
@@ -185,6 +196,7 @@
 		approved: '--approve',
 		denied: '--deny',
 		refunded: '--info',
+		held: '--seal',
 		cancelled: '--ink-4',
 		draft: '--ink-4'
 	};
@@ -193,6 +205,7 @@
 		approved: 'Approved',
 		denied: 'Denied',
 		refunded: 'Refunded',
+		held: 'Sleeping',
 		cancelled: 'Cancelled',
 		draft: 'Draft'
 	};
@@ -231,13 +244,26 @@
 	// ever puts purchases here, this just tells the compiler that.
 	const confirmItems = $derived(data.awaitingConfirmation.filter(isPurchase));
 	const showConfirm = $derived(!hasFilters && !activeQuery && confirmItems.length > 0);
+	// "Sleep on it": paused requests, served whole like the confirm to-do.
+	const sleepingItems = $derived(data.sleeping.filter(isPurchase));
+	const showSleeping = $derived(!hasFilters && !activeQuery && sleepingItems.length > 0);
 	const rest = $derived(
 		filtered.filter((e) => {
 			if (isPurchase(e) && e.state === 'pending_approval') return false;
+			if (showSleeping && isPurchase(e) && e.state === 'held') return false;
 			if (showConfirm && isPurchase(e) && e.state === 'approved' && e.mine) return false;
 			return true;
 		})
 	);
+
+	/** "3 days left" · "tomorrow" · "ready". */
+	function heldLeft(iso: string | null): string {
+		if (!iso) return '';
+		const ms = new Date(iso).getTime() - Date.now();
+		if (ms <= 0) return 'ready';
+		const days = Math.ceil(ms / 86_400_000);
+		return days <= 1 ? 'tomorrow' : `${days} days left`;
+	}
 
 	async function loadMore() {
 		if (loadingMore) return;
@@ -298,7 +324,7 @@
 			style="background: color-mix(in oklab, {m.bucketColor ??
 				'var(--seal)'} 14%, var(--surface-2))"
 		>
-			<Icon name="bank" class="h-[16px] w-[16px]" style="color: {m.bucketColor ?? 'var(--seal)'}" />
+			<Landmark class="h-[16px] w-[16px]" style="color: {m.bucketColor ?? 'var(--seal)'}" />
 		</span>
 		<div class="min-w-0 flex-1">
 			<p class="truncate text-[15px]" style="color: var(--ink-2)">
@@ -339,7 +365,7 @@
 						class="press flex h-full w-[88px] flex-col items-center justify-center gap-1 text-[13px] font-semibold"
 						style="background: var(--deny); color: var(--paper)"
 					>
-						<Icon name="xmark" class="h-4 w-4" /> Deny
+						<X class="h-4 w-4" /> Deny
 					</button>
 				</form>
 				<form
@@ -352,7 +378,7 @@
 						class="press flex h-full w-[88px] flex-col items-center justify-center gap-1 text-[13px] font-semibold"
 						style="background: var(--approve); color: var(--paper)"
 					>
-						<Icon name="checkmark" class="h-4 w-4" /> Approve
+						<Check class="h-4 w-4" /> Approve
 					</button>
 				</form>
 			</div>
@@ -362,7 +388,7 @@
 				class="absolute inset-y-0 right-0 z-0 flex items-center gap-1.5 pr-4 pl-5 text-[14px] font-semibold"
 				style="background: var(--approve); color: var(--paper)"
 			>
-				<Icon name="checkmark" class="h-4 w-4" /> Confirm
+				<Check class="h-4 w-4" /> Confirm
 			</a>
 		{/if}
 		<a
@@ -396,7 +422,7 @@
 					/>
 					{#if p.isRefund}
 						<span class="absolute inset-0 flex items-center justify-center">
-							<Icon name="reverse" class="h-[18px] w-[18px] text-white drop-shadow" />
+							<RotateCcw class="h-[18px] w-[18px] text-white drop-shadow" />
 						</span>
 					{/if}
 				</span>
@@ -405,11 +431,11 @@
 					class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] text-[18px]"
 					style="background: var(--surface-2); box-shadow: inset 0 0 0 0.5px var(--hairline)"
 				>
-					<Icon
-						name={p.isRefund ? 'reverse' : 'bag'}
-						class="h-[18px] w-[18px]"
-						style="color: var(--ink-4)"
-					/>
+					{#if p.isRefund}
+						<RotateCcw class="h-[18px] w-[18px]" style="color: var(--ink-4)" />
+					{:else}
+						<ShoppingBag class="h-[18px] w-[18px]" style="color: var(--ink-4)" />
+					{/if}
 				</span>
 			{/if}
 			<div class="min-w-0 flex-1">
@@ -424,7 +450,7 @@
 							aria-label="Sealed — hidden from some members"
 							class="contents"
 						>
-							<Icon name="lock" class="h-3 w-3 shrink-0" style="color: var(--seal)" />
+							<Lock class="h-3 w-3 shrink-0" style="color: var(--seal)" />
 						</span>
 					{/if}
 				</div>
@@ -464,8 +490,7 @@
 	<div class="mb-5 flex gap-2">
 		<label class="relative flex-1">
 			<span class="sr-only">Search the ledger</span>
-			<Icon
-				name="search"
+			<Search
 				class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2"
 				style="color: var(--ink-4)"
 			/>
@@ -483,7 +508,7 @@
 					style="color: var(--ink-4)"
 					aria-label="Clear"
 				>
-					<Icon name="xmark" class="h-4 w-4" />
+					<X class="h-4 w-4" />
 				</button>
 			{/if}
 		</label>
@@ -495,11 +520,7 @@
 				: 'var(--hairline)'}; background: var(--surface)"
 			aria-label="Filter the ledger"
 		>
-			<Icon
-				name="funnel"
-				class="h-4 w-4"
-				style="color: {hasFilters ? 'var(--ink)' : 'var(--ink-4)'}"
-			/>
+			<Funnel class="h-4 w-4" style="color: {hasFilters ? 'var(--ink)' : 'var(--ink-4)'}" />
 			{#if hasFilters}
 				<span
 					class="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full"
@@ -519,7 +540,7 @@
 					aria-label="Remove filter: {f.label}"
 				>
 					{f.label}
-					<Icon name="xmark" class="h-3 w-3" style="color: var(--ink-4)" />
+					<X class="h-3 w-3" style="color: var(--ink-4)" />
 				</button>
 			{/each}
 			{#if activeFilters.length > 1}
@@ -568,7 +589,7 @@
 						style="color: var(--ink-4)"
 						aria-label="Close"
 					>
-						<Icon name="xmark" class="h-4 w-4" />
+						<X class="h-4 w-4" />
 					</button>
 				</div>
 				<div class="h-px" style="background: var(--hairline)"></div>
@@ -709,8 +730,7 @@
 				class="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-[22px]"
 				style="background: radial-gradient(120% 120% at 30% 20%, color-mix(in oklab, var(--ws-accent) 40%, var(--surface)), var(--surface))"
 			>
-				<Icon
-					name="bag"
+				<ShoppingBag
 					class="h-8 w-8"
 					style="color: color-mix(in oklab, var(--ws-accent) 80%, white)"
 				/>
@@ -742,7 +762,7 @@
 					class="press mt-4 flex items-center justify-center gap-1.5 text-[14px] font-medium"
 					style="color: var(--ws-accent)"
 				>
-					<Icon name="question" class="h-4 w-4" /> How this works
+					<CircleHelp class="h-4 w-4" /> How this works
 				</a>
 			{/if}
 		</div>
@@ -767,6 +787,50 @@
 			<div class="mb-6">
 				{#each confirmItems as p, i (p.id)}
 					{@render row(p, i === confirmItems.length - 1)}
+				{/each}
+			</div>
+		{/if}
+
+		{#if showSleeping}
+			<!-- Seal-purple: the temporal-lock tone shared with sealed gifts. -->
+			<p class="section-label mt-2 mb-1 px-1" style="color: var(--seal)">
+				Sleeping on it · {sleepingItems.length}
+			</p>
+			<div class="mb-6">
+				{#each sleepingItems as p, i (p.id)}
+					<a
+						href="/w/{slug}/purchases/{p.id}"
+						class="press flex items-center gap-3 px-1 py-3 {i === sleepingItems.length - 1
+							? ''
+							: 'hairline'}"
+					>
+						<span
+							class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px]"
+							style="background: color-mix(in oklab, var(--seal) 13%, var(--surface-2)); color: var(--seal)"
+						>
+							<Moon class="h-[18px] w-[18px]" />
+						</span>
+						<div class="min-w-0 flex-1">
+							<span class="block truncate text-[16px] font-medium" style="color: var(--ink)"
+								>{p.itemName}</span
+							>
+							<span class="mt-0.5 block text-[13px]" style="color: var(--ink-4)"
+								>{p.requesterName}</span
+							>
+						</div>
+						<div class="flex shrink-0 flex-col items-end gap-1">
+							<Money
+								minor={p.amountMinor}
+								currency={p.currency}
+								class="text-[16px] font-semibold"
+							/>
+							<span
+								class="chip num"
+								style="color: color-mix(in oklab, var(--seal) 80%, var(--ink)); background: color-mix(in oklab, var(--seal) 13%, var(--surface))"
+								>{heldLeft(p.heldUntil)}</span
+							>
+						</div>
+					</a>
 				{/each}
 			</div>
 		{/if}

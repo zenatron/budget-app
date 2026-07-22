@@ -12,7 +12,7 @@
 	 * photo input, so the upload goes through the same hardened image pipeline as
 	 * a photographed receipt — nothing on the server had to learn about PDFs.
 	 */
-	import Icon from '$lib/components/Icon.svelte';
+	import { ChevronRight, Sparkles } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
 	import type { ReadPdfResult } from '$lib/bill/read-pdf';
 	import type { MoneyCandidate } from '$lib/domain/bill/extract';
@@ -116,7 +116,7 @@
 				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
 				style="background: color-mix(in oklab, var(--pending) 14%, var(--surface))"
 			>
-				<Icon name="sparkle" class="h-[18px] w-[18px]" style="color: var(--pending)" />
+				<Sparkles class="h-[18px] w-[18px]" style="color: var(--pending)" />
 			</span>
 			<span class="min-w-0 flex-1">
 				<span class="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -134,7 +134,7 @@
 				</span>
 			</span>
 			{#if !busy}
-				<Icon name="chevronRight" class="h-4 w-4 shrink-0" style="color: var(--ink-4)" />
+				<ChevronRight class="h-4 w-4 shrink-0" style="color: var(--ink-4)" />
 			{/if}
 			<input
 				type="file"

@@ -3,7 +3,7 @@
 	import { submit } from '$lib/actions/submit';
 	import { money } from '$lib/actions/money';
 	import { dismiss } from '$lib/actions/dismiss';
-	import Icon from './Icon.svelte';
+	import { X } from '@lucide/svelte';
 
 	// `open` is bindable so the FAB long-press can drive it; the form's action
 	// posts to the real new-purchase route, so no layout-level action is needed.
@@ -47,7 +47,7 @@
 					style="color: var(--ink-4)"
 					aria-label="Close"
 				>
-					<Icon name="xmark" class="h-4 w-4" />
+					<X class="h-4 w-4" />
 				</button>
 			</div>
 			<p class="px-5 pb-3 text-[13px]" style="color: var(--ink-4)">

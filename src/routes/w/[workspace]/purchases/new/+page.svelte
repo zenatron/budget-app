@@ -1,18 +1,40 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
-	import Icon from '$lib/components/Icon.svelte';
+	import {
+		Calendar,
+		Camera,
+		ChevronDown,
+		ChevronLeft,
+		ChevronRight,
+		Clock,
+		CreditCard,
+		Gift,
+		Landmark,
+		MapPin,
+		Moon,
+		Search,
+		ShoppingBag,
+		X
+	} from '@lucide/svelte';
 	import { money } from '$lib/actions/money';
 	import { onDestroy } from 'svelte';
+	import { fade, fly } from 'svelte/transition';
 	import { calDateInZone } from '$lib/domain/time/zoned';
+	import { dismiss } from '$lib/actions/dismiss';
 
 	import BillImport from '$lib/components/BillImport.svelte';
 	import BarcodeScanner from '$lib/components/BarcodeScanner.svelte';
+	import HoldPicker from '$lib/components/HoldPicker.svelte';
 
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
 	let showGift = $state(false);
 	let photoPreview: string | null = $state(null);
+	// "Sleep on it" at creation: opens the duration picker, then submits the form
+	// as a request that's immediately put to sleep.
+	let showSleep = $state(false);
+	let sleepDays = $state(3);
 
 	// Bound so the bill importer can fill them. Everything else on this form
 	// stays uncontrolled — these three are the only fields a bill can speak to.
@@ -20,6 +42,9 @@
 	let itemName = $state('');
 	let merchantName = $state('');
 	let photoInput: HTMLInputElement | null = $state(null);
+	const amountMinorForPicker = $derived(
+		BigInt(Math.round((Number((amount || '0').replace(/[^0-9.]/g, '')) || 0) * 100))
+	);
 
 	/**
 	 * Hand the rendered page to the form's own photo input rather than uploading
@@ -148,7 +173,7 @@
 		class="press -ml-1 inline-flex items-center gap-0.5 text-[15px]"
 		style="color: var(--ink-3)"
 	>
-		<Icon name="chevronLeft" class="h-4 w-4" /> Ledger
+		<ChevronLeft class="h-4 w-4" /> Ledger
 	</a>
 
 	{#if data.billImportEnabled}
@@ -161,7 +186,7 @@
 				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
 				style="background: color-mix(in oklab, var(--pending) 14%, var(--surface))"
 			>
-				<Icon name="search" class="h-[18px] w-[18px]" style="color: var(--pending)" />
+				<Search class="h-[18px] w-[18px]" style="color: var(--pending)" />
 			</span>
 			<span class="min-w-0 flex-1">
 				<span class="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -176,7 +201,7 @@
 					>Reads the number. You still enter the price.</span
 				>
 			</span>
-			<Icon name="chevronRight" class="h-4 w-4 shrink-0" style="color: var(--ink-4)" />
+			<ChevronRight class="h-4 w-4 shrink-0" style="color: var(--ink-4)" />
 		</button>
 
 		<BarcodeScanner bind:open={scanning} onscan={applyScan} onphoto={applyScanPhoto} />
@@ -213,7 +238,7 @@
 
 		<div class="card p-2">
 			<label class="row">
-				<Icon name="bag" class="h-5 w-5" style="color: var(--ink-4)" />
+				<ShoppingBag class="h-5 w-5" style="color: var(--ink-4)" />
 				<input
 					name="itemName"
 					aria-label="Item"
@@ -226,7 +251,7 @@
 				/>
 			</label>
 			<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
-				<Icon name="pin" class="h-5 w-5" style="color: var(--ink-4)" />
+				<MapPin class="h-5 w-5" style="color: var(--ink-4)" />
 				<input
 					name="merchantName"
 					aria-label="Merchant"
@@ -238,7 +263,7 @@
 				/>
 			</div>
 			<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
-				<Icon name="card" class="h-5 w-5" style="color: var(--ink-4)" />
+				<CreditCard class="h-5 w-5" style="color: var(--ink-4)" />
 				<select
 					name="categoryId"
 					class="-mx-1 flex-1 border-none bg-transparent p-0 text-[17px] outline-none"
@@ -247,11 +272,11 @@
 					<option value="">No category</option>
 					{#each data.categories as c (c.id)}<option value={c.id}>{c.icon} {c.name}</option>{/each}
 				</select>
-				<Icon name="chevronDown" class="h-4 w-4" style="color: var(--ink-4)" />
+				<ChevronDown class="h-4 w-4" style="color: var(--ink-4)" />
 			</div>
 			{#if data.buckets.length > 0}
 				<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
-					<Icon name="bank" class="h-5 w-5" style="color: var(--ink-4)" />
+					<Landmark class="h-5 w-5" style="color: var(--ink-4)" />
 					<select
 						name="bucketId"
 						class="-mx-1 flex-1 border-none bg-transparent p-0 text-[17px] outline-none"
@@ -260,7 +285,7 @@
 						<option value="">Charge to bucket</option>
 						{#each data.buckets as b (b.id)}<option value={b.id}>{b.name}</option>{/each}
 					</select>
-					<Icon name="chevronDown" class="h-4 w-4" style="color: var(--ink-4)" />
+					<ChevronDown class="h-4 w-4" style="color: var(--ink-4)" />
 				</div>
 			{/if}
 			<!-- Photo (optional) -->
@@ -273,7 +298,7 @@
 					<span class="flex-1 text-[17px]" style="color: var(--ink)">Photo attached</span>
 					<span class="text-[14px]" style="color: var(--ink-3)">Change</span>
 				{:else}
-					<Icon name="camera" class="h-5 w-5" style="color: var(--ink-4)" />
+					<Camera class="h-5 w-5" style="color: var(--ink-4)" />
 					<span class="flex-1 text-[17px]" style="color: var(--ink-4)">Add a photo (optional)</span>
 				{/if}
 				<input
@@ -286,7 +311,7 @@
 				/>
 			</label>
 			<div class="row" style="box-shadow: inset 0 0.5px 0 var(--hairline); align-items: flex-start">
-				<Icon name="clock" class="mt-0.5 h-5 w-5" style="color: var(--ink-4)" />
+				<Clock class="mt-0.5 h-5 w-5" style="color: var(--ink-4)" />
 				<textarea
 					name="note"
 					aria-label="Note"
@@ -302,7 +327,7 @@
 				means "now", so the everyday case needs no interaction.
 			-->
 			<label class="row" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
-				<Icon name="calendar" class="h-5 w-5" style="color: var(--ink-4)" />
+				<Calendar class="h-5 w-5" style="color: var(--ink-4)" />
 				<span class="flex-1 text-[16px]" style="color: var(--ink-4)">When</span>
 				<input
 					type="date"
@@ -330,7 +355,7 @@
 						class="flex h-9 w-9 items-center justify-center rounded-full"
 						style="background: color-mix(in oklab, var(--seal) 20%, transparent)"
 					>
-						<Icon name="gift" class="h-[18px] w-[18px]" style="color: var(--seal)" />
+						<Gift class="h-[18px] w-[18px]" style="color: var(--seal)" />
 					</span>
 					<div class="flex-1">
 						<p class="text-[15px] font-semibold" style="color: var(--seal)">
@@ -340,8 +365,7 @@
 							Invisible to who you pick, including totals
 						</p>
 					</div>
-					<Icon
-						name="chevronDown"
+					<ChevronDown
 						class="h-4 w-4 transition-transform duration-200 {showGift ? 'rotate-180' : ''}"
 						style="color: var(--seal)"
 					/>
@@ -452,5 +476,65 @@
 				<span class="text-[12px] font-normal" style="color: var(--ink-4)">Needs approval</span>
 			</button>
 		</div>
+
+		<button
+			type="button"
+			onclick={() => (showSleep = true)}
+			disabled={!itemName || !amount}
+			class="btn w-full py-3 text-[15px] disabled:opacity-40"
+			style="color: color-mix(in oklab, var(--seal) 84%, var(--ink)); background: color-mix(in oklab, var(--seal) 10%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--seal) 26%, transparent)"
+		>
+			<Moon class="h-4 w-4" /> Sleep on it
+		</button>
+
+		{#if showSleep}
+			<div
+				class="fixed inset-0 z-50"
+				style="background: oklch(0 0 0 / 0.28)"
+				use:dismiss={() => (showSleep = false)}
+				transition:fade={{ duration: 140 }}
+			></div>
+			<div
+				class="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+				role="dialog"
+				aria-modal="true"
+				aria-label="Sleep on it"
+				transition:fly={{ y: 24, duration: 200 }}
+			>
+				<div
+					class="card-lg overflow-hidden p-5"
+					style="box-shadow: var(--shadow-float); background: var(--surface)"
+				>
+					<div class="flex items-center justify-between">
+						<h2
+							class="font-[family-name:var(--font-display)] text-[22px]"
+							style="color: var(--ink)"
+						>
+							Sleep on it
+						</h2>
+						<button
+							type="button"
+							onclick={() => (showSleep = false)}
+							class="press -mr-1 flex h-8 w-8 items-center justify-center rounded-full"
+							style="color: var(--ink-4)"
+							aria-label="Close"
+						>
+							<X class="h-4 w-4" />
+						</button>
+					</div>
+					<p class="mt-1 text-[13px]" style="color: var(--ink-4)">
+						Take some time before deciding. We've suggested how long based on the amount — spin to
+						change it.
+					</p>
+					<div class="mt-3">
+						<HoldPicker amountMinor={amountMinorForPicker} bind:days={sleepDays} />
+					</div>
+					<input type="hidden" name="sleepDays" value={sleepDays} />
+					<button name="intent" value="request" class="btn btn-accent mt-3 w-full py-3 text-[15px]">
+						Sleep on it
+					</button>
+				</div>
+			</div>
+		{/if}
 	</form>
 </div>

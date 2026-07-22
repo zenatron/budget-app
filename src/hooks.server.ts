@@ -14,6 +14,7 @@ import {
 import { findWorkspaceForMember } from '$lib/server/repo/workspaces';
 import { rateLimitOk } from '$lib/server/rate-limit';
 import { unsealDuePurchases } from '$lib/application/unseal-due';
+import { releaseDueHolds } from '$lib/application/release-holds';
 import { nudgeStaleRequests } from '$lib/application/nudge-stale';
 import { sendDueSummaries } from '$lib/application/summary-digest';
 import { materializeDueRules } from '$lib/application/recurring';
@@ -102,6 +103,16 @@ export const init: ServerInit = async () => {
 		} catch (e) {
 			console.log(
 				JSON.stringify({ level: 'error', msg: 'sweep: nudge failed', err: (e as Error).message })
+			);
+		}
+		try {
+			const ready = await releaseDueHolds(getDb(), deps);
+			if (ready > 0) {
+				console.log(JSON.stringify({ level: 'info', msg: 'sweep: holds ready', count: ready }));
+			}
+		} catch (e) {
+			console.log(
+				JSON.stringify({ level: 'error', msg: 'sweep: holds failed', err: (e as Error).message })
 			);
 		}
 		try {

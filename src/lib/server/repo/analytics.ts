@@ -1,6 +1,13 @@
 import { and, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db';
-import { budget, category, purchase, user, workspaceMember } from '$lib/server/db/schema';
+import {
+	approvalEvent,
+	budget,
+	category,
+	purchase,
+	user,
+	workspaceMember
+} from '$lib/server/db/schema';
 import { periodBoundsUtc, type Period } from '$lib/domain/analytics/period';
 import { visibleTo } from './purchases';
 
@@ -230,6 +237,8 @@ export interface VerdictTotals {
 	deniedMinor: bigint;
 	/** Requested amounts the requester withdrew before a decision. */
 	cancelledMinor: bigint;
+	/** Slept on, then let go — the impulse buys avoided. Subset of cancelled. */
+	letGoMinor: bigint;
 }
 
 /**
@@ -263,6 +272,14 @@ export async function verdictTotals(
 			), 0)`,
 			cancelled: sql<string>`coalesce(sum(${purchase.requestedAmountMinor}) filter (
 				where ${purchase.state} = 'cancelled'
+			), 0)`,
+			// The correlation must be fully qualified: a bare ${purchase.id} renders
+			// as "id", which the subquery binds to approval_event.id instead.
+			letGo: sql<string>`coalesce(sum(${purchase.requestedAmountMinor}) filter (
+				where ${purchase.state} = 'cancelled' and exists (
+					select 1 from ${approvalEvent} ae
+					where ae.purchase_id = "purchase"."id" and ae.reason = 'let it go'
+				)
 			), 0)`
 		})
 		.from(purchase)
@@ -272,6 +289,7 @@ export async function verdictTotals(
 		approvedMinor: BigInt(row?.approved ?? '0'),
 		refundedMinor: BigInt(row?.refunded ?? '0'),
 		deniedMinor: BigInt(row?.denied ?? '0'),
-		cancelledMinor: BigInt(row?.cancelled ?? '0')
+		cancelledMinor: BigInt(row?.cancelled ?? '0'),
+		letGoMinor: BigInt(row?.letGo ?? '0')
 	};
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Icon from '$lib/components/Icon.svelte';
+	import { Sparkles } from '@lucide/svelte';
 	import { toggle } from '$lib/command-palette-state.svelte';
 </script>
 
@@ -9,5 +9,5 @@
 	style="background: color-mix(in oklab, var(--ws-accent) 12%, transparent); color: var(--ws-accent)"
 	aria-label="Ask Ledger"
 >
-	<Icon name="sparkle" class="h-[17px] w-[17px]" />
+	<Sparkles class="h-[17px] w-[17px]" />
 </button>

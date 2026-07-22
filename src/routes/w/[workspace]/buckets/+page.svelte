@@ -5,7 +5,7 @@
 	import { money } from '$lib/actions/money';
 	import { formatMinor } from '$lib/money-format';
 	import { formatPct } from '$lib/format';
-	import Icon from '$lib/components/Icon.svelte';
+	import { CircleHelp, Pause, Pencil, Play, Plus, Wallet } from '@lucide/svelte';
 	import Money from '$lib/components/Money.svelte';
 	import DayOfMonthPicker from '$lib/components/DayOfMonthPicker.svelte';
 
@@ -182,7 +182,7 @@
 				class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
 				style="background: color-mix(in oklab, var(--ws-accent) 16%, var(--surface-2))"
 			>
-				<Icon name="wallet" class="h-7 w-7" style="color: var(--ws-accent)" />
+				<Wallet class="h-7 w-7" style="color: var(--ws-accent)" />
 			</div>
 			<p class="text-[18px] font-semibold" style="color: var(--ink)">No buckets yet</p>
 			<p class="mx-auto mt-1 max-w-[30ch] text-[15px] leading-relaxed" style="color: var(--ink-3)">
@@ -193,7 +193,7 @@
 				class="press mt-4 inline-flex items-center gap-1.5 text-[14px] font-medium"
 				style="color: var(--ws-accent)"
 			>
-				<Icon name="question" class="h-4 w-4" /> How this works
+				<CircleHelp class="h-4 w-4" /> How this works
 			</a>
 		</div>
 	{:else}
@@ -254,13 +254,13 @@
 								class="press inline-flex items-center gap-1"
 								style="color: var(--ink-2)"
 							>
-								<Icon name="pencil" class="h-3.5 w-3.5" /> Edit
+								<Pencil class="h-3.5 w-3.5" /> Edit
 							</button>
 							{#if b.status === 'active'}
 								<form method="POST" action="?/pause" use:submit={{ success: 'Paused' }}>
 									<input type="hidden" name="bucketId" value={b.id} />
 									<button class="press inline-flex items-center gap-1" style="color: var(--ink-3)">
-										<Icon name="pause" class="h-3.5 w-3.5" /> Pause
+										<Pause class="h-3.5 w-3.5" /> Pause
 									</button>
 								</form>
 							{:else}
@@ -270,7 +270,7 @@
 										class="press inline-flex items-center gap-1"
 										style="color: var(--approve)"
 									>
-										<Icon name="play" class="h-3.5 w-3.5" /> Resume
+										<Play class="h-3.5 w-3.5" /> Resume
 									</button>
 								</form>
 							{/if}
@@ -279,7 +279,7 @@
 								class="press inline-flex items-center gap-1"
 								style="color: var(--ink-2)"
 							>
-								<Icon name="plus" class="h-3.5 w-3.5" /> Adjust
+								<Plus class="h-3.5 w-3.5" /> Adjust
 							</button>
 							<form
 								method="POST"

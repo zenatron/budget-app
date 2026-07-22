@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { fly } from 'svelte/transition';
 	import { dismiss, toasts } from '$lib/toast-state.svelte';
-	import Icon from '$lib/components/Icon.svelte';
+	import { Check, CircleAlert } from '@lucide/svelte';
 </script>
 
 <!--
@@ -20,11 +20,11 @@
 			style="box-shadow: var(--shadow-float); background: var(--surface)"
 			transition:fly={{ y: 12, duration: 180 }}
 		>
-			<Icon
-				name={toast.kind === 'success' ? 'checkmark' : 'exclamation'}
-				class="h-4 w-4 shrink-0"
-				style="color: {toast.kind === 'success' ? 'var(--approve)' : 'var(--deny)'}"
-			/>
+			{#if toast.kind === 'success'}
+				<Check class="h-4 w-4 shrink-0" style="color: var(--approve)" />
+			{:else}
+				<CircleAlert class="h-4 w-4 shrink-0" style="color: var(--deny)" />
+			{/if}
 			<span class="flex-1 text-[15px]" style="color: var(--ink)">{toast.message}</span>
 			<button
 				onclick={() => dismiss(toast.id)}

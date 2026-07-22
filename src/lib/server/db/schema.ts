@@ -31,7 +31,9 @@ export const purchaseState = pgEnum('purchase_state', [
 	'denied',
 	'cancelled',
 	'completed',
-	'refunded'
+	'refunded',
+	// "Sleep on it": a pending request paused until held_until, then resurfaced.
+	'held'
 ]);
 export const recurringStatus = pgEnum('recurring_rule_status', ['active', 'paused', 'ended']);
 export const budgetPeriod = pgEnum('budget_period', ['month', 'week']);
@@ -173,6 +175,11 @@ export const purchase = pgTable(
 		recurringRuleId: uuid('recurring_rule_id'),
 		parentPurchaseId: uuid('parent_purchase_id').references((): AnyPgColumn => purchase.id),
 		bucketId: uuid('bucket_id'),
+		// "Sleep on it" hold: when the pause lifts, who set it, and whether the
+		// "ready to decide" nudge has already gone out (so the sweep fires once).
+		heldUntil: timestamp('held_until', { withTimezone: true }),
+		heldBy: uuid('held_by'),
+		heldNotifiedAt: timestamp('held_notified_at', { withTimezone: true }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
 		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull()
 	},

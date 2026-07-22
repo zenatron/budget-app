@@ -9,7 +9,17 @@
 	import { money } from '$lib/actions/money';
 	import { dismiss } from '$lib/actions/dismiss';
 	import { formatMinor } from '$lib/money-format';
-	import Icon from '$lib/components/Icon.svelte';
+	import {
+		Check,
+		ChevronRight,
+		CircleHelp,
+		Funnel,
+		Pause,
+		Pencil,
+		Play,
+		Repeat,
+		X
+	} from '@lucide/svelte';
 	import Money from '$lib/components/Money.svelte';
 	import CheckField from '$lib/components/CheckField.svelte';
 	let { data, form } = $props();
@@ -184,7 +194,7 @@
 					style="box-shadow: inset 0 0 0 1px var(--hairline); background: var(--surface)"
 					aria-label="Sort and group"
 				>
-					<Icon name="funnel" class="h-4 w-4" style="color: var(--ink-3)" />
+					<Funnel class="h-4 w-4" style="color: var(--ink-3)" />
 				</button>
 			{/if}
 			<button
@@ -226,7 +236,7 @@
 						style="color: var(--ink-4)"
 						aria-label="Close"
 					>
-						<Icon name="xmark" class="h-4 w-4" />
+						<X class="h-4 w-4" />
 					</button>
 				</div>
 				<div class="h-px" style="background: var(--hairline)"></div>
@@ -247,7 +257,7 @@
 										: 'background: var(--surface-2); color: var(--ink-2)'}
 								>
 									{o.l}
-									{#if on}<Icon name="checkmark" class="h-4 w-4" />{/if}
+									{#if on}<Check class="h-4 w-4" />{/if}
 								</button>
 							{/each}
 						</div>
@@ -321,13 +331,13 @@
 			style="box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--approve) 30%, transparent)"
 		>
 			<span class="flex items-center gap-2.5">
-				<Icon name="checkmark" class="h-4 w-4 shrink-0" style="color: var(--approve)" />
+				<Check class="h-4 w-4 shrink-0" style="color: var(--approve)" />
 				<span class="text-[15px]" style="color: var(--ink)">
 					{data.needsConfirmingCount}
 					{data.needsConfirmingCount === 1 ? 'charge needs' : 'charges need'} confirming
 				</span>
 			</span>
-			<Icon name="chevronRight" class="h-4 w-4 shrink-0" style="color: var(--ink-4)" />
+			<ChevronRight class="h-4 w-4 shrink-0" style="color: var(--ink-4)" />
 		</a>
 	{/if}
 
@@ -398,7 +408,7 @@
 				class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl"
 				style="background: color-mix(in oklab, var(--ws-accent) 16%, var(--surface-2))"
 			>
-				<Icon name="repeat" class="h-7 w-7" style="color: var(--ws-accent)" />
+				<Repeat class="h-7 w-7" style="color: var(--ws-accent)" />
 			</div>
 			<p class="text-[18px] font-semibold" style="color: var(--ink)">No recurring charges</p>
 			<p class="mx-auto mt-1 max-w-[28ch] text-[15px] leading-relaxed" style="color: var(--ink-3)">
@@ -409,7 +419,7 @@
 				class="press mt-4 inline-flex items-center gap-1.5 text-[14px] font-medium"
 				style="color: var(--ws-accent)"
 			>
-				<Icon name="question" class="h-4 w-4" /> How this works
+				<CircleHelp class="h-4 w-4" /> How this works
 			</a>
 		</div>
 	{:else}
@@ -456,7 +466,7 @@
 												class="press inline-flex items-center gap-1"
 												style="color: var(--ink-3)"
 											>
-												<Icon name="pause" class="h-3.5 w-3.5" /> Pause
+												<Pause class="h-3.5 w-3.5" /> Pause
 											</button>
 										</form>
 									{:else}
@@ -466,7 +476,7 @@
 												class="press inline-flex items-center gap-1"
 												style="color: var(--approve)"
 											>
-												<Icon name="play" class="h-3.5 w-3.5" /> Resume
+												<Play class="h-3.5 w-3.5" /> Resume
 											</button>
 										</form>
 									{/if}
@@ -475,7 +485,7 @@
 										class="press inline-flex items-center gap-1"
 										style="color: var(--ink-2)"
 									>
-										<Icon name="pencil" class="h-3.5 w-3.5" /> Edit
+										<Pencil class="h-3.5 w-3.5" /> Edit
 									</button>
 									<form
 										method="POST"

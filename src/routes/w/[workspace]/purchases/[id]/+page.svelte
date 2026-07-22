@@ -3,9 +3,23 @@
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
 	import { formatMinor } from '$lib/money-format';
-	import Icon from '$lib/components/Icon.svelte';
+	import {
+		Camera,
+		Check,
+		ChevronDown,
+		ChevronLeft,
+		CircleAlert,
+		Lock,
+		Moon,
+		RotateCcw,
+		Trash2,
+		X
+	} from '@lucide/svelte';
 	import Money from '$lib/components/Money.svelte';
 	import { money } from '$lib/actions/money';
+	import { fade, fly } from 'svelte/transition';
+	import { dismiss } from '$lib/actions/dismiss';
+	import HoldPicker from '$lib/components/HoldPicker.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 
 	let { data, form } = $props();
@@ -15,7 +29,25 @@
 	let editingNote = $state(false);
 	let deciding = $state<'approve' | 'deny' | null>(null);
 	let showDeny = $state(false);
+	// Sleep-on-it picker sheet: 'hold' for a fresh pause, 'extend' for more days.
+	let holdSheet = $state<'hold' | 'extend' | null>(null);
+	let holdDays = $state(3);
 	const p = $derived(data.purchase);
+
+	/** "3 days left" · "tomorrow" · "ready" — coarse, never a ticking clock. */
+	function heldLeft(iso: string): string {
+		const ms = new Date(iso).getTime() - Date.now();
+		if (ms <= 0) return 'ready';
+		const days = Math.ceil(ms / 86_400_000);
+		return days <= 1 ? 'tomorrow' : `${days} days left`;
+	}
+	function heldUntilLong(iso: string): string {
+		return new Date(iso).toLocaleDateString(undefined, {
+			weekday: 'short',
+			month: 'short',
+			day: 'numeric'
+		});
+	}
 
 	function fmtDate(iso: string) {
 		return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -47,7 +79,8 @@
 		denied: 'Denied',
 		cancelled: 'Cancelled',
 		completed: 'Completed',
-		refunded: 'Refunded'
+		refunded: 'Refunded',
+		held: 'Sleeping'
 	};
 	const stateVar: Record<string, string> = {
 		pending_approval: '--pending',
@@ -55,6 +88,7 @@
 		denied: '--deny',
 		refunded: '--info',
 		completed: '--approve',
+		held: '--seal',
 		draft: '--ink-3',
 		cancelled: '--ink-3'
 	};
@@ -66,7 +100,7 @@
 		class="press mb-4 -ml-1 inline-flex items-center gap-0.5 text-[14px] font-medium"
 		style="color: var(--ink-3)"
 	>
-		<Icon name="chevronLeft" class="h-4 w-4" /> Ledger
+		<ChevronLeft class="h-4 w-4" /> Ledger
 	</a>
 
 	<!-- Editorial masthead: the amount as a magazine headline -->
@@ -94,6 +128,85 @@
 			Requested by {p.requesterName}{p.completedAt ? ` · ${fmtDateLong(p.completedAt)}` : ''}
 		</p>
 	</div>
+
+	{#if p.state === 'held'}
+		<!-- Sleeping. Seal-purple, the temporal-lock tone. -->
+		<div
+			class="mt-5 rounded-[16px] p-4"
+			style="background: color-mix(in oklab, var(--seal) 9%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--seal) 24%, transparent)"
+		>
+			<div class="flex items-center gap-2.5">
+				<Moon class="h-5 w-5 shrink-0" style="color: var(--seal)" />
+				<div class="min-w-0">
+					{#if p.heldReady}
+						<p
+							class="text-[15px] font-semibold"
+							style="color: color-mix(in oklab, var(--seal) 82%, var(--ink))"
+						>
+							Ready to decide
+						</p>
+						<p class="text-[13px]" style="color: var(--ink-3)">You slept on it — still want it?</p>
+					{:else if p.heldUntil}
+						<p
+							class="text-[15px] font-semibold"
+							style="color: color-mix(in oklab, var(--seal) 82%, var(--ink))"
+						>
+							Sleeping until {heldUntilLong(p.heldUntil)}
+						</p>
+						<p class="num text-[13px]" style="color: var(--ink-3)">{heldLeft(p.heldUntil)}</p>
+					{/if}
+				</div>
+			</div>
+			{#if data.can.manageHold}
+				<div class="mt-3.5 flex gap-2">
+					{#if p.heldReady}
+						<form
+							method="POST"
+							action="?/wake"
+							use:submit={{ success: 'Back in the queue' }}
+							class="flex-1"
+						>
+							<button class="btn btn-accent w-full py-2.5 text-[14px]">Buy it</button>
+						</form>
+						<button
+							onclick={() => {
+								holdDays = 3;
+								holdSheet = 'extend';
+							}}
+							class="btn btn-ghost flex-1 py-2.5 text-[14px]">A few more days</button
+						>
+					{:else}
+						<form
+							method="POST"
+							action="?/wake"
+							use:submit={{ success: 'Back in the queue' }}
+							class="flex-1"
+						>
+							<button class="btn btn-ghost w-full py-2.5 text-[14px]">Wake it now</button>
+						</form>
+					{/if}
+					<form
+						method="POST"
+						action="?/letGo"
+						use:submit={{
+							confirm: {
+								title: 'Let it go?',
+								body: 'This cancels the request. Deciding not to buy is a perfectly good outcome.',
+								confirmLabel: 'Let it go',
+								tone: 'danger'
+							},
+							success: 'Cancelled'
+						}}
+						class="flex-1"
+					>
+						<button class="btn btn-plain w-full py-2.5 text-[14px]" style="color: var(--deny)"
+							>Let it go</button
+						>
+					</form>
+				</div>
+			{/if}
+		</div>
+	{/if}
 
 	{#if data.isRefund && !img}
 		<!--
@@ -134,7 +247,7 @@
 						? 'oklch(0 0 0 / 0.45)'
 						: 'var(--surface)'}; color: {data.inheritedImage ? 'white' : 'var(--ink-3)'}"
 				>
-					<Icon name="reverse" class="h-6 w-6" />
+					<RotateCcw class="h-6 w-6" />
 				</span>
 				<!--
 					Says what tapping does. "Reverses this purchase" read as though the
@@ -188,7 +301,7 @@
 							class="press flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold backdrop-blur"
 							style="background: oklch(0 0 0 / 0.55); color: white"
 						>
-							<Icon name="camera" class="h-3.5 w-3.5" /> Replace
+							<Camera class="h-3.5 w-3.5" /> Replace
 							<input
 								type="file"
 								name="photo"
@@ -209,7 +322,7 @@
 							style="background: oklch(0 0 0 / 0.55); color: white"
 							aria-label="Remove photo"
 						>
-							<Icon name="trash" class="h-3.5 w-3.5" />
+							<Trash2 class="h-3.5 w-3.5" />
 						</button>
 					</form>
 				</div>
@@ -223,7 +336,7 @@
 				class="press flex cursor-pointer items-center gap-3 rounded-[14px] px-4 py-4"
 				style="box-shadow: inset 0 0 0 1px var(--hairline); background: var(--surface)"
 			>
-				<Icon name="camera" class="h-5 w-5" style="color: var(--ink-3)" />
+				<Camera class="h-5 w-5" style="color: var(--ink-3)" />
 				<span class="text-[15px]" style="color: var(--ink-3)"
 					>{data.isRefund
 						? 'Add a photo of the return receipt'
@@ -251,7 +364,7 @@
 					class="flex items-center gap-1.5 text-[14px] font-semibold"
 					style="color: var(--pending)"
 				>
-					<Icon name="exclamation" class="h-4 w-4" /> Over budget — needs re-approval
+					<CircleAlert class="h-4 w-4" /> Over budget — needs re-approval
 				</p>
 				<p class="num mt-1 text-[13px]" style="color: var(--ink-2)">
 					Approved {formatMinor(p.approvedAmountMinor, p.currency)}, spent {formatMinor(
@@ -289,10 +402,7 @@
 						{#if deciding === 'approve'}
 							<span class="spin h-5 w-5"></span>
 						{:else}
-							<Icon name="checkmark" class="h-5 w-5" /> Approve {formatMinor(
-								displayAmount,
-								p.currency
-							)}
+							<Check class="h-5 w-5" /> Approve {formatMinor(displayAmount, p.currency)}
 						{/if}
 					</button>
 				</form>
@@ -327,6 +437,19 @@
 					>
 				{/if}
 			</div>
+		{/if}
+
+		{#if data.can.hold}
+			<button
+				onclick={() => {
+					holdDays = 3;
+					holdSheet = 'hold';
+				}}
+				class="btn w-full py-3 text-[15px]"
+				style="color: color-mix(in oklab, var(--seal) 84%, var(--ink)); background: color-mix(in oklab, var(--seal) 10%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--seal) 26%, transparent)"
+			>
+				<Moon class="h-4 w-4" /> Sleep on it
+			</button>
 		{/if}
 
 		<!-- Details as a printed ledger -->
@@ -385,7 +508,7 @@
 						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
 						style="background: color-mix(in oklab, var(--seal) 18%, transparent)"
 					>
-						<Icon name="lock" class="h-4 w-4" style="color: var(--seal)" />
+						<Lock class="h-4 w-4" style="color: var(--seal)" />
 					</span>
 					<div class="min-w-0 flex-1">
 						<p class="text-[15px] font-semibold" style="color: var(--seal)">
@@ -469,8 +592,7 @@
 					style="color: var(--ink)"
 				>
 					<span class="font-medium">Edit details</span>
-					<Icon
-						name="chevronDown"
+					<ChevronDown
 						class="h-4 w-4 transition-transform duration-200 {editing ? 'rotate-180' : ''}"
 						style="color: var(--ink-4)"
 					/>
@@ -547,8 +669,7 @@
 					style="color: var(--ink)"
 				>
 					<span class="font-medium">{p.note ? 'Edit note' : 'Add a note'}</span>
-					<Icon
-						name="chevronDown"
+					<ChevronDown
 						class="h-4 w-4 transition-transform duration-200 {editingNote ? 'rotate-180' : ''}"
 						style="color: var(--ink-4)"
 					/>
@@ -664,6 +785,62 @@
 		{/if}
 	</div>
 </div>
+
+{#if holdSheet}
+	<div
+		class="fixed inset-0 z-50"
+		style="background: oklch(0 0 0 / 0.28)"
+		use:dismiss={() => (holdSheet = null)}
+		transition:fade={{ duration: 140 }}
+	></div>
+	<div
+		class="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+		role="dialog"
+		aria-modal="true"
+		aria-label="Sleep on it"
+		transition:fly={{ y: 24, duration: 200 }}
+	>
+		<div
+			class="card-lg overflow-hidden p-5"
+			style="box-shadow: var(--shadow-float); background: var(--surface)"
+		>
+			<div class="flex items-center justify-between">
+				<h2 class="font-[family-name:var(--font-display)] text-[22px]" style="color: var(--ink)">
+					{holdSheet === 'extend' ? 'A few more days' : 'Sleep on it'}
+				</h2>
+				<button
+					onclick={() => (holdSheet = null)}
+					class="press -mr-1 flex h-8 w-8 items-center justify-center rounded-full"
+					style="color: var(--ink-4)"
+					aria-label="Close"
+				>
+					<X class="h-4 w-4" />
+				</button>
+			</div>
+			<p class="mt-1 text-[13px]" style="color: var(--ink-4)">
+				Take some time before deciding. We've suggested how long based on the amount — spin to
+				change it.
+			</p>
+			<div class="mt-3">
+				<HoldPicker amountMinor={p.requestedAmountMinor} bind:days={holdDays} />
+			</div>
+			<form
+				method="POST"
+				action={holdSheet === 'extend' ? '?/extendHold' : '?/hold'}
+				use:submit={{
+					success: holdSheet === 'extend' ? 'Given more time' : 'Sleeping on it',
+					onSuccess: () => (holdSheet = null)
+				}}
+				class="mt-3"
+			>
+				<input type="hidden" name="days" value={holdDays} />
+				<button class="btn btn-accent w-full py-3 text-[15px]">
+					{holdSheet === 'extend' ? 'Give it more time' : 'Sleep on it'}
+				</button>
+			</form>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.spin {

@@ -16,7 +16,14 @@ import { isSealed } from '../visibility/seal';
  */
 
 export type PurchaseState =
-	'draft' | 'pending_approval' | 'approved' | 'denied' | 'cancelled' | 'completed' | 'refunded';
+	| 'draft'
+	| 'pending_approval'
+	| 'approved'
+	| 'denied'
+	| 'cancelled'
+	| 'completed'
+	| 'refunded'
+	| 'held';
 
 export interface Purchase {
 	id: string;
@@ -45,6 +52,10 @@ export interface Purchase {
 	approverMemberIds: string[];
 	/** Bucket this purchase charges against (withdrawal on completion). */
 	bucketId: string | null;
+	/** "Sleep on it": when set, the purchase is paused until this instant. */
+	heldUntil: Date | null;
+	/** Who put it to sleep — the requester or an approver. */
+	heldBy: string | null;
 }
 
 export class PurchaseStateError extends Error {
@@ -317,6 +328,83 @@ export function edit(
 	return {
 		purchase: next,
 		event: event(next, next.state, actorMemberId, now, 'edited', next.requestedAmount)
+	};
+}
+
+/**
+ * "Sleep on it." PENDING_APPROVAL → HELD, paused until `until`. Either the
+ * requester (a self-imposed cooling-off) or a designated approver ("let's think
+ * about it") may set it — the caller checks which. Approvers are preserved so
+ * the request resumes intact when it wakes.
+ */
+export function hold(p: Purchase, actorMemberId: string, until: Date, now: Date): TransitionResult {
+	// From pending (a request awaiting a decision) or approved (a fresh buy you
+	// want to sleep on before spending). Waking restores whichever it was.
+	assertState(p, ['pending_approval', 'approved'], 'sleep on');
+	if (until.getTime() <= now.getTime()) {
+		throw new PurchaseStateError('The pause has to end in the future');
+	}
+	return {
+		purchase: { ...p, state: 'held', heldUntil: until, heldBy: actorMemberId },
+		event: event(p, 'held', actorMemberId, now, 'put to sleep', null)
+	};
+}
+
+/** HELD → HELD: give it a few more days. */
+export function extendHold(
+	p: Purchase,
+	actorMemberId: string,
+	until: Date,
+	now: Date
+): TransitionResult {
+	assertState(p, ['held'], 'extend the pause on');
+	if (until.getTime() <= now.getTime()) {
+		throw new PurchaseStateError('The pause has to end in the future');
+	}
+	return {
+		purchase: { ...p, heldUntil: until },
+		event: event(p, 'held', actorMemberId, now, 'a few more days', null)
+	};
+}
+
+/**
+ * Still want it. Wake back to where it was: PENDING_APPROVAL if it has approvers
+ * waiting, otherwise APPROVED (an exempt buy that only ever needed *you*). The
+ * pending clock restarts so staleness counts from waking, not the first ask.
+ */
+export function wake(p: Purchase, actorMemberId: string, now: Date): TransitionResult {
+	assertState(p, ['held'], 'wake');
+	if (p.approverMemberIds.length > 0) {
+		return {
+			purchase: {
+				...p,
+				state: 'pending_approval',
+				heldUntil: null,
+				heldBy: null,
+				requestedAt: now
+			},
+			event: event(p, 'pending_approval', actorMemberId, now, 'still wanted it', p.requestedAmount)
+		};
+	}
+	return {
+		purchase: {
+			...p,
+			state: 'approved',
+			heldUntil: null,
+			heldBy: null,
+			approvedAmount: p.approvedAmount ?? p.requestedAmount,
+			decidedAt: p.decidedAt ?? now
+		},
+		event: event(p, 'approved', actorMemberId, now, 'still wanted it', p.requestedAmount)
+	};
+}
+
+/** HELD → CANCELLED: let it go. The quiet win the whole feature is for. */
+export function letGo(p: Purchase, actorMemberId: string, now: Date): TransitionResult {
+	assertState(p, ['held'], 'let go');
+	return {
+		purchase: { ...p, state: 'cancelled', heldUntil: null, heldBy: null },
+		event: event(p, 'cancelled', actorMemberId, now, 'let it go', p.requestedAmount)
 	};
 }
 

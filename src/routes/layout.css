@@ -487,3 +487,10 @@ html[data-vt-slide='left']::view-transition-new(vt-period-card) {
 		animation: none !important;
 	}
 }
+
+/* Lucide ships a 2px stroke; the app's line weight is lighter and more
+   editorial. Soften it globally so the icons sit with the Paper Statement type
+   instead of shouting over it. */
+.lucide {
+	stroke-width: 1.6px;
+}

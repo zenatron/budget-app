@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Icon from '$lib/components/Icon.svelte';
+	import { Wallet } from '@lucide/svelte';
 </script>
 
 <svelte:head><title>Ledger</title></svelte:head>
@@ -13,7 +13,7 @@
 			class="flex h-9 w-9 items-center justify-center rounded-[9px]"
 			style="background: var(--ink); color: var(--paper)"
 		>
-			<Icon name="wallet" class="h-5 w-5" />
+			<Wallet class="h-5 w-5" />
 		</div>
 		<span class="section-label" style="letter-spacing: 0.18em">The Ledger</span>
 	</div>

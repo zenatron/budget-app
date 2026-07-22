@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
-	import Icon from '$lib/components/Icon.svelte';
+	import { Check, ChevronLeft } from '@lucide/svelte';
 
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
@@ -49,7 +49,7 @@
 		class="press -ml-1 inline-flex items-center gap-0.5 text-[15px]"
 		style="color: var(--ink-3)"
 	>
-		<Icon name="chevronLeft" class="h-4 w-4" /> Settings
+		<ChevronLeft class="h-4 w-4" /> Settings
 	</a>
 	<h1 class="px-1 text-[28px]">API &amp; MCP</h1>
 
@@ -97,7 +97,7 @@
 			style="background: color-mix(in oklab, var(--approve) 10%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--approve) 30%, transparent)"
 		>
 			<p class="flex items-center gap-1.5 text-[14px] font-semibold" style="color: var(--approve)">
-				<Icon name="checkmark" class="h-4 w-4" /> “{revealed.name}” created
+				<Check class="h-4 w-4" /> “{revealed.name}” created
 			</p>
 			<p class="mt-1 text-[13px]" style="color: var(--ink-3)">
 				Copy it now — this is the only time it’s shown.

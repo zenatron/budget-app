@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
-	import Icon from '$lib/components/Icon.svelte';
+	import { Check, ChevronLeft, CircleAlert } from '@lucide/svelte';
 
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
@@ -87,7 +87,7 @@
 		class="press -ml-1 inline-flex items-center gap-0.5 text-[15px]"
 		style="color: var(--ink-3)"
 	>
-		<Icon name="chevronLeft" class="h-4 w-4" /> Settings
+		<ChevronLeft class="h-4 w-4" /> Settings
 	</a>
 	<h1 class="px-1 text-[28px]">Notifications</h1>
 
@@ -100,7 +100,7 @@
 				class="flex items-center gap-2 font-[family-name:var(--font-sans)] text-[15px] font-semibold tracking-normal"
 				style="color: var(--pending)"
 			>
-				<Icon name="exclamation" class="h-4 w-4" /> Install the app first
+				<CircleAlert class="h-4 w-4" /> Install the app first
 			</h2>
 			<p class="mt-1.5 text-[13px] leading-relaxed" style="color: var(--ink-2)">
 				On iPhone, notifications only work for installed apps. In Safari, tap
@@ -132,7 +132,7 @@
 			</p>
 		{:else if subscribed}
 			<p class="mt-2 flex items-center gap-1.5 text-[14px]" style="color: var(--approve)">
-				<Icon name="checkmark" class="h-4 w-4" /> Enabled on this device
+				<Check class="h-4 w-4" /> Enabled on this device
 			</p>
 			<button
 				onclick={disablePush}

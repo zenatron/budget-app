@@ -1,7 +1,16 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
-	import Icon from '$lib/components/Icon.svelte';
+	import {
+		Check,
+		ChevronDown,
+		Plus,
+		Settings,
+		CreditCard,
+		ChartNoAxesColumnIncreasing,
+		Repeat,
+		CircleDollarSign
+	} from '@lucide/svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import CommandPaletteOverlay from '$lib/components/CommandPaletteOverlay.svelte';
 	import { paletteOpen, close as closePalette } from '$lib/command-palette-state.svelte';
@@ -123,6 +132,12 @@
 	 * header — it's configuration, visited rarely, and it was occupying prime
 	 * thumb real estate.
 	 */
+	const TAB_ICONS = {
+		card: CreditCard,
+		chart: ChartNoAxesColumnIncreasing,
+		repeat: Repeat,
+		dollar: CircleDollarSign
+	};
 	const tabs = [
 		{ section: 'purchases', label: 'Ledger', icon: 'card', also: [] as string[] },
 		{ section: 'analytics', label: 'Activity', icon: 'chart', also: [] as string[] },
@@ -176,8 +191,7 @@
 					<span class="max-w-[140px] truncate text-[17px] font-semibold" style="color: var(--ink)"
 						>{wsName}</span
 					>
-					<Icon
-						name="chevronDown"
+					<ChevronDown
 						class="h-3.5 w-3.5 shrink-0 transition-transform duration-200 {showSwitcher
 							? 'rotate-180'
 							: ''}"
@@ -196,7 +210,7 @@
 						aria-label="Settings"
 						aria-current={isSettings() ? 'page' : undefined}
 					>
-						<Icon name="gear" class="h-[20px] w-[20px]" />
+						<Settings class="h-[20px] w-[20px]" />
 					</a>
 				</div>
 
@@ -223,7 +237,7 @@
 								>
 								<span class="text-[17px]" style="color: var(--ink)">{ws.name}</span>
 								{#if active}
-									<Icon name="checkmark" class="ml-auto h-4 w-4" style="color: var(--ink)" />
+									<Check class="ml-auto h-4 w-4" style="color: var(--ink)" />
 								{/if}
 							</a>
 						{/each}
@@ -236,7 +250,7 @@
 							<span
 								class="flex h-8 w-8 items-center justify-center rounded-[10px]"
 								style="box-shadow: inset 0 0 0 1.5px var(--hairline-strong)"
-								><Icon name="plus" class="h-4 w-4" style="color: var(--ink-3)" /></span
+								><Plus class="h-4 w-4" style="color: var(--ink-3)" /></span
 							>
 							<span class="text-[17px]" style="color: var(--ink-3)">New workspace</span>
 						</a>
@@ -277,13 +291,14 @@
 			<div class="mx-auto flex max-w-3xl items-start justify-around px-2 pt-1.5">
 				{#each leftTabs as tab (tab.section)}
 					{@const active = tabActive(tab)}
+					{@const TabIcon = TAB_ICONS[tab.icon as keyof typeof TAB_ICONS]}
 					<a
 						href="/w/{slug}/{tab.section}"
 						class="press flex flex-1 flex-col items-center gap-1 py-1 text-[10px]"
 						style="color: {active ? 'var(--ink)' : 'var(--ink-4)'}"
 						aria-current={active ? 'page' : undefined}
 					>
-						<Icon name={tab.icon} class="h-[24px] w-[24px]" />
+						<TabIcon class="h-[24px] w-[24px]" />
 						<span class="font-medium tracking-tight">{tab.label}</span>
 					</a>
 				{/each}
@@ -303,19 +318,20 @@
 						class="flex h-[52px] w-[52px] -translate-y-3 items-center justify-center rounded-full text-white"
 						style="background: var(--ws-accent); box-shadow: 0 6px 16px -4px color-mix(in oklab, var(--ws-accent) 55%, transparent), 0 1px 2px oklch(0.28 0.03 65 / 0.18); outline: 3px solid var(--paper)"
 					>
-						<Icon name="plus" class="h-6 w-6" />
+						<Plus class="h-6 w-6" />
 					</span>
 				</a>
 
 				{#each rightTabs as tab (tab.section)}
 					{@const active = tabActive(tab)}
+					{@const TabIcon = TAB_ICONS[tab.icon as keyof typeof TAB_ICONS]}
 					<a
 						href="/w/{slug}/{tab.section}"
 						class="press flex flex-1 flex-col items-center gap-1 py-1 text-[10px]"
 						style="color: {active ? 'var(--ink)' : 'var(--ink-4)'}"
 						aria-current={active ? 'page' : undefined}
 					>
-						<Icon name={tab.icon} class="h-[24px] w-[24px]" />
+						<TabIcon class="h-[24px] w-[24px]" />
 						<span class="font-medium tracking-tight">{tab.label}</span>
 					</a>
 				{/each}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
-	import Icon from '$lib/components/Icon.svelte';
+	import { ChevronRight } from '@lucide/svelte';
 	import AccentPicker from '$lib/components/AccentPicker.svelte';
 	import { ACCENTS, accentFor } from '$lib/accent';
 	let { data, form } = $props();
@@ -42,7 +42,7 @@
 						<span class="flex-1 truncate text-[17px] font-medium" style="color: var(--ink)">
 							{ws.name}
 						</span>
-						<Icon name="chevronRight" class="h-4 w-4 shrink-0" style="color: var(--ink-4)" />
+						<ChevronRight class="h-4 w-4 shrink-0" style="color: var(--ink-4)" />
 					</a>
 				{/each}
 			</div>

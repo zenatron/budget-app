@@ -5,7 +5,9 @@ import { ApprovalRoutingError } from '$lib/domain/approval/evaluate';
 import { PurchaseStateError } from '$lib/domain/purchase/purchase';
 import { SealError } from '$lib/domain/visibility/seal';
 import { submitPurchase } from '$lib/application/purchases';
+import { holdPurchase } from '$lib/application/hold';
 import { setPurchaseImage } from '$lib/application/images';
+import { addDays } from '$lib/domain/recurrence/rrule';
 import { ImageValidationError } from '$lib/infra/images/process';
 import { getBlobStore } from '$lib/server/blobs';
 import { getDb } from '$lib/server/db';
@@ -16,6 +18,15 @@ import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { getNotifier } from '$lib/server/notify';
 import type { Actions, PageServerLoad } from './$types';
+
+/** A chosen duration → wake instant. "1 night" (<1 day) wakes at 9am tomorrow. */
+function untilFromDays(days: number, timezone: string): Date {
+	const now = systemClock.now();
+	if (days < 1) {
+		return zonedTimeToUtc(addDays(calDateInZone(now, timezone), 1), 9, 0, timezone);
+	}
+	return new Date(now.getTime() + days * 86_400_000);
+}
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	// Re-run this workspace-scoped load when the workspace in the URL changes;
@@ -131,6 +142,24 @@ export const actions: Actions = {
 				return fail(400, { error: e.message });
 			}
 			throw e;
+		}
+
+		// "Sleep on it" at creation: submit as a normal request above, then put it
+		// straight to sleep. Waking restores it to whatever it resolved to (pending
+		// for approval, or approved if it was exempt) — see wake() in the domain.
+		const sleepDays = Number(form.get('sleepDays'));
+		if (Number.isFinite(sleepDays) && sleepDays > 0) {
+			try {
+				await holdPurchase(
+					getDb(),
+					{ clock: systemClock, ids: uuidv7, notifier: getNotifier() },
+					{ workspaceId: locals.workspace!.id, memberId: locals.member!.id },
+					purchaseId,
+					untilFromDays(sleepDays, locals.workspace!.timezone)
+				);
+			} catch (e) {
+				if (!(e instanceof PurchaseStateError)) throw e;
+			}
 		}
 
 		// Optional photo attached at creation. The purchase already exists, so a

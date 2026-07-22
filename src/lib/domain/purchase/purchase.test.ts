@@ -42,6 +42,8 @@ function draft(overrides: Partial<Purchase> = {}): Purchase {
 		approverMemberIds: [],
 		bucketId: null,
 		merchantId: null,
+		heldUntil: null,
+		heldBy: null,
 		...overrides
 	};
 }

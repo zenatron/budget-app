@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
-	import Icon from '$lib/components/Icon.svelte';
+	import { ChevronLeft } from '@lucide/svelte';
 	import { money } from '$lib/actions/money';
 	import { formatMinor } from '$lib/money-format';
 
@@ -160,7 +160,7 @@
 		class="press -ml-1 inline-flex items-center gap-0.5 text-[15px]"
 		style="color: var(--ink-3)"
 	>
-		<Icon name="chevronLeft" class="h-4 w-4" /> Settings
+		<ChevronLeft class="h-4 w-4" /> Settings
 	</a>
 	<h1 class="px-1 text-[28px]">Members</h1>
 

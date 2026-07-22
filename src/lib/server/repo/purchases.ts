@@ -78,7 +78,9 @@ function toDomain(row: PurchaseRow, approverMemberIds: string[]): Purchase {
 		recurringRuleId: row.recurringRuleId,
 		parentPurchaseId: row.parentPurchaseId,
 		approverMemberIds,
-		bucketId: row.bucketId ?? null
+		bucketId: row.bucketId ?? null,
+		heldUntil: row.heldUntil,
+		heldBy: row.heldBy
 	};
 }
 
@@ -150,6 +152,8 @@ export async function insertPurchase(
 		recurringRuleId: p.recurringRuleId,
 		parentPurchaseId: p.parentPurchaseId,
 		bucketId: p.bucketId,
+		heldUntil: p.heldUntil,
+		heldBy: p.heldBy,
 		createdAt: now,
 		updatedAt: now
 	});
@@ -190,6 +194,8 @@ export async function applyTransition(
 			lastNudgedAt: p.lastNudgedAt,
 			nudgeCount: p.nudgeCount,
 			bucketId: p.bucketId,
+			heldUntil: p.heldUntil,
+			heldBy: p.heldBy,
 			updatedAt: ev.at
 		})
 		.where(eq(purchase.id, p.id));
@@ -244,6 +250,8 @@ export interface PurchaseListItem {
 	recurring: boolean;
 	/** Child row reversing a completed purchase; its photo is the original's. */
 	isRefund: boolean;
+	/** Set while the purchase is asleep ("sleep on it"); when the pause lifts. */
+	heldUntil: Date | null;
 }
 
 /** Workspace purchase feed, seal-filtered, pending first then newest. */
@@ -344,7 +352,8 @@ export async function listPurchases(
 			r.p.sealedUntil.getTime() > now.getTime(),
 		sealedUntil: r.p.sealedUntil,
 		isRefund: r.p.parentPurchaseId !== null,
-		recurring: r.p.recurringRuleId !== null
+		recurring: r.p.recurringRuleId !== null,
+		heldUntil: r.p.heldUntil
 	}));
 }
 
