@@ -85,6 +85,13 @@
       "when": 1784724402031,
       "tag": "0011_secret_rictor",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1784776898228,
+      "tag": "0012_cultured_anita_blake",
+      "breakpoints": true
     }
   ]
 }

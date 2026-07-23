@@ -5,7 +5,8 @@ export const EVENT_TYPES = [
 	{ id: 'stale_nudge', label: 'Waiting-request reminders' },
 	{ id: 'seal_opened', label: 'Gifts being revealed' },
 	{ id: 'recurring_due', label: 'Recurring charges recorded' },
-	{ id: 'budget_exceeded', label: 'Budget met or exceeded' }
+	{ id: 'budget_exceeded', label: 'Budget met or exceeded' },
+	{ id: 'safe_to_spend', label: 'Safe-to-Spend alerts' }
 ] as const;
 
 export const CHANNELS = [

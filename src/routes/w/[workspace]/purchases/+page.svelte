@@ -506,9 +506,7 @@
 
 {#snippet runwayLine(label: string, minor: bigint, kind: 'add' | 'sub' | 'total')}
 	<div class="flex items-center justify-between {kind === 'total' ? '' : 'mt-1.5'}">
-		<span style="color: {kind === 'total' ? 'var(--ink)' : 'var(--ink-3)'}"
-			>{label}</span
-		>
+		<span style="color: {kind === 'total' ? 'var(--ink)' : 'var(--ink-3)'}">{label}</span>
 		<span
 			class="num {kind === 'total' ? 'font-semibold' : ''}"
 			style="color: {kind === 'total'
@@ -565,9 +563,9 @@
 					transition:slide={{ duration: 220 }}
 				>
 					{@render runwayLine('Income', f.breakdown.incomeMinor, 'add')}
-					{@render runwayLine('Bills', f.breakdown.upcomingBillsMinor, 'sub')}
+					{@render runwayLine('Recurring', f.breakdown.upcomingBillsMinor, 'sub')}
 					{@render runwayLine('Saved', f.breakdown.savingsMinor, 'sub')}
-					{@render runwayLine('Committed', f.breakdown.cashCommittedMinor, 'sub')}
+					{@render runwayLine('Approved', f.breakdown.cashCommittedMinor, 'sub')}
 					{@render runwayLine('Spent', f.breakdown.cashSpentMinor, 'sub')}
 					<div class="mt-2 border-t pt-2" style="border-color: var(--hairline)">
 						{@render runwayLine('Free to spend', f.freeMinor, 'total')}

@@ -95,6 +95,11 @@ export const workspaceMember = pgTable(
 		/** When their last summary was sent, so the sweep fires once per period and
 		 *  can catch up after downtime. */
 		summaryLastSentAt: timestamp('summary_last_sent_at', { withTimezone: true }),
+		/** Harmony's Safe-to-Spend watch, per member (their own seal-filtered number).
+		 *  The month (period start) and the worst level already alerted for it —
+		 *  a high-water mark so we nudge once per level per month, not every sweep. */
+		safeToSpendAlertMonth: date('safe_to_spend_alert_month'),
+		safeToSpendAlertLevel: integer('safe_to_spend_alert_level').notNull().default(0),
 		joinedAt: timestamp('joined_at', { withTimezone: true }).notNull()
 	},
 	(t) => [uniqueIndex('workspace_member_workspace_user_uq').on(t.workspaceId, t.userId)]

@@ -106,7 +106,7 @@ export function narrateSafeToSpend(
 	if (r.status === 'over') {
 		return {
 			tone: 'over',
-			text: `You're ${fmt(-r.freeMinor)} over for the month — worth holding off on new spends until more comes in.`
+			text: `You're ${fmt(-r.freeMinor)} over for the month. Worth holding off on new spends until more comes in.`
 		};
 	}
 	// Cash is positive, but approving what's pending would tip it negative.
@@ -133,8 +133,34 @@ export function narrateSafeToSpend(
 	// Room to spare, nothing pressing.
 	return {
 		tone: 'clear',
-		text: `${fmt(r.freeMinor)} free and clear — everything this month is accounted for.`
+		text: `${fmt(r.freeMinor)} free and clear. Everything this month is accounted for.`
 	};
+}
+
+/**
+ * Severity of the status as a number, so a proactive watch can compare "how bad
+ * is it now" against "how bad was it when we last spoke". clear=0, tight=1, over=2.
+ */
+export type StsAlertLevel = 0 | 1 | 2;
+
+export function statusLevel(status: SafeToSpendStatus): StsAlertLevel {
+	return status === 'over' ? 2 : status === 'tight' ? 1 : 0;
+}
+
+/**
+ * Whether a fresh alert at `newLevel` is worth sending, given the worst level
+ * already sent this month (`storedLevel`) and whether that record is even from
+ * this month. High-water mark per month: we speak up when things get *worse*
+ * than we last said, never to repeat or to walk back. A new month resets the
+ * bar to zero, so the first tight/over of the month always lands.
+ */
+export function supersedesStsAlert(
+	newLevel: StsAlertLevel,
+	storedLevel: StsAlertLevel,
+	sameMonth: boolean
+): boolean {
+	const effective = sameMonth ? storedLevel : 0;
+	return newLevel > effective;
 }
 
 /**

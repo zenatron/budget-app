@@ -190,7 +190,7 @@
 		</form>
 	</div>
 
-	<div class="card flex items-center justify-between gap-4 p-4">
+	<div class="card flex items-start justify-between gap-4 p-4">
 		<div>
 			<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
 				Harmony
@@ -200,10 +200,15 @@
 					>Alpha</span
 				>
 			</p>
-			<p class="text-[13px]" style="color: var(--ink-4)">
-				Your money, watched over. Ask in plain language, and get a spending summary each week or
-				month.
+			<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
+				Harmony works out what's genuinely safe to spend this month, and answers questions about
+				your money in plain language.
 			</p>
+			<a
+				href="/w/{slug}/settings/help?s=safe-to-spend"
+				class="press mt-1 inline-block text-[13px] font-medium"
+				style="color: var(--ws-accent)">How it works</a
+			>
 		</div>
 		<form method="POST" action="?/intelligence" use:submit={{ success: 'Setting saved' }}>
 			<Toggle on={data.intelligenceEnabled} label="Toggle Harmony" />

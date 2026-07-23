@@ -17,6 +17,7 @@ import { unsealDuePurchases } from '$lib/application/unseal-due';
 import { releaseDueHolds } from '$lib/application/release-holds';
 import { nudgeStaleRequests } from '$lib/application/nudge-stale';
 import { sendDueSummaries } from '$lib/application/summary-digest';
+import { sendSafeToSpendAlerts } from '$lib/application/safe-to-spend-alerts';
 import { materializeDueRules } from '$lib/application/recurring';
 import { checkBudgetAlerts } from '$lib/application/budget-alerts';
 import { materializeBucketAccruals } from '$lib/application/buckets';
@@ -127,6 +128,22 @@ export const init: ServerInit = async () => {
 				JSON.stringify({
 					level: 'error',
 					msg: 'sweep: budget alerts failed',
+					err: (e as Error).message
+				})
+			);
+		}
+		try {
+			const stsAlerts = await sendSafeToSpendAlerts(getDb(), deps);
+			if (stsAlerts > 0) {
+				console.log(
+					JSON.stringify({ level: 'info', msg: 'sweep: safe-to-spend alerts sent', count: stsAlerts })
+				);
+			}
+		} catch (e) {
+			console.log(
+				JSON.stringify({
+					level: 'error',
+					msg: 'sweep: safe-to-spend alerts failed',
 					err: (e as Error).message
 				})
 			);

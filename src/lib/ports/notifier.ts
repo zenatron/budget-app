@@ -11,6 +11,7 @@ export type NotificationEventType =
 	| 'seal_opened'
 	| 'recurring_due'
 	| 'budget_exceeded'
+	| 'safe_to_spend'
 	| 'periodic_summary';
 
 export interface NotificationMessage {

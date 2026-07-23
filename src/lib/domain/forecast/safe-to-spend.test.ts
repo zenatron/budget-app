@@ -4,7 +4,9 @@ import { parseRRule } from '../recurrence/rrule';
 import {
 	computeSafeToSpend,
 	narrateSafeToSpend,
+	statusLevel,
 	sumRecurringInWindow,
+	supersedesStsAlert,
 	type SafeToSpendBreakdown
 } from './safe-to-spend';
 
@@ -120,6 +122,29 @@ describe('narrateSafeToSpend', () => {
 		const n = say({ incomeMinor: 100000n, cashSpentMinor: 20000n });
 		expect(n.tone).toBe('clear');
 		expect(n.text).toContain('$800.00 free and clear');
+	});
+});
+
+describe('safe-to-spend alert level', () => {
+	it('maps status to severity', () => {
+		expect(statusLevel('clear')).toBe(0);
+		expect(statusLevel('tight')).toBe(1);
+		expect(statusLevel('over')).toBe(2);
+	});
+
+	it('fires the first tight/over of the month', () => {
+		expect(supersedesStsAlert(1, 0, true)).toBe(true);
+		expect(supersedesStsAlert(2, 0, true)).toBe(true);
+	});
+
+	it('escalates tight → over, but never repeats or walks back', () => {
+		expect(supersedesStsAlert(2, 1, true)).toBe(true); // worsened
+		expect(supersedesStsAlert(1, 1, true)).toBe(false); // same
+		expect(supersedesStsAlert(1, 2, true)).toBe(false); // improved, stay quiet
+	});
+
+	it('resets the bar in a new month', () => {
+		expect(supersedesStsAlert(1, 2, false)).toBe(true); // last month was worse, this month is fresh
 	});
 });
 

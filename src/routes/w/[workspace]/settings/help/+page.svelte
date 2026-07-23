@@ -178,6 +178,18 @@
 			]
 		},
 		{
+			id: 'safe-to-spend',
+			icon: 'sparkle',
+			title: 'Safe to Spend',
+			body: [
+				'The number at the top of the Ledger is how much is genuinely free to spend this month. Tap it to see the whole breakdown.',
+				'It starts from your **Income** for the month, then takes out four things. **Recurring** is the bills still to come before month-end. **Saved** is what you set aside into your buckets this month. **Approved** is purchases that were greenlit but not yet paid. **Spent** is what has already left your account, net of refunds. What is left is **Free to spend**.',
+				'Money charged to a bucket does not count as spending here. That was set aside in an earlier month, so spending it is not this month’s cash.',
+				'**Pending** requests and ones you’re **sleeping on** are shown but not taken out, since they might still be denied or let go. If you set a budget, Harmony also marks the point where your budget, rather than your cash, becomes the limit.',
+				'Every figure is plain arithmetic and nothing leaves your server. It is worked out as you see it, so a hidden gift never shows in the total for the person it is for.'
+			]
+		},
+		{
 			id: 'palette',
 			icon: 'sparkle',
 			title: 'Asking questions',
