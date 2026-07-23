@@ -210,7 +210,7 @@
 		</div>
 		<Toggle
 			on={data.bucketChargesSkipApproval}
-			action="?/bucketSkipApproval"
+			flag="bucketChargesSkipApproval"
 			label="Toggle bucket charges skip approval"
 		/>
 	</div>

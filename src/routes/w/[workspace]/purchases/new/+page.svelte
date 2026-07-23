@@ -2,6 +2,7 @@
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
 	import {
+		ArrowRight,
 		Calendar,
 		Camera,
 		ChevronDown,
@@ -304,10 +305,12 @@
 	{/if}
 
 	<form method="POST" enctype="multipart/form-data" use:submit class="space-y-4">
-		<!-- Describe it: a sentence (typed or dictated) parsed into the fields below. -->
-		<div class="card p-2">
-			<div class="row">
-				<Sparkles class="h-5 w-5" style="color: var(--accent)" />
+		<!-- Describe it: a sentence (typed or dictated) parsed into the fields below.
+		     Accent-tinted so it reads as the optional smart shortcut, not another
+		     required field competing with Amount. -->
+		<div class="card p-3" style="background: color-mix(in oklab, var(--accent) 7%, var(--surface))">
+			<div class="flex items-center gap-2.5">
+				<Sparkles class="h-5 w-5 shrink-0" style="color: var(--accent)" />
 				<input
 					bind:value={describeText}
 					onkeydown={(e) => {
@@ -317,22 +320,33 @@
 						}
 					}}
 					aria-label="Describe the purchase in words"
-					placeholder="Describe it, or dictate. “23 on lunch at Chipotle”"
-					class="flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:opacity-40"
+					placeholder="Describe it, or dictate"
+					class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:opacity-40"
 					style="color: var(--ink)"
 				/>
-				{#if describeText.trim()}
-					<button
-						type="button"
-						onclick={parseDescription}
-						disabled={parsing}
-						class="press rounded-full px-3 py-1 text-[13px] font-semibold disabled:opacity-50"
-						style="color: var(--paper); background: var(--accent)"
-					>
-						{parsing ? 'Reading…' : 'Fill'}
-					</button>
-				{/if}
+				<button
+					type="button"
+					onclick={parseDescription}
+					disabled={!describeText.trim() || parsing}
+					aria-label="Fill the form from your description"
+					class="press grid h-8 w-8 shrink-0 place-items-center rounded-full transition-opacity disabled:opacity-30"
+					style="background: var(--accent); color: var(--paper)"
+				>
+					{#if parsing}
+						<span
+							class="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-current border-t-transparent"
+						></span>
+					{:else}
+						<ArrowRight class="h-4 w-4" />
+					{/if}
+				</button>
 			</div>
+			{#if !describeText}
+				<p class="mt-2 pl-[30px] text-[12px] leading-snug" style="color: var(--ink-3)">
+					Type or dictate a sentence like “23 on lunch at Chipotle yesterday”. Harmony fills in the
+					amount, item, and category; you confirm before saving.
+				</p>
+			{/if}
 		</div>
 
 		<!-- Amount: the focal point -->

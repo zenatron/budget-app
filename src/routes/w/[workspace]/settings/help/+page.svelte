@@ -79,6 +79,16 @@
 			]
 		},
 		{
+			id: 'describe',
+			icon: 'sparkle',
+			title: 'Describe a purchase',
+			body: [
+				'At the top of the Add screen is a field you can type or **dictate** into, using your phone keyboard’s microphone. Say something like *23 on lunch at Chipotle yesterday* and it fills in the amount, item, merchant, date, and a category.',
+				'The amount and the date are read by plain rules, never by AI, so a misheard number is one you can see and fix rather than one the app invented. A category is only suggested when you have turned on AI assistance. Nothing is saved until you tap **Log it** or **Ask first**.',
+				'The sparkle button at the top of the app understands the same thing: *log 18 for tacos* opens the Add screen already filled in.'
+			]
+		},
+		{
 			id: 'approvals',
 			icon: 'checkmark',
 			title: 'Approvals',
@@ -204,9 +214,19 @@
 			icon: 'sparkle',
 			title: 'Asking questions',
 			body: [
-				'The sparkle in the header takes plain language: *how much did I spend on groceries last month*, *what’s my net position*, *add income of 4800 per month on the first*.',
+				'The sparkle in the header takes plain language: *how much did I spend on groceries last month*, *what’s my net position*, *add income of 4800 per month on the first*, or *log 23 for lunch* to open the Add screen filled in.',
 				'It shows what it understood as you type. If it cannot act on something, it says what is missing rather than guessing.',
-				'Nothing leaves your server — it is pattern matching, not an AI service.'
+				'This is pattern matching, not an AI service, and it stays on your server. It works the same whether or not AI assistance is turned on.'
+			]
+		},
+		{
+			id: 'ai',
+			icon: 'sparkle',
+			title: 'AI assistance',
+			body: [
+				'Harmony works entirely on plain arithmetic and pattern matching. In Settings → Harmony you can optionally let a language model help with the fuzzy parts, like suggesting a category or reading a cryptic bank line into a merchant name.',
+				'It only ever **suggests**. It never approves a purchase, moves money, or decides your Safe to Spend, and every suggestion is checked against the app’s own options before you see it, so a bad answer becomes no answer.',
+				'You choose the source. **Local** runs a model on your own machine, so nothing leaves your server. **External** uses an outside API, which means the text you send is processed by a third party. **Off**, the default, keeps everything deterministic and contacts no model at all.'
 			]
 		}
 	];

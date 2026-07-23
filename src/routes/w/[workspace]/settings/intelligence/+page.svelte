@@ -52,7 +52,7 @@
 			>
 		</div>
 		{#if owner}
-			<Toggle on={data.intelligenceEnabled} action="?/intelligence" label="Toggle Harmony" />
+			<Toggle on={data.intelligenceEnabled} flag="intelligenceEnabled" label="Toggle Harmony" />
 		{/if}
 	</div>
 
@@ -66,7 +66,7 @@
 		{#if owner}
 			<Toggle
 				on={data.billImportEnabled}
-				action="?/billImport"
+				flag="billImportEnabled"
 				label="Toggle reading bills from PDFs"
 			/>
 		{/if}

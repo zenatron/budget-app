@@ -58,16 +58,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 };
 
 export const actions: Actions = {
-	bucketSkipApproval: async ({ locals, request }) => {
-		if (locals.member!.role !== 'owner') error(403, 'Only the owner can change this setting');
-		const value = (await request.formData()).get('enabled') === 'true';
-		await getDb()
-			.update(workspace)
-			.set({ bucketChargesSkipApproval: value })
-			.where(eq(workspace.id, locals.workspace!.id));
-		return { ok: true };
-	},
-
 	/** The accent is workspace-scoped, so changing it is an owner-only setting. */
 	accent: async ({ locals, request }) => {
 		if (locals.member!.role !== 'owner') error(403, 'Only the owner can change the accent');
