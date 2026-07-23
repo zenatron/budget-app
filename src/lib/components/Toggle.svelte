@@ -76,7 +76,7 @@
 	aria-checked={checked}
 	aria-label={label}
 	onclick={toggle}
-	class="press relative inline-flex h-7 w-11 items-center rounded-full transition-colors"
+	class="press relative inline-flex h-7 w-11 shrink-0 items-center rounded-full transition-colors"
 	style="background: {checked ? onColor : 'var(--surface-hi)'}"
 >
 	<span
