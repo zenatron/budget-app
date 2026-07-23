@@ -29,6 +29,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const ws = locals.workspace!;
 	return {
 		isOwner: locals.member!.role === 'owner',
+		intelligenceEnabled: ws.intelligenceEnabled,
+		billImportEnabled: ws.billImportEnabled,
 		config: {
 			mode: ws.aiMode,
 			endpoint: ws.aiEndpoint ?? '',
@@ -38,6 +40,21 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		}
 	};
 };
+
+/** Flip a boolean workspace flag. Owner-only; the Toggle posts the new value. */
+function boolFlag(
+	column: 'intelligenceEnabled' | 'billImportEnabled'
+): (e: { locals: App.Locals; request: Request }) => Promise<{ ok: true }> {
+	return async ({ locals, request }) => {
+		if (locals.member!.role !== 'owner') error(403, 'Only the owner can change this setting');
+		const value = (await request.formData()).get('enabled') === 'true';
+		await getDb()
+			.update(workspace)
+			.set({ [column]: value })
+			.where(eq(workspace.id, locals.workspace!.id));
+		return { ok: true };
+	};
+}
 
 /** Resolve the config a form submission describes, keeping the stored key if blank. */
 function configFromForm(
@@ -53,6 +70,9 @@ function configFromForm(
 }
 
 export const actions: Actions = {
+	intelligence: boolFlag('intelligenceEnabled'),
+	billImport: boolFlag('billImportEnabled'),
+
 	save: async ({ locals, request }) => {
 		if (locals.member!.role !== 'owner') error(403, 'Only the owner can change intelligence settings');
 		const parsed = v.safeParse(ConfigSchema, Object.fromEntries(await request.formData()));

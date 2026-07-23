@@ -72,7 +72,13 @@ export async function submit() {
 		});
 		const data = await res.json();
 		paletteResponse.value = data;
-		if (data.target) {
+		if (data.describe) {
+			// Hand the sentence to the Add screen, which parses and prefills it.
+			close();
+			void goto(
+				`/w/${page.params.workspace}/purchases/new?describe=${encodeURIComponent(data.describe)}`
+			);
+		} else if (data.target) {
 			setTimeout(() => {
 				close();
 				void goto(`/w/${page.params.workspace}/${data.target}`);

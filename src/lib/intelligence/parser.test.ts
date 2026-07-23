@@ -210,3 +210,42 @@ describe('parse — unknown', () => {
 		expect(at('what is the airspeed velocity of an unladen swallow').intent).toBe('spending_query');
 	});
 });
+
+describe('parse — log purchase', () => {
+	it('routes a logging sentence with an amount', () => {
+		expect(at('log 23 for lunch at chipotle')).toEqual({
+			intent: 'log_purchase',
+			text: 'log 23 for lunch at chipotle'
+		});
+		expect(at('bought coffee for $4')).toEqual({
+			intent: 'log_purchase',
+			text: 'bought coffee for $4'
+		});
+		expect(at('spent 50 on groceries')).toEqual({
+			intent: 'log_purchase',
+			text: 'spent 50 on groceries'
+		});
+	});
+
+	it('does not steal a spending question', () => {
+		expect(at('how much did I spend on groceries').intent).toBe('spending_query');
+		expect(at('what did I spend last month').intent).toBe('spending_query');
+	});
+
+	it('does not fire without a number', () => {
+		expect(at('bought coffee').intent).not.toBe('log_purchase');
+	});
+
+	it('leaves income and buckets to their own intents', () => {
+		expect(at('add income of 4800 per month').intent).toBe('create_income');
+		expect(at('create a travel bucket of 500/mo').intent).toBe('create_bucket');
+	});
+
+	it('reads as ready in the palette', () => {
+		expect(understand('bought coffee for $4', NOW)).toMatchObject({
+			intent: 'log_purchase',
+			label: 'Log purchase',
+			ready: true
+		});
+	});
+});

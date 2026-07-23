@@ -19,7 +19,7 @@
 		X
 	} from '@lucide/svelte';
 	import { money } from '$lib/actions/money';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
 	import { calDateInZone } from '$lib/domain/time/zoned';
 	import { dismiss } from '$lib/actions/dismiss';
@@ -89,6 +89,53 @@
 			suggested = null;
 		}
 	}
+
+	// Natural-language entry: a sentence (typed, or dictated with the phone's own
+	// keyboard mic) parsed into the fields below. Money and date are extracted
+	// deterministically on the server; only the category may come from the assist.
+	// Everything lands as editable fields — you still tap Log it / Ask first.
+	let describeText = $state('');
+	let parsing = $state(false);
+
+	async function parseDescription() {
+		const text = describeText.trim();
+		if (!text || parsing) return;
+		parsing = true;
+		try {
+			const res = await fetch(`/w/${slug}/purchases/parse`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ text })
+			});
+			if (res.ok) {
+				const d = await res.json();
+				if (!d.empty) {
+					if (d.amount) amount = d.amount;
+					if (d.itemName) itemName = d.itemName;
+					if (d.merchantName) merchantName = d.merchantName;
+					if (d.spentAt) spentAt = d.spentAt;
+					if (d.categoryId) {
+						categoryId = d.categoryId;
+						suggested = null;
+						lastSuggestKey = `${itemName}|${merchantName}`; // don't re-ask on blur
+					}
+				}
+			}
+		} catch {
+			// Leave the form untouched; the person can fill it by hand.
+		} finally {
+			parsing = false;
+		}
+	}
+
+	// The Harmony button's "log a purchase" door hands off here via ?describe=.
+	onMount(() => {
+		const d = page.url.searchParams.get('describe');
+		if (d) {
+			describeText = d;
+			void parseDescription();
+		}
+	});
 	const amountMinorForPicker = $derived(
 		BigInt(Math.round((Number((amount || '0').replace(/[^0-9.]/g, '')) || 0) * 100))
 	);
@@ -257,6 +304,37 @@
 	{/if}
 
 	<form method="POST" enctype="multipart/form-data" use:submit class="space-y-4">
+		<!-- Describe it: a sentence (typed or dictated) parsed into the fields below. -->
+		<div class="card p-2">
+			<div class="row">
+				<Sparkles class="h-5 w-5" style="color: var(--accent)" />
+				<input
+					bind:value={describeText}
+					onkeydown={(e) => {
+						if (e.key === 'Enter') {
+							e.preventDefault();
+							parseDescription();
+						}
+					}}
+					aria-label="Describe the purchase in words"
+					placeholder="Describe it, or dictate. “23 on lunch at Chipotle”"
+					class="flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:opacity-40"
+					style="color: var(--ink)"
+				/>
+				{#if describeText.trim()}
+					<button
+						type="button"
+						onclick={parseDescription}
+						disabled={parsing}
+						class="press rounded-full px-3 py-1 text-[13px] font-semibold disabled:opacity-50"
+						style="color: var(--paper); background: var(--accent)"
+					>
+						{parsing ? 'Reading…' : 'Fill'}
+					</button>
+				{/if}
+			</div>
+		</div>
+
 		<!-- Amount: the focal point -->
 		<div class="card-lg card px-6 py-8 text-center">
 			<label class="block">

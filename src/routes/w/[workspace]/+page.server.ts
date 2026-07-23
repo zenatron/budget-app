@@ -68,26 +68,6 @@ export const actions: Actions = {
 		return { ok: true };
 	},
 
-	billImport: async ({ locals, request }) => {
-		if (locals.member!.role !== 'owner') error(403, 'Only the owner can change this setting');
-		const value = (await request.formData()).get('enabled') === 'true';
-		await getDb()
-			.update(workspace)
-			.set({ billImportEnabled: value })
-			.where(eq(workspace.id, locals.workspace!.id));
-		return { ok: true };
-	},
-
-	intelligence: async ({ locals, request }) => {
-		if (locals.member!.role !== 'owner') error(403, 'Only the owner can change this setting');
-		const value = (await request.formData()).get('enabled') === 'true';
-		await getDb()
-			.update(workspace)
-			.set({ intelligenceEnabled: value })
-			.where(eq(workspace.id, locals.workspace!.id));
-		return { ok: true };
-	},
-
 	/** The accent is workspace-scoped, so changing it is an owner-only setting. */
 	accent: async ({ locals, request }) => {
 		if (locals.member!.role !== 'owner') error(403, 'Only the owner can change the accent');

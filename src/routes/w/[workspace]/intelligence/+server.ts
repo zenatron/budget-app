@@ -66,6 +66,12 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	const now = systemClock.now();
 	const today = calDateInZone(now, scope.timezone);
 
+	// The Add screen owns purchase parsing (money/date stay deterministic there),
+	// so the palette just forwards the sentence for it to fill in.
+	if (parsed.intent === 'log_purchase') {
+		return jsonSafe({ intent: 'log_purchase', describe: parsed.text });
+	}
+
 	if (parsed.intent === 'spending_query') {
 		const period = timeToPeriod(parsed.period);
 		const total = await periodTotal(db, scope, period, now);

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
+	import Toggle from '$lib/components/Toggle.svelte';
 	import { ChevronLeft, Check, CircleAlert, Sparkles, ShieldCheck } from '@lucide/svelte';
 
 	let { data, form } = $props();
@@ -27,7 +28,51 @@
 	>
 		<ChevronLeft class="h-4 w-4" /> Settings
 	</a>
-	<h1 class="px-1 text-[28px]">Intelligence</h1>
+	<h1 class="px-1 text-[28px]">Harmony</h1>
+
+	<!-- The deterministic suite: master switch + the features it powers. -->
+	<div class="card flex items-start justify-between gap-4 p-4">
+		<div>
+			<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
+				Harmony
+				<span
+					class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
+					style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
+					>Alpha</span
+				>
+			</p>
+			<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
+				Works out what's genuinely safe to spend this month, and answers questions about your money
+				in plain language.
+			</p>
+			<a
+				href="/w/{slug}/settings/help?s=safe-to-spend"
+				class="press mt-1 inline-block text-[13px] font-medium"
+				style="color: var(--ws-accent)">How it works</a
+			>
+		</div>
+		{#if owner}
+			<Toggle on={data.intelligenceEnabled} action="?/intelligence" label="Toggle Harmony" />
+		{/if}
+	</div>
+
+	<div class="card flex items-center justify-between gap-4 p-4">
+		<div>
+			<p class="text-[15px] font-medium" style="color: var(--ink)">Read bills from PDFs</p>
+			<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
+				Prefills a purchase from a bill PDF. It guesses, so it always asks you to confirm.
+			</p>
+		</div>
+		{#if owner}
+			<Toggle
+				on={data.billImportEnabled}
+				action="?/billImport"
+				label="Toggle reading bills from PDFs"
+			/>
+		{/if}
+	</div>
+
+	<p class="section-label px-1 pt-2">AI assistance</p>
 
 	<!-- What this is, and the line it never crosses. -->
 	<section class="card p-5">

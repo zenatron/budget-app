@@ -145,11 +145,13 @@
 	/* Checkboxes belong to no palette out of the box. Note @tailwindcss/forms
 	   sets appearance:none on these, which makes accent-color inert — the box is
 	   drawn by the plugin, tinted with `color` via `background-color:currentColor`
-	   when checked. So we set `color`, not `accent-color`. Ink rather than accent:
-	   --accent is per-workspace and these are utility controls, not brand moments. */
+	   when checked. So we set `color`, not `accent-color`. The accent joins them to
+	   the same family as the switches: a checked box now reads "on" in the brand
+	   tint, and the white glyph stays legible on every accent in light and
+	   (auto-lifted) dark — where plain ink went near-white and washed out. */
 	input[type='checkbox'],
 	input[type='radio'] {
-		color: var(--ink);
+		color: var(--accent);
 		background-color: var(--surface);
 		border-color: var(--hairline-strong);
 		border-radius: 5px;

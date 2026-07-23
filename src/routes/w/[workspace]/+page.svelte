@@ -178,27 +178,14 @@
 		</div>
 	{/if}
 
-	<div class="card flex items-center justify-between gap-4 p-4">
-		<div>
-			<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
-				Read bills from PDFs
-				<span
-					class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
-					style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
-					>Alpha</span
-				>
-			</p>
-			<p class="text-[13px]" style="color: var(--ink-3)">
-				Prefills a purchase from a bill PDF. It guesses, so it always asks you to confirm.
-			</p>
-		</div>
-		<form method="POST" action="?/billImport" use:submit={{ success: 'Setting saved' }}>
-			<Toggle on={data.billImportEnabled} label="Toggle reading bills from PDFs" />
-		</form>
-	</div>
-
-	<div class="card flex items-start justify-between gap-4 p-4">
-		<div>
+	<a href="/w/{slug}/settings/intelligence" class="press card flex items-center gap-3.5 p-4">
+		<span
+			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+		>
+			<Sparkles class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+		</span>
+		<div class="flex-1">
 			<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
 				Harmony
 				<span
@@ -207,27 +194,12 @@
 					>Alpha</span
 				>
 			</p>
-			<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
-				Harmony works out what's genuinely safe to spend this month, and answers questions about
-				your money in plain language.
+			<p class="text-[13px]" style="color: var(--ink-3)">
+				Safe to Spend, bill reading, and optional AI assistance
 			</p>
-			<div class="mt-1 flex items-center gap-3">
-				<a
-					href="/w/{slug}/settings/help?s=safe-to-spend"
-					class="press inline-block text-[13px] font-medium"
-					style="color: var(--ws-accent)">How it works</a
-				>
-				<a
-					href="/w/{slug}/settings/intelligence"
-					class="press inline-block text-[13px] font-medium"
-					style="color: var(--ws-accent)">Assist &amp; AI</a
-				>
-			</div>
 		</div>
-		<form method="POST" action="?/intelligence" use:submit={{ success: 'Setting saved' }}>
-			<Toggle on={data.intelligenceEnabled} label="Toggle Harmony" />
-		</form>
-	</div>
+		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
+	</a>
 
 	<div class="card flex items-center justify-between p-4">
 		<div>
@@ -236,9 +208,11 @@
 				Skip approval for purchases charged to a bucket
 			</p>
 		</div>
-		<form method="POST" action="?/bucketSkipApproval" use:submit={{ success: 'Setting saved' }}>
-			<Toggle on={data.bucketChargesSkipApproval} label="Toggle bucket charges skip approval" />
-		</form>
+		<Toggle
+			on={data.bucketChargesSkipApproval}
+			action="?/bucketSkipApproval"
+			label="Toggle bucket charges skip approval"
+		/>
 	</div>
 
 	<div class="card p-5">

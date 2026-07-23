@@ -52,12 +52,24 @@ export interface UnknownResult {
 	raw: string;
 }
 
+/**
+ * "log 23 for lunch at chipotle", "bought coffee for $4". The palette doesn't
+ * parse the fields itself — it hands the raw sentence to the Add screen, which
+ * runs the same deterministic purchase parser the form uses, so the two doors
+ * behave identically.
+ */
+export interface LogPurchaseCommand {
+	intent: 'log_purchase';
+	text: string;
+}
+
 export type ParsedIntent =
 	| SpendingQuery
 	| NetQuery
 	| CreateBucketCommand
 	| CreateIncomeCommand
 	| NavigateCommand
+	| LogPurchaseCommand
 	| IncompleteResult
 	| UnknownResult;
 
@@ -349,6 +361,18 @@ export function parse(input: string, now: Date = new Date()): ParsedIntent {
 		};
 	}
 
+	// Log a purchase: "bought coffee for $4", "log 23 for lunch at chipotle",
+	// "spent 50 on groceries". Conservative on purpose so it never steals a
+	// spending question: it needs a logging verb up front, an actual number, and
+	// must not read as a question. Income and buckets are already handled above.
+	if (
+		/^(?:log|record|buy|bought|spent|paid|got|grabbed|picked up|purchased?|add)\b/.test(lower) &&
+		!/^(?:how|what|when|where|why|who|did|do|does|is|are|can|should|show)\b/.test(lower) &&
+		/\d/.test(lower)
+	) {
+		return { intent: 'log_purchase', text: input.trim() };
+	}
+
 	// Net position / savings rate: "what's my net", "savings rate", "how much am i saving"
 	if (
 		/\b(?:net\s+position|savings?\s+rate|how\s+much\s+am\s+i\s+saving|what(?:'s| is) my net|net worth)\b/.test(
@@ -523,6 +547,16 @@ export function understand(input: string, now: Date = new Date()): Understanding
 				intent: parsed.intent,
 				label: 'Open',
 				slots: [{ label: 'Page', value: parsed.target }],
+				missing: [],
+				suggestions: [],
+				ready: true
+			};
+
+		case 'log_purchase':
+			return {
+				intent: parsed.intent,
+				label: 'Log purchase',
+				slots: [{ label: 'From', value: 'your words' }],
 				missing: [],
 				suggestions: [],
 				ready: true
