@@ -594,7 +594,7 @@
 					<span class="font-medium">Edit details</span>
 					<ChevronDown
 						class="h-4 w-4 transition-transform duration-200 {editing ? 'rotate-180' : ''}"
-						style="color: var(--ink-4)"
+						style="color: var(--ink-3)"
 					/>
 				</button>
 				{#if editing}
@@ -671,7 +671,7 @@
 					<span class="font-medium">{p.note ? 'Edit note' : 'Add a note'}</span>
 					<ChevronDown
 						class="h-4 w-4 transition-transform duration-200 {editingNote ? 'rotate-180' : ''}"
-						style="color: var(--ink-4)"
+						style="color: var(--ink-3)"
 					/>
 				</button>
 				{#if editingNote}
@@ -732,7 +732,7 @@
 				}}
 				class="pt-1 text-center"
 			>
-				<button class="btn btn-plain" style="color: var(--ink-4)">Cancel this purchase</button>
+				<button class="btn btn-plain" style="color: var(--ink-3)">Cancel this purchase</button>
 			</form>
 		{/if}
 
@@ -772,7 +772,7 @@
 										? ` · ${e.actorName}`
 										: ''}{e.reason ? ` — ${e.reason}` : ''}
 								</span>
-								<span class="num shrink-0 text-[12px]" style="color: var(--ink-4)">
+								<span class="num shrink-0 text-[12px]" style="color: var(--ink-3)">
 									{fmtDate(e.at)}{e.amountMinor !== null
 										? ` · ${formatMinor(e.amountMinor, p.currency)}`
 										: ''}
@@ -811,13 +811,13 @@
 				<button
 					onclick={() => (holdSheet = null)}
 					class="press -mr-1 flex h-8 w-8 items-center justify-center rounded-full"
-					style="color: var(--ink-4)"
+					style="color: var(--ink-3)"
 					aria-label="Close"
 				>
 					<X class="h-4 w-4" />
 				</button>
 			</div>
-			<p class="mt-1 text-[13px]" style="color: var(--ink-4)">
+			<p class="mt-1 text-[13px]" style="color: var(--ink-3)">
 				Take some time before deciding. We've suggested how long based on the amount — spin to
 				change it.
 			</p>

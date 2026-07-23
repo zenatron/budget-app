@@ -120,7 +120,7 @@
 						</span>
 						<div class="min-w-0 flex-1">
 							<p class="text-[16px]" style="color: var(--ink)">{e.source}</p>
-							<p class="text-[13px]" style="color: var(--ink-4)">
+							<p class="text-[13px]" style="color: var(--ink-3)">
 								{e.memberName} · {e.cadence ?? fmtDate(e.receivedAt)}
 							</p>
 						</div>
@@ -147,7 +147,7 @@
 								use:submit={{ confirm: 'Remove this income entry?', success: 'Income removed' }}
 							>
 								<input type="hidden" name="incomeId" value={e.id} />
-								<button class="press ml-0.5" style="color: var(--ink-4)" aria-label="Remove">
+								<button class="press ml-0.5" style="color: var(--ink-3)" aria-label="Remove">
 									<Trash2 class="h-4 w-4" />
 								</button>
 							</form>

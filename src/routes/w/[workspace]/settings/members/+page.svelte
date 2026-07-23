@@ -221,25 +221,25 @@
 										</button>
 									</form>
 								{:else}
-									<span class="text-[13px]" style="color: var(--ink-4)">{roleLabel[m.role]}</span>
+									<span class="text-[13px]" style="color: var(--ink-3)">{roleLabel[m.role]}</span>
 								{/if}
 								{#if m.status !== 'active'}
-									<span class="text-[13px]" style="color: var(--ink-4)">· {m.status}</span>
+									<span class="text-[13px]" style="color: var(--ink-3)">· {m.status}</span>
 								{/if}
 							</div>
 							{#if disabled}
 								<!-- A disabled member has no access, so their approval rules say
 								     nothing about what can happen. Showing them would read as if
 								     they were still in force. -->
-								<p class="text-[13px]" style="color: var(--ink-4)">No access to this workspace</p>
+								<p class="text-[13px]" style="color: var(--ink-3)">No access to this workspace</p>
 							{:else}
-								<p class="text-[13px]" style="color: var(--ink-4)">{policySummary(m.policy)}</p>
+								<p class="text-[13px]" style="color: var(--ink-3)">{policySummary(m.policy)}</p>
 								<!-- Dimmer than the line above: bucket charges are the exception
 								     to the rule, so they read as a footnote to it rather than as a
 								     second, competing headline. -->
 								<p
 									class="text-[12px]"
-									style="color: color-mix(in oklab, var(--ink-4) 78%, transparent)"
+									style="color: color-mix(in oklab, var(--ink-3) 78%, transparent)"
 								>
 									{bucketSummary(m.policy)}
 								</p>
@@ -268,7 +268,7 @@
 											name="disabled"
 											value={disabled ? 'false' : 'true'}
 											class="press text-[13px] font-medium"
-											style="color: {disabled ? 'var(--approve)' : 'var(--ink-4)'}"
+											style="color: {disabled ? 'var(--approve)' : 'var(--ink-3)'}"
 											>{disabled ? 'Restore' : 'Disable'}</button
 										>
 									</form>
@@ -402,7 +402,7 @@
 				</form>
 			</div>
 			{#if data.invites.length === 0}
-				<p class="mt-3 text-[15px]" style="color: var(--ink-4)">
+				<p class="mt-3 text-[15px]" style="color: var(--ink-3)">
 					No open invites. Create a code to add someone.
 				</p>
 			{:else}
@@ -417,7 +417,7 @@
 							>
 							<span
 								class="text-[13px]"
-								style="color: {copied === inv.code ? 'var(--approve)' : 'var(--ink-4)'}"
+								style="color: {copied === inv.code ? 'var(--approve)' : 'var(--ink-3)'}"
 							>
 								{copied === inv.code ? 'Copied ✓' : expiresIn(inv.expiresAt)}
 							</span>

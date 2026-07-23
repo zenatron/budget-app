@@ -29,7 +29,7 @@
 			<button
 				onclick={() => dismiss(toast.id)}
 				class="press shrink-0 text-[13px]"
-				style="color: var(--ink-4)"
+				style="color: var(--ink-3)"
 				aria-label="Dismiss">Close</button
 			>
 		</div>

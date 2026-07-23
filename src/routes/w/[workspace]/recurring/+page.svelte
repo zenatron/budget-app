@@ -233,7 +233,7 @@
 					<button
 						onclick={() => (showSettings = false)}
 						class="press -mr-1 flex h-8 w-8 items-center justify-center rounded-full"
-						style="color: var(--ink-4)"
+						style="color: var(--ink-3)"
 						aria-label="Close"
 					>
 						<X class="h-4 w-4" />
@@ -271,7 +271,7 @@
 					>
 						<span class="text-left">
 							<span class="block text-[15px]" style="color: var(--ink)">Group by cadence</span>
-							<span class="block text-[13px]" style="color: var(--ink-4)">
+							<span class="block text-[13px]" style="color: var(--ink-3)">
 								Weekly, monthly and yearly under their own headings
 							</span>
 						</span>
@@ -439,7 +439,7 @@
 											>
 										{/if}
 									</p>
-									<p class="mt-0.5 text-[13px]" style="color: var(--ink-4)">
+									<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
 										{r.cadence} · next {fmtNext(r.nextAt)}{r.autoComplete
 											? ''
 											: ' · needs confirming'}
@@ -453,7 +453,7 @@
 										class="text-[16px] font-semibold"
 									/>
 									{#if perMonth(r)}
-										<span class="num text-[12px]" style="color: var(--ink-4)">{perMonth(r)}</span>
+										<span class="num text-[12px]" style="color: var(--ink-3)">{perMonth(r)}</span>
 									{/if}
 								</div>
 							</div>

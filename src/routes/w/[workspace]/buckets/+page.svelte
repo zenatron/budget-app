@@ -155,7 +155,7 @@
 				placeholder="Save up to…"
 				class="field text-[16px]"
 			/>
-			<p class="text-[11px] font-medium tracking-[0.14em] uppercase" style="color: var(--ink-4)">
+			<p class="text-[11px] font-medium tracking-[0.14em] uppercase" style="color: var(--ink-3)">
 				Color
 			</p>
 			<div class="flex gap-2.5">
@@ -216,7 +216,7 @@
 									>
 								{/if}
 							</p>
-							<p class="text-[13px]" style="color: var(--ink-4)">{cadenceLine(b)}</p>
+							<p class="text-[13px]" style="color: var(--ink-3)">{cadenceLine(b)}</p>
 						</div>
 						<span class="shrink-0 text-[16px] font-semibold" style="color: var(--ink)">
 							<Money
@@ -237,7 +237,7 @@
 								style="width: {progressPct(b)}%; background: {colorFor(b)}"
 							></div>
 						</div>
-						<div class="mt-1 flex justify-between text-[11px]" style="color: var(--ink-4)">
+						<div class="mt-1 flex justify-between text-[11px]" style="color: var(--ink-3)">
 							<span>{formatPct(progressPct(b))} of {formatMinor(b.goalCapMinor, b.currency)}</span>
 							<span>{b.memberName}</span>
 						</div>
@@ -332,7 +332,7 @@
 								/>
 								<p
 									class="text-[11px] font-medium tracking-[0.14em] uppercase"
-									style="color: var(--ink-4)"
+									style="color: var(--ink-3)"
 								>
 									Color
 								</p>

@@ -306,7 +306,7 @@
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 		letter-spacing: -0.01em;
-		color: var(--ink-4);
+		color: var(--ink-3);
 		backface-visibility: hidden;
 		will-change: transform, opacity;
 	}

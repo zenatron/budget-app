@@ -197,7 +197,7 @@
 						>Alpha</span
 					>
 				</span>
-				<span class="mt-0.5 block text-[13px]" style="color: var(--ink-4)"
+				<span class="mt-0.5 block text-[13px]" style="color: var(--ink-3)"
 					>Reads the number. You still enter the price.</span
 				>
 			</span>
@@ -217,7 +217,7 @@
 				<div class="mt-3 flex items-center justify-center">
 					<span
 						class="font-[family-name:var(--font-display)] text-[34px] font-semibold"
-						style="color: var(--ink-4)">{symbol}</span
+						style="color: var(--ink-3)">{symbol}</span
 					>
 					<input
 						name="amount"
@@ -299,7 +299,7 @@
 					<span class="text-[14px]" style="color: var(--ink-3)">Change</span>
 				{:else}
 					<Camera class="h-5 w-5" style="color: var(--ink-4)" />
-					<span class="flex-1 text-[17px]" style="color: var(--ink-4)">Add a photo (optional)</span>
+					<span class="flex-1 text-[17px]" style="color: var(--ink-3)">Add a photo (optional)</span>
 				{/if}
 				<input
 					type="file"
@@ -311,7 +311,7 @@
 				/>
 			</label>
 			<div class="row" style="box-shadow: inset 0 0.5px 0 var(--hairline); align-items: flex-start">
-				<Clock class="mt-0.5 h-5 w-5" style="color: var(--ink-4)" />
+				<Clock class="mt-0.5 h-5 w-5" style="color: var(--ink-3)" />
 				<textarea
 					name="note"
 					aria-label="Note"
@@ -328,7 +328,7 @@
 			-->
 			<label class="row" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
 				<Calendar class="h-5 w-5" style="color: var(--ink-4)" />
-				<span class="flex-1 text-[16px]" style="color: var(--ink-4)">When</span>
+				<span class="flex-1 text-[16px]" style="color: var(--ink-3)">When</span>
 				<input
 					type="date"
 					name="spentAt"
@@ -473,7 +473,7 @@
 				class="btn btn-ghost flex-col gap-0 py-3.5"
 			>
 				<span>Ask first</span>
-				<span class="text-[12px] font-normal" style="color: var(--ink-4)">Needs approval</span>
+				<span class="text-[12px] font-normal" style="color: var(--ink-3)">Needs approval</span>
 			</button>
 		</div>
 
@@ -516,13 +516,13 @@
 							type="button"
 							onclick={() => (showSleep = false)}
 							class="press -mr-1 flex h-8 w-8 items-center justify-center rounded-full"
-							style="color: var(--ink-4)"
+							style="color: var(--ink-3)"
 							aria-label="Close"
 						>
 							<X class="h-4 w-4" />
 						</button>
 					</div>
-					<p class="mt-1 text-[13px]" style="color: var(--ink-4)">
+					<p class="mt-1 text-[13px]" style="color: var(--ink-3)">
 						Take some time before deciding. We've suggested how long based on the amount — spin to
 						change it.
 					</p>

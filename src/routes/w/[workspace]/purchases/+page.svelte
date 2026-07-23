@@ -357,7 +357,7 @@
 				{m.type === 'accrual' ? 'Set aside' : m.type === 'withdrawal' ? 'Taken from' : 'Adjusted'}
 				{m.bucketName}
 			</p>
-			<p class="mt-0.5 text-[13px]" style="color: var(--ink-4)">
+			<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
 				{m.note ?? 'Bucket'} · {fmtDate(m.at)}
 			</p>
 		</div>
@@ -480,7 +480,7 @@
 						</span>
 					{/if}
 				</div>
-				<div class="mt-0.5 flex items-center gap-1.5 text-[13px]" style="color: var(--ink-4)">
+				<div class="mt-0.5 flex items-center gap-1.5 text-[13px]" style="color: var(--ink-3)">
 					{#if p.categoryIcon}<span>{p.categoryIcon}</span>{/if}
 					<span>{p.requesterName}</span>
 					<span>· {fmtDate(p.at)}</span>
@@ -547,7 +547,7 @@
 					class="mt-0.5 h-5 w-5 shrink-0 transition-transform duration-200 {showRunway
 						? 'rotate-180'
 						: ''}"
-					style="color: var(--ink-4)"
+					style="color: var(--ink-3)"
 				/>
 			</button>
 			<!-- Harmony's read: always present, the story above the numbers. -->
@@ -571,13 +571,13 @@
 						{@render runwayLine('Free to spend', f.freeMinor, 'total')}
 					</div>
 					{#if f.breakdown.reservedMinor > 0n}
-						<div class="mt-2.5 flex items-center justify-between" style="color: var(--ink-4)">
+						<div class="mt-2.5 flex items-center justify-between" style="color: var(--ink-3)">
 							<span>Reserved for pending</span>
 							<span class="num" style="color: var(--pending)"
 								>−{formatMinor(f.breakdown.reservedMinor, data.currency)}</span
 							>
 						</div>
-						<div class="flex items-center justify-between" style="color: var(--ink-4)">
+						<div class="flex items-center justify-between" style="color: var(--ink-3)">
 							<span>If all approved</span>
 							<span
 								class="num"
@@ -596,7 +596,7 @@
 						</div>
 					{/if}
 					{#if f.breakdown.budgetRemainingMinor !== null}
-						<div class="mt-1 flex items-center justify-between" style="color: var(--ink-4)">
+						<div class="mt-1 flex items-center justify-between" style="color: var(--ink-3)">
 							<span>Left in your budget</span>
 							<span
 								class="num"
@@ -609,7 +609,7 @@
 				</div>
 			{/if}
 			{#if !showRunway}
-				<p class="mt-2 text-[13px]" style="color: var(--ink-4)">
+				<p class="mt-2 text-[13px]" style="color: var(--ink-3)">
 					<span class="num">{formatMinor(f.breakdown.upcomingBillsMinor, data.currency)}</span> bills ·
 					<span class="num">{formatMinor(f.breakdown.savingsMinor, data.currency)}</span> saved{f
 						.breakdown.cashCommittedMinor > 0n
@@ -631,7 +631,7 @@
 
 	<div class="flex items-end justify-between px-1 pt-1 pb-2">
 		<h1>Ledger</h1>
-		<span class="num pb-1 text-[13px]" style="color: var(--ink-4)"
+		<span class="num pb-1 text-[13px]" style="color: var(--ink-3)"
 			>{filtered.length}
 			{filtered.length === 1 ? 'item' : 'items'}</span
 		>
@@ -642,7 +642,7 @@
 			<span class="sr-only">Search the ledger</span>
 			<Search
 				class="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2"
-				style="color: var(--ink-4)"
+				style="color: var(--ink-3)"
 			/>
 			<input
 				type="text"
@@ -655,7 +655,7 @@
 				<button
 					onclick={clearSearch}
 					class="press absolute top-1/2 right-3 -translate-y-1/2"
-					style="color: var(--ink-4)"
+					style="color: var(--ink-3)"
 					aria-label="Clear"
 				>
 					<X class="h-4 w-4" />
@@ -697,7 +697,7 @@
 				<button
 					onclick={clearFilters}
 					class="press px-1 text-[13px] underline underline-offset-2"
-					style="color: var(--ink-4)">Clear all</button
+					style="color: var(--ink-3)">Clear all</button
 				>
 			{/if}
 		</div>
@@ -736,7 +736,7 @@
 					<button
 						onclick={() => (showFilter = false)}
 						class="press -mr-1 flex h-8 w-8 items-center justify-center rounded-full"
-						style="color: var(--ink-4)"
+						style="color: var(--ink-3)"
 						aria-label="Close"
 					>
 						<X class="h-4 w-4" />
@@ -760,7 +760,7 @@
 									class="field text-[14px]"
 								/>
 							</label>
-							<span class="text-[13px]" style="color: var(--ink-4)">to</span>
+							<span class="text-[13px]" style="color: var(--ink-3)">to</span>
 							<label class="flex-1">
 								<span class="sr-only">To date</span>
 								<input
@@ -841,7 +841,7 @@
 					>
 						<span class="text-left">
 							<span class="block text-[15px]" style="color: var(--ink)">Bucket activity</span>
-							<span class="block text-[13px]" style="color: var(--ink-4)"
+							<span class="block text-[13px]" style="color: var(--ink-3)"
 								>Show money moving in and out of buckets</span
 							>
 						</span>
@@ -864,7 +864,7 @@
 						onclick={clearFilters}
 						disabled={!hasFilters}
 						class="press text-[14px] disabled:opacity-40"
-						style="color: var(--ink-4)">Clear all</button
+						style="color: var(--ink-3)">Clear all</button
 					>
 					<button onclick={() => (showFilter = false)} class="btn btn-accent px-5 py-2 text-[14px]"
 						>Done</button
@@ -964,7 +964,7 @@
 							<span class="block truncate text-[16px] font-medium" style="color: var(--ink)"
 								>{p.itemName}</span
 							>
-							<span class="mt-0.5 block text-[13px]" style="color: var(--ink-4)"
+							<span class="mt-0.5 block text-[13px]" style="color: var(--ink-3)"
 								>{p.requesterName}</span
 							>
 						</div>

@@ -243,7 +243,7 @@
 						<SIcon class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
 					</span>
 					<span class="flex-1 text-[16px] font-medium" style="color: var(--ink)">{s.title}</span>
-					<ChevronDown class="chevron h-4 w-4" style="color: var(--ink-4)" />
+					<ChevronDown class="chevron h-4 w-4" style="color: var(--ink-3)" />
 				</summary>
 				<div class="space-y-2.5 px-4 pb-4" style="padding-left: 4.25rem">
 					{#each s.body as para (para)}
@@ -257,7 +257,7 @@
 		{/each}
 	</div>
 
-	<p class="px-1 pt-2 text-[13px] leading-relaxed" style="color: var(--ink-4)">
+	<p class="px-1 pt-2 text-[13px] leading-relaxed" style="color: var(--ink-3)">
 		Every number on Activity is filtered to what you're allowed to see, so two people can look at
 		the same screen and correctly see different totals.
 	</p>

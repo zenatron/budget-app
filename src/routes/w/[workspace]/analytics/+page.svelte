@@ -234,7 +234,7 @@
 		{
 			label: 'Cancelled',
 			minor: data.verdicts.cancelledMinor,
-			tone: 'var(--ink-4)',
+			tone: 'var(--ink-3)',
 			hint: 'Voided'
 		},
 		{
@@ -389,7 +389,7 @@
 						class="font-[family-name:var(--font-display)] text-[24px] leading-none font-semibold"
 					/>
 					{#if isMonth && overallPct !== null}
-						<p class="num mt-1 text-[11px]" style="color: var(--ink-4)">
+						<p class="num mt-1 text-[11px]" style="color: var(--ink-3)">
 							of {formatMinor(overall!.budgetMinor, currency)}
 						</p>
 					{/if}
@@ -516,7 +516,7 @@
 							class="absolute top-0 block text-center text-[10px] font-medium hover:opacity-70"
 							style="left: {i * (barWidth + barGap) + 1}px; width: {barWidth - 2}px; color: {b.today
 								? 'var(--ink)'
-								: 'var(--ink-4)'}">{b.label}</a
+								: 'var(--ink-3)'}">{b.label}</a
 						>
 					{/each}
 				</div>
@@ -524,7 +524,7 @@
 				<div class="mt-1.5 flex justify-between" style="padding-left: 1px; padding-right: 0">
 					{#each data.buckets as b (b.key)}
 						{#if b.weekLabel}
-							<span class="text-[9px] font-medium" style="color: var(--ink-4)">{b.weekLabel}</span>
+							<span class="text-[9px] font-medium" style="color: var(--ink-3)">{b.weekLabel}</span>
 						{/if}
 					{/each}
 				</div>
@@ -642,7 +642,7 @@
 				>
 					<div class="flex items-end gap-2">
 						<label class="flex-1">
-							<span class="text-[11px]" style="color: var(--ink-4)">Scope</span>
+							<span class="text-[11px]" style="color: var(--ink-3)">Scope</span>
 							<select name="categoryId" class="field mt-1 text-[16px]">
 								<option value="">Everything</option>
 								{#each data.allCategories as c (c.id)}
@@ -651,7 +651,7 @@
 							</select>
 						</label>
 						<label class="w-28">
-							<span class="text-[11px]" style="color: var(--ink-4)">{currency}</span>
+							<span class="text-[11px]" style="color: var(--ink-3)">{currency}</span>
 							<input
 								name="amount"
 								use:money
@@ -663,7 +663,7 @@
 					</div>
 					<div class="flex items-end gap-2">
 						<label class="flex-1">
-							<span class="text-[11px]" style="color: var(--ink-4)">Starts</span>
+							<span class="text-[11px]" style="color: var(--ink-3)">Starts</span>
 							<select name="effectiveMonth" class="field mt-1 text-[16px]">
 								{#each data.budgetMonths as m (m.value)}
 									<option value={m.value}>{m.label}</option>
@@ -672,7 +672,7 @@
 						</label>
 						<button class="btn btn-accent shrink-0 px-4 py-3 text-[15px]">Save</button>
 					</div>
-					<p class="px-1 text-[12px]" style="color: var(--ink-4)">
+					<p class="px-1 text-[12px]" style="color: var(--ink-3)">
 						Applies from that month onward until you set another.
 					</p>
 				</form>
@@ -691,7 +691,7 @@
 							<span style="color: var(--ink-2)">
 								{s.categoryIcon ?? ''}
 								{s.categoryName ?? 'Everything'}
-								<span style="color: var(--ink-4)">· from {s.label}</span>
+								<span style="color: var(--ink-3)">· from {s.label}</span>
 							</span>
 							<span class="flex items-center gap-2">
 								<span class="num" style="color: var(--ink)"
@@ -707,7 +707,7 @@
 										}}
 									>
 										<input type="hidden" name="budgetId" value={s.id} />
-										<button class="press" style="color: var(--ink-4)" aria-label="Remove">
+										<button class="press" style="color: var(--ink-3)" aria-label="Remove">
 											<X class="h-3.5 w-3.5" />
 										</button>
 									</form>
@@ -756,11 +756,11 @@
 				"see purchases" ten times.
 			-->
 			{#if data.categories.length > 0}
-				<span class="text-[12px]" style="color: var(--ink-4)">Tap to see purchases</span>
+				<span class="text-[12px]" style="color: var(--ink-3)">Tap to see purchases</span>
 			{/if}
 		</div>
 		{#if data.categories.length === 0}
-			<p class="px-1 text-[15px]" style="color: var(--ink-4)">Nothing spent this {period}.</p>
+			<p class="px-1 text-[15px]" style="color: var(--ink-3)">Nothing spent this {period}.</p>
 		{:else}
 			<div class="space-y-1">
 				{#each data.categories as c (c.categoryId)}
@@ -784,7 +784,7 @@
 							<span class="flex items-baseline gap-1.5">
 								<span class="num" style="color: var(--ink-2)">
 									{formatMinor(c.totalMinor, currency)}
-									<span class="ml-1 text-[12px]" style="color: var(--ink-4)">{formatPct(pct)}</span>
+									<span class="ml-1 text-[12px]" style="color: var(--ink-3)">{formatPct(pct)}</span>
 								</span>
 								<ChevronRight class="h-3.5 w-3.5 self-center" style="color: var(--ink-4)" />
 							</span>
@@ -809,11 +809,11 @@
 		<div class="mb-2 flex items-baseline justify-between px-1">
 			<p class="section-label">By member</p>
 			{#if data.members.length > 0}
-				<span class="text-[12px]" style="color: var(--ink-4)">Tap to see purchases</span>
+				<span class="text-[12px]" style="color: var(--ink-3)">Tap to see purchases</span>
 			{/if}
 		</div>
 		{#if data.members.length === 0}
-			<p class="px-1 text-[15px]" style="color: var(--ink-4)">Nothing spent this {period}.</p>
+			<p class="px-1 text-[15px]" style="color: var(--ink-3)">Nothing spent this {period}.</p>
 		{:else}
 			<div style="border-top: 0.5px solid var(--hairline)">
 				{#each data.members as m (m.memberId)}
@@ -861,7 +861,7 @@
 					<p class="num mt-1.5 text-[16px] font-semibold" style="color: var(--ink)">
 						{formatMinor(stat.minor, currency)}
 					</p>
-					<p class="mt-0.5 text-[11px] leading-tight" style="color: var(--ink-4)">{stat.hint}</p>
+					<p class="mt-0.5 text-[11px] leading-tight" style="color: var(--ink-3)">{stat.hint}</p>
 				</div>
 			{/each}
 		</div>

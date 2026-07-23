@@ -129,7 +129,7 @@
 						>Alpha</span
 					>
 				</span>
-				<span class="mt-0.5 block text-[13px]" style="color: var(--ink-4)">
+				<span class="mt-0.5 block text-[13px]" style="color: var(--ink-3)">
 					{busy ? 'This can take a moment' : 'Fills in the amount from a PDF'}
 				</span>
 			</span>
@@ -154,7 +154,7 @@
 				<button
 					onclick={reset}
 					class="press text-[13px] underline underline-offset-2"
-					style="color: var(--ink-4)">Cancel</button
+					style="color: var(--ink-3)">Cancel</button
 				>
 			</div>
 
@@ -171,7 +171,7 @@
 			<!-- The line it came from. A guess you can check is worth far more than
 			     a number presented as fact. -->
 			{#if chosenAmount}
-				<p class="mt-1.5 text-[12px]" style="color: var(--ink-4)">
+				<p class="mt-1.5 text-[12px]" style="color: var(--ink-3)">
 					from “{chosenAmount.context}”
 				</p>
 			{/if}
@@ -194,7 +194,7 @@
 			{/if}
 
 			{#if result.extraction.dueDate}
-				<p class="mt-3 text-[13px]" style="color: var(--ink-4)">
+				<p class="mt-3 text-[13px]" style="color: var(--ink-3)">
 					Due {result.extraction.dueDate.date}{result.extraction.dueDate.ambiguous
 						? ' — day and month could be either way round'
 						: ''}

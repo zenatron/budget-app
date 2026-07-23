@@ -79,7 +79,7 @@
 				<button
 					onclick={close}
 					class="press shrink-0"
-					style="color: var(--ink-4)"
+					style="color: var(--ink-3)"
 					aria-label="Close"
 				>
 					<X class="h-4 w-4" />
@@ -102,7 +102,7 @@
 							class="rounded-full px-2 py-[3px] text-[11px]"
 							style="background: var(--surface-2); color: var(--ink-2)"
 						>
-							<span style="color: var(--ink-4)">{slot.label}</span>
+							<span style="color: var(--ink-3)">{slot.label}</span>
 							{slot.value}
 						</span>
 					{/each}
@@ -153,7 +153,7 @@
 				<div class="p-4">
 					<p
 						class="text-[11px] font-semibold tracking-[0.08em] uppercase"
-						style="color: var(--ink-4)"
+						style="color: var(--ink-3)"
 					>
 						{completing ? 'Did you mean' : 'Try asking'}
 					</p>

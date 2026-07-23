@@ -44,13 +44,13 @@
 				<button
 					onclick={reset}
 					class="press -mr-1 flex h-8 w-8 items-center justify-center rounded-full"
-					style="color: var(--ink-4)"
+					style="color: var(--ink-3)"
 					aria-label="Close"
 				>
 					<X class="h-4 w-4" />
 				</button>
 			</div>
-			<p class="px-5 pb-3 text-[13px]" style="color: var(--ink-4)">
+			<p class="px-5 pb-3 text-[13px]" style="color: var(--ink-3)">
 				Record something you already bought.
 			</p>
 
@@ -86,7 +86,7 @@
 					href="/w/{slug}/purchases/new"
 					onclick={reset}
 					class="press block text-center text-[13px]"
-					style="color: var(--ink-4)"
+					style="color: var(--ink-3)"
 				>
 					More options
 				</a>

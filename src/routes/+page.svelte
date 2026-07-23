@@ -29,7 +29,7 @@
 
 	<div>
 		<a href="/auth/login" class="btn btn-accent w-full py-4 text-[17px]">Sign in with Pocket ID</a>
-		<p class="mt-4 text-center text-[13px]" style="color: var(--ink-4)">
+		<p class="mt-4 text-center text-[13px]" style="color: var(--ink-3)">
 			Self-hosted · Passkey auth
 		</p>
 	</div>

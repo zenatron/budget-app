@@ -75,7 +75,7 @@
 					class="btn btn-ghost shrink-0 px-3 py-2 text-[13px]">Copy</button
 				>
 			</div>
-			<p class="mt-1.5 text-[12px]" style="color: var(--ink-4)">
+			<p class="mt-1.5 text-[12px]" style="color: var(--ink-3)">
 				Authenticate with a token below as <code>Authorization: Bearer …</code>.
 			</p>
 		</div>
@@ -117,7 +117,7 @@
 				type="button"
 				onclick={() => (revealed = null)}
 				class="btn btn-plain mt-2 px-0 text-[13px]"
-				style="color: var(--ink-4)">I’ve saved it — hide</button
+				style="color: var(--ink-3)">I’ve saved it — hide</button
 			>
 		</div>
 	{/if}
@@ -162,7 +162,7 @@
 								<span class="block text-[15px] font-medium" style="color: var(--ink)"
 									>{s.label}</span
 								>
-								<span class="block text-[13px]" style="color: var(--ink-4)">{s.hint}</span>
+								<span class="block text-[13px]" style="color: var(--ink-3)">{s.hint}</span>
 							</span>
 						</label>
 					{/each}
@@ -187,7 +187,7 @@
 	<div>
 		<p class="section-label mb-2 px-1">Your tokens</p>
 		{#if data.tokens.length === 0}
-			<div class="card p-4 text-[14px]" style="color: var(--ink-4)">
+			<div class="card p-4 text-[14px]" style="color: var(--ink-3)">
 				No tokens yet. Create one above to connect a client.
 			</div>
 		{:else}
@@ -196,10 +196,10 @@
 					<div class="card flex items-center gap-3 p-4">
 						<div class="min-w-0 flex-1">
 							<p class="truncate text-[15px] font-medium" style="color: var(--ink)">{t.name}</p>
-							<p class="num mt-0.5 text-[12px]" style="color: var(--ink-4)">
+							<p class="num mt-0.5 text-[12px]" style="color: var(--ink-3)">
 								{t.prefix}…&nbsp;·&nbsp;{t.scopes.map(scopeLabel).join(', ')}
 							</p>
-							<p class="mt-0.5 text-[12px]" style="color: var(--ink-4)">
+							<p class="mt-0.5 text-[12px]" style="color: var(--ink-3)">
 								{t.lastUsedAt ? `Last used ${fmtDate(t.lastUsedAt)}` : 'Never used'}
 								{#if t.expiresAt}· expires {fmtDate(t.expiresAt)}{/if}
 							</p>

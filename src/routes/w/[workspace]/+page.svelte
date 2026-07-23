@@ -67,7 +67,7 @@
 			<p class="truncate text-[17px] font-semibold" style="color: var(--ink)">
 				{data.user.displayName}
 			</p>
-			<p class="text-[13px] capitalize" style="color: var(--ink-4)">
+			<p class="text-[13px] capitalize" style="color: var(--ink-3)">
 				{data.member.role} · {data.workspace.name}
 			</p>
 		</div>
@@ -115,7 +115,7 @@
 		</span>
 		<div class="flex-1">
 			<p class="text-[15px] font-medium" style="color: var(--ink)">Help</p>
-			<p class="text-[13px]" style="color: var(--ink-4)">Approvals, gift mode, buckets, budgets</p>
+			<p class="text-[13px]" style="color: var(--ink-3)">Approvals, gift mode, buckets, budgets</p>
 		</div>
 		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
 	</a>
@@ -129,7 +129,7 @@
 		</span>
 		<div class="flex-1">
 			<p class="text-[15px] font-medium" style="color: var(--ink)">Notifications</p>
-			<p class="text-[13px]" style="color: var(--ink-4)">Push, ntfy, and per-event routing</p>
+			<p class="text-[13px]" style="color: var(--ink-3)">Push, ntfy, and per-event routing</p>
 		</div>
 		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
 	</a>
@@ -150,7 +150,7 @@
 					>Alpha</span
 				>
 			</p>
-			<p class="text-[13px]" style="color: var(--ink-4)">Connect Claude or another assistant</p>
+			<p class="text-[13px]" style="color: var(--ink-3)">Connect Claude or another assistant</p>
 		</div>
 		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
 	</a>
@@ -164,7 +164,7 @@
 		</span>
 		<div class="flex-1">
 			<p class="text-[15px] font-medium" style="color: var(--ink)">Members</p>
-			<p class="text-[13px]" style="color: var(--ink-4)">{memberSummary}</p>
+			<p class="text-[13px]" style="color: var(--ink-3)">{memberSummary}</p>
 		</div>
 		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
 	</a>
@@ -188,7 +188,7 @@
 					>Alpha</span
 				>
 			</p>
-			<p class="text-[13px]" style="color: var(--ink-4)">
+			<p class="text-[13px]" style="color: var(--ink-3)">
 				Prefills a purchase from a bill PDF. It guesses, so it always asks you to confirm.
 			</p>
 		</div>
@@ -225,7 +225,7 @@
 	<div class="card flex items-center justify-between p-4">
 		<div>
 			<p class="text-[15px] font-medium" style="color: var(--ink)">Bucket charges</p>
-			<p class="text-[13px]" style="color: var(--ink-4)">
+			<p class="text-[13px]" style="color: var(--ink-3)">
 				Skip approval for purchases charged to a bucket
 			</p>
 		</div>
@@ -236,7 +236,7 @@
 
 	<div class="card p-5">
 		<p class="text-[15px] font-medium" style="color: var(--ink)">Appearance</p>
-		<p class="mt-0.5 mb-3.5 text-[13px]" style="color: var(--ink-4)">
+		<p class="mt-0.5 mb-3.5 text-[13px]" style="color: var(--ink-3)">
 			Follows your device by default. Saved on this device.
 		</p>
 		<div
@@ -267,7 +267,7 @@
 	{#if data.member.role === 'owner'}
 		<div class="card p-5">
 			<p class="text-[15px] font-medium" style="color: var(--ink)">Accent</p>
-			<p class="mt-0.5 mb-3.5 text-[13px]" style="color: var(--ink-4)">
+			<p class="mt-0.5 mb-3.5 text-[13px]" style="color: var(--ink-3)">
 				Colors this workspace everywhere. Each workspace keeps its own.
 			</p>
 			<form method="POST" action="?/accent" use:submit={{ success: 'Accent updated' }}>
@@ -290,7 +290,7 @@
 			style="box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--deny) 30%, transparent)"
 		>
 			<p class="text-[15px] font-medium" style="color: var(--deny)">Danger zone</p>
-			<p class="mt-0.5 text-[13px]" style="color: var(--ink-4)">
+			<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
 				Permanently removes {data.workspace.name} — every purchase, bucket, budget and member. This cannot
 				be undone.
 			</p>
@@ -349,5 +349,5 @@
 		</div>
 	{/if}
 
-	<p class="pt-2 text-center text-[12px]" style="color: var(--ink-4)">Ledger v{data.version}</p>
+	<p class="pt-2 text-center text-[12px]" style="color: var(--ink-3)">Ledger v{data.version}</p>
 </div>

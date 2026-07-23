@@ -36,7 +36,7 @@
 	<span class="text-[15px]" style="color: var(--ink-2)">
 		{label}
 		{#if hint}
-			<span class="mt-0.5 block text-[13px]" style="color: var(--ink-4)">{hint}</span>
+			<span class="mt-0.5 block text-[13px]" style="color: var(--ink-3)">{hint}</span>
 		{/if}
 	</span>
 </label>

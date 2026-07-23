@@ -119,7 +119,7 @@
 			Push on this device
 		</h2>
 		{#if !data.vapidPublicKey}
-			<p class="mt-2 text-[14px]" style="color: var(--ink-4)">
+			<p class="mt-2 text-[14px]" style="color: var(--ink-3)">
 				Push is not configured on this server.
 			</p>
 		{:else if permission === 'unsupported'}
@@ -156,7 +156,7 @@
 			<p class="mt-2 text-[13px]" style="color: var(--deny)">{pushError}</p>
 		{/if}
 		{#if data.subscriptionCount > 0}
-			<p class="mt-2 text-[12px]" style="color: var(--ink-4)">
+			<p class="mt-2 text-[12px]" style="color: var(--ink-3)">
 				{data.subscriptionCount} device{data.subscriptionCount === 1 ? '' : 's'} registered
 			</p>
 		{/if}
@@ -174,11 +174,11 @@
 		</p>
 		<form method="POST" action="?/ntfy" use:submit class="mt-3.5 space-y-3">
 			<label class="block">
-				<span class="text-[12px]" style="color: var(--ink-4)">Server</span>
+				<span class="text-[12px]" style="color: var(--ink-3)">Server</span>
 				<input name="serverUrl" value={data.ntfy.serverUrl} class="field mt-1 text-[16px]" />
 			</label>
 			<label class="block">
-				<span class="text-[12px]" style="color: var(--ink-4)">Topic — treat it like a password</span
+				<span class="text-[12px]" style="color: var(--ink-3)">Topic — treat it like a password</span
 				>
 				<input name="topic" value={data.ntfy.topic} class="field mt-1 font-mono text-[16px]" />
 			</label>
@@ -188,7 +188,7 @@
 					>Send test</button
 				>
 				{#if !data.ntfy.unsaved}
-					<button formaction="?/ntfyOff" class="btn btn-plain ml-auto" style="color: var(--ink-4)">
+					<button formaction="?/ntfyOff" class="btn btn-plain ml-auto" style="color: var(--ink-3)">
 						Remove
 					</button>
 				{/if}
@@ -227,7 +227,7 @@
 				>
 				<span
 					class="w-11 text-center text-[12px] font-semibold"
-					style="color: {ntfyConfigured ? 'var(--ink-3)' : 'var(--ink-4)'}">ntfy</span
+					style="color: {ntfyConfigured ? 'var(--ink-3)' : 'var(--ink-3)'}">ntfy</span
 				>
 				{#each data.eventTypes as event, i (event.id)}
 					<span
@@ -273,7 +273,7 @@
 				{/each}
 			</div>
 			{#if !ntfyConfigured}
-				<p class="mt-2 text-[12px]" style="color: var(--ink-4)">
+				<p class="mt-2 text-[12px]" style="color: var(--ink-3)">
 					Save an ntfy topic above to send to that column.
 				</p>
 			{/if}
@@ -331,7 +331,7 @@
 					{/each}
 				</div>
 				{#if data.summaryCadence !== 'off'}
-					<p class="mt-2.5 text-[12px]" style="color: var(--ink-4)">
+					<p class="mt-2.5 text-[12px]" style="color: var(--ink-3)">
 						Arrives at the start of each {data.summaryCadence === 'weekly' ? 'week' : 'month'}, for
 						the one just ended.
 					</p>

@@ -93,7 +93,7 @@
 		</div>
 
 		<div class="card space-y-3.5 p-5">
-			<p class="text-[13px] font-semibold tracking-[0.06em] uppercase" style="color: var(--ink-4)">
+			<p class="text-[13px] font-semibold tracking-[0.06em] uppercase" style="color: var(--ink-3)">
 				Join with invite code
 			</p>
 			<form method="POST" action="?/join" use:submit class="space-y-3.5">
@@ -120,7 +120,7 @@
 		</div>
 
 		<form method="POST" action="/auth/logout" class="pt-1 text-center">
-			<button class="btn btn-plain text-[15px]" style="color: var(--ink-4)">Sign out</button>
+			<button class="btn btn-plain text-[15px]" style="color: var(--ink-3)">Sign out</button>
 		</form>
 	</div>
 </main>
