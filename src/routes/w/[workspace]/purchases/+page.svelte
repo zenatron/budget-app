@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { onMount, untrack } from 'svelte';
-	import { scale, fade } from 'svelte/transition';
+	import { scale, fade, slide } from 'svelte/transition';
 	import {
 		Check,
+		ChevronDown,
 		CircleHelp,
 		Funnel,
 		Landmark,
@@ -12,6 +13,7 @@
 		RotateCcw,
 		Search,
 		ShoppingBag,
+		Sparkles,
 		X
 	} from '@lucide/svelte';
 	import Money from '$lib/components/Money.svelte';
@@ -21,6 +23,7 @@
 	import type { ConfirmSpec } from '$lib/confirm-state.svelte';
 	import { goto } from '$app/navigation';
 	import { formatMinor } from '$lib/money-format';
+	import { narrateSafeToSpend } from '$lib/domain/forecast/safe-to-spend';
 	import { NO_CATEGORY } from '$lib/ledger-filters';
 	import { toastError } from '$lib/toast-state.svelte';
 	let { data } = $props();
@@ -265,6 +268,29 @@
 		return days <= 1 ? 'tomorrow' : `${days} days left`;
 	}
 
+	// Harmony's Safe to Spend — the hero. Only on the unfiltered view: under a
+	// search it'd be noise, and the number is a whole-month figure regardless.
+	const f = $derived(data.forecast);
+	const showForecast = $derived(!hasFilters && !activeQuery);
+	// The runway waterfall unfolds in place: income minus everything already
+	// spent, promised, and set aside, arriving at the free number above.
+	let showRunway = $state(false);
+	// Harmony's read of the number — deterministic interpretation, not an LLM call.
+	const narration = $derived(narrateSafeToSpend(f, (m) => formatMinor(m, data.currency)));
+	const narrationColor = $derived(
+		narration.tone === 'over'
+			? 'var(--deny)'
+			: narration.tone === 'tight' || narration.tone === 'budget'
+				? 'var(--pending)'
+				: 'var(--ink-3)'
+	);
+	/** "Jul 31" — the last day of the horizon month. */
+	function monthEndLabel(): string {
+		const t = f.horizon.toExclusive; // first of next month
+		const last = new Date(Date.UTC(t.y, t.m - 1, 1) - 86_400_000);
+		return last.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+	}
+
 	async function loadMore() {
 		if (loadingMore) return;
 		loadingMore = true;
@@ -478,7 +504,133 @@
 	</div>
 {/snippet}
 
+{#snippet runwayLine(label: string, minor: bigint, kind: 'add' | 'sub' | 'total')}
+	<div class="flex items-center justify-between {kind === 'total' ? '' : 'mt-1.5'}">
+		<span style="color: {kind === 'total' ? 'var(--ink)' : 'var(--ink-3)'}"
+			>{label}</span
+		>
+		<span
+			class="num {kind === 'total' ? 'font-semibold' : ''}"
+			style="color: {kind === 'total'
+				? minor < 0n
+					? 'var(--deny)'
+					: 'var(--ink)'
+				: kind === 'add'
+					? 'var(--ink)'
+					: 'var(--ink-3)'}"
+		>
+			{kind === 'add' ? '+' : kind === 'sub' ? '−' : ''}{formatMinor(minor, data.currency)}
+		</span>
+	</div>
+{/snippet}
+
 <div>
+	{#if showForecast}
+		<!-- Harmony's headline: the money that's actually free this month. Live —
+		     pending reserves it, sleeping releases it, approving commits it. -->
+		<div class="card mb-5 p-5">
+			<button
+				type="button"
+				onclick={() => (showRunway = !showRunway)}
+				class="press -m-1 flex w-full items-start justify-between gap-3 p-1 text-left"
+				aria-expanded={showRunway}
+				aria-label={showRunway ? 'Hide the runway' : 'Show how this is calculated'}
+			>
+				<div class="min-w-0">
+					<p class="section-label">Safe to spend · through {monthEndLabel()}</p>
+					<div
+						class="mt-1.5 font-[family-name:var(--font-display)] text-[42px] leading-[0.95] font-semibold"
+						style="color: {f.freeMinor < 0n ? 'var(--deny)' : 'var(--ink)'}"
+					>
+						<Money minor={f.freeMinor} currency={data.currency} />
+					</div>
+				</div>
+				<ChevronDown
+					class="mt-0.5 h-5 w-5 shrink-0 transition-transform duration-200 {showRunway
+						? 'rotate-180'
+						: ''}"
+					style="color: var(--ink-4)"
+				/>
+			</button>
+			<!-- Harmony's read: always present, the story above the numbers. -->
+			<p class="mt-2 flex items-start gap-1.5 text-[13px] leading-snug" style="color: {narrationColor}">
+				<Sparkles class="mt-[3px] h-3.5 w-3.5 shrink-0" />
+				<span>{narration.text}</span>
+			</p>
+			{#if showRunway}
+				<!-- The runway: how income becomes the free number, line by line. -->
+				<div
+					class="mt-4 border-t pt-3 text-[14px]"
+					style="border-color: var(--hairline)"
+					transition:slide={{ duration: 220 }}
+				>
+					{@render runwayLine('Income', f.breakdown.incomeMinor, 'add')}
+					{@render runwayLine('Bills', f.breakdown.upcomingBillsMinor, 'sub')}
+					{@render runwayLine('Saved', f.breakdown.savingsMinor, 'sub')}
+					{@render runwayLine('Committed', f.breakdown.cashCommittedMinor, 'sub')}
+					{@render runwayLine('Spent', f.breakdown.cashSpentMinor, 'sub')}
+					<div class="mt-2 border-t pt-2" style="border-color: var(--hairline)">
+						{@render runwayLine('Free to spend', f.freeMinor, 'total')}
+					</div>
+					{#if f.breakdown.reservedMinor > 0n}
+						<div class="mt-2.5 flex items-center justify-between" style="color: var(--ink-4)">
+							<span>Reserved for pending</span>
+							<span class="num" style="color: var(--pending)"
+								>−{formatMinor(f.breakdown.reservedMinor, data.currency)}</span
+							>
+						</div>
+						<div class="flex items-center justify-between" style="color: var(--ink-4)">
+							<span>If all approved</span>
+							<span
+								class="num"
+								style="color: {f.afterReservedMinor < 0n ? 'var(--pending)' : 'var(--ink-2)'}"
+								>{formatMinor(f.afterReservedMinor, data.currency)}</span
+							>
+						</div>
+					{/if}
+					{#if f.breakdown.sleepingMinor > 0n}
+						<div
+							class="mt-1 flex items-center justify-between gap-1.5"
+							style="color: var(--seal)"
+						>
+							<span class="flex items-center gap-1.5"><Moon class="h-3.5 w-3.5" /> Sleeping</span>
+							<span class="num">{formatMinor(f.breakdown.sleepingMinor, data.currency)}</span>
+						</div>
+					{/if}
+					{#if f.breakdown.budgetRemainingMinor !== null}
+						<div class="mt-1 flex items-center justify-between" style="color: var(--ink-4)">
+							<span>Left in your budget</span>
+							<span
+								class="num"
+								style="color: {f.breakdown.budgetRemainingMinor < 0n
+									? 'var(--pending)'
+									: 'var(--ink-2)'}">{formatMinor(f.breakdown.budgetRemainingMinor, data.currency)}</span
+							>
+						</div>
+					{/if}
+				</div>
+			{/if}
+			{#if !showRunway}
+				<p class="mt-2 text-[13px]" style="color: var(--ink-4)">
+					<span class="num">{formatMinor(f.breakdown.upcomingBillsMinor, data.currency)}</span> bills ·
+					<span class="num">{formatMinor(f.breakdown.savingsMinor, data.currency)}</span> saved{f
+						.breakdown.cashCommittedMinor > 0n
+						? ` · ${formatMinor(f.breakdown.cashCommittedMinor, data.currency)} committed`
+						: ''} this month
+				</p>
+				{#if f.breakdown.sleepingMinor > 0n}
+					<p class="mt-1 flex items-center gap-1.5 text-[13px]" style="color: var(--seal)">
+						<Moon class="h-3.5 w-3.5" />
+						<span
+							><span class="num">{formatMinor(f.breakdown.sleepingMinor, data.currency)}</span> sleeping
+							on the horizon</span
+						>
+					</p>
+				{/if}
+			{/if}
+		</div>
+	{/if}
+
 	<div class="flex items-end justify-between px-1 pt-1 pb-2">
 		<h1>Ledger</h1>
 		<span class="num pb-1 text-[13px]" style="color: var(--ink-4)"

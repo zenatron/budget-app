@@ -75,6 +75,8 @@ import { listLedger } from '$lib/server/repo/ledger';
 import { listPurchases, loadPurchase, listEvents, memberNames } from '$lib/server/repo/purchases';
 import { listCategories, listMembers } from '$lib/server/repo/workspaces';
 import { listBuckets } from '$lib/server/repo/buckets';
+import { safeToSpend } from '$lib/server/repo/forecast';
+import { narrateSafeToSpend } from '$lib/domain/forecast/safe-to-spend';
 import {
 	periodTotal,
 	categoryBreakdown,
@@ -464,6 +466,48 @@ export const TOOLS: McpTool[] = [
 				`Total ${data.period.replace('_', ' ')}: ${data.total}\n` +
 				`By category:\n${data.by_category.map((c) => `  - ${c.name}: ${c.amount}`).join('\n') || '  (none)'}\n` +
 				`By member:\n${data.by_member.map((m) => `  - ${m.name}: ${m.amount}`).join('\n') || '  (none)'}`;
+			return { text, data };
+		}
+	},
+	{
+		name: 'safe_to_spend',
+		description:
+			"Harmony's Safe to Spend for the current month: how much cash is genuinely free after income, everything already spent, money committed to approved purchases, upcoming bills, and planned savings. Also reports where you'd land if all pending requests are approved (after_reserved), and the budget guardrail if one is set. Seal-aware — computed as the token's member sees it. Use this for \"how much can I spend?\" questions.",
+		scope: 'read',
+		inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+		async handler(ctx) {
+			const r = await safeToSpend(
+				ctx.db,
+				{ ...viewScope(ctx), timezone: ctx.authed.workspace.timezone },
+				ctx.now
+			);
+			const read = narrateSafeToSpend(r, (m) => fmt(m, ctx));
+			const data = {
+				free: fmt(r.freeMinor, ctx),
+				status: r.status,
+				after_reserved: fmt(r.afterReservedMinor, ctx),
+				on_plan: r.onPlanMinor === null ? null : fmt(r.onPlanMinor, ctx),
+				summary: read.text,
+				breakdown: {
+					income: fmt(r.breakdown.incomeMinor, ctx),
+					spent: fmt(r.breakdown.cashSpentMinor, ctx),
+					committed: fmt(r.breakdown.cashCommittedMinor, ctx),
+					upcoming_bills: fmt(r.breakdown.upcomingBillsMinor, ctx),
+					planned_savings: fmt(r.breakdown.savingsMinor, ctx),
+					reserved_pending: fmt(r.breakdown.reservedMinor, ctx),
+					sleeping: fmt(r.breakdown.sleepingMinor, ctx),
+					budget_remaining:
+						r.breakdown.budgetRemainingMinor === null
+							? null
+							: fmt(r.breakdown.budgetRemainingMinor, ctx)
+				}
+			};
+			const text =
+				`${read.text}\n\n` +
+				`Free to spend: ${data.free} (${r.status})\n` +
+				`Income ${data.breakdown.income} − spent ${data.breakdown.spent} − committed ${data.breakdown.committed} − bills ${data.breakdown.upcoming_bills} − saved ${data.breakdown.planned_savings}\n` +
+				`If all pending approved: ${data.after_reserved}` +
+				(data.on_plan ? ` · budget leaves ${data.on_plan}` : '');
 			return { text, data };
 		}
 	},

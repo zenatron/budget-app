@@ -193,7 +193,7 @@
 	<div class="card flex items-center justify-between gap-4 p-4">
 		<div>
 			<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
-				Intelligence
+				Harmony
 				<span
 					class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
 					style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
@@ -201,11 +201,12 @@
 				>
 			</p>
 			<p class="text-[13px]" style="color: var(--ink-4)">
-				Ask questions in plain language, and get a spending summary each week or month.
+				Your money, watched over. Ask in plain language, and get a spending summary each week or
+				month.
 			</p>
 		</div>
 		<form method="POST" action="?/intelligence" use:submit={{ success: 'Setting saved' }}>
-			<Toggle on={data.intelligenceEnabled} label="Toggle intelligence features" />
+			<Toggle on={data.intelligenceEnabled} label="Toggle Harmony" />
 		</form>
 	</div>
 

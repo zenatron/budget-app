@@ -3,6 +3,7 @@ import { getDb } from '$lib/server/db';
 import { purchase } from '$lib/server/db/schema';
 import { listLedger } from '$lib/server/repo/ledger';
 import { listPurchases } from '$lib/server/repo/purchases';
+import { safeToSpend } from '$lib/server/repo/forecast';
 import { toLedgerView } from '$lib/server/ledger-view';
 import { listCategories, listMembers } from '$lib/server/repo/workspaces';
 import { ledgerOptsFromUrl } from '$lib/server/ledger-query';
@@ -34,7 +35,7 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 	 * months old (a backfilled bill), so they'd otherwise sort into a later page
 	 * and be exactly the thing this section exists to stop getting lost.
 	 */
-	const [feed, categories, members, awaitingIds, sleepingIds] = await Promise.all([
+	const [feed, categories, members, awaitingIds, sleepingIds, forecast] = await Promise.all([
 		listLedger(db, scope, now, { ...opts, limit: LIMIT }),
 		listCategories(db, ws.id),
 		listMembers(db, ws.id),
@@ -52,7 +53,9 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		db
 			.select({ id: purchase.id })
 			.from(purchase)
-			.where(and(eq(purchase.workspaceId, ws.id), eq(purchase.state, 'held')))
+			.where(and(eq(purchase.workspaceId, ws.id), eq(purchase.state, 'held'))),
+		// Harmony's number: Safe to Spend this month, seal-scoped to the viewer.
+		safeToSpend(db, { workspaceId: ws.id, viewerId: locals.member!.id, timezone: ws.timezone }, now)
 	]);
 
 	const ctx = {
@@ -85,6 +88,8 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		hasMore: feed.hasMore,
 		includeMovements: opts.includeMovements ?? false,
 		awaitingConfirmation,
-		sleeping
+		sleeping,
+		forecast,
+		currency: ws.currency
 	};
 };
