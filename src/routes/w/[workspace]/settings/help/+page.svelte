@@ -190,6 +190,16 @@
 			]
 		},
 		{
+			id: 'statement',
+			icon: 'sparkle',
+			title: 'Month-End Statement',
+			body: [
+				'From the Activity page, open the statement for any month to read it back as a single page: what came in, what went out, what you set aside, and where you landed. It defaults to the current month, marked *in progress* until the month ends.',
+				'Harmony reads the month in plain language at the top. It only speaks to your net position when income is recorded, since a balance needs both sides. With no income logged, it describes the spending and judges nothing.',
+				'Every line is seal-aware, the same as the rest of the app: a statement shows only what you are meant to see. Use the print button for a clean copy on paper, with the app’s chrome stripped away.'
+			]
+		},
+		{
 			id: 'palette',
 			icon: 'sparkle',
 			title: 'Asking questions',

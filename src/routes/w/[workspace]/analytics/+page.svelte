@@ -7,7 +7,7 @@
 	import { formatPct } from '$lib/format';
 	import Money from '$lib/components/Money.svelte';
 	import CategoryRing from '$lib/components/CategoryRing.svelte';
-	import { ChevronRight, X } from '@lucide/svelte';
+	import { ChevronRight, X, Sparkles } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { ledgerLink } from '$lib/ledger-filters';
 	let { data } = $props();
@@ -416,6 +416,19 @@
 			>
 				{typeof comparison === 'string' ? comparison : comparison.text}
 			</p>
+		{/if}
+
+		{#if isMonth}
+			<div class="mt-4 flex justify-center">
+				<a
+					href="/w/{slug}/statement?month={data.monthParam}"
+					class="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-medium"
+					style="color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--hairline)"
+				>
+					<Sparkles size={13} style="color: var(--accent)" />
+					Read the {data.label} statement
+				</a>
+			</div>
 		{/if}
 
 		{#if period !== 'day'}

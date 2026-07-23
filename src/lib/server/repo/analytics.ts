@@ -50,6 +50,20 @@ export async function periodTotal(
 	return BigInt(row.total);
 }
 
+/** How many completed purchases landed in the period, seal-scoped to the viewer. */
+export async function periodCount(
+	db: Db,
+	scope: AnalyticsScope,
+	period: Period,
+	now: Date
+): Promise<number> {
+	const [row] = await db
+		.select({ n: sql<string>`count(*)` })
+		.from(purchase)
+		.where(spentInPeriod(scope, period, now));
+	return Number(row?.n ?? '0');
+}
+
 export interface CategorySlice {
 	categoryId: string | null;
 	name: string;
