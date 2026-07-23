@@ -11,6 +11,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq, sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import * as schema from '../src/lib/server/db/schema';
+import { parseRRule, nextOccurrence } from '../src/lib/domain/recurrence/rrule';
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error('Set DATABASE_URL');
@@ -21,6 +22,16 @@ const uuid = () => crypto.randomUUID();
 const now = new Date();
 const daysAgo = (n: number) => new Date(now.getTime() - n * 86_400_000);
 const hoursAgo = (n: number) => new Date(now.getTime() - n * 3_600_000);
+
+// A rule's real next occurrence from today, so demo "next" dates land on the
+// rule's own day-of-month rather than an arbitrary offset (which read as a bug:
+// "every month on the 10th · next Jul 23"). Noon UTC keeps it clear of any
+// timezone's midnight boundary. Mirrors how the app derives nextOccurrenceAt.
+const todayCal = { y: now.getUTCFullYear(), m: now.getUTCMonth() + 1, d: now.getUTCDate() };
+const nextOccurrenceOf = (rrule: string): Date => {
+	const o = nextOccurrence(parseRRule(rrule), todayCal);
+	return new Date(Date.UTC(o.y, o.m - 1, o.d, 12, 0, 0));
+};
 
 const existing = await db
 	.select({ id: schema.workspace.id })
@@ -206,7 +217,6 @@ await db.insert(schema.recurringRule).values([
 		amountMinor: 1_800_00n,
 		currency: 'USD',
 		rrule: 'DTSTART=2025-07-01;FREQ=MONTHLY;BYMONTHDAY=1',
-		nextOccurrenceAt: daysAgo(-14),
 		lastGeneratedAt: daysAgo(32),
 		status: 'active' as any,
 		autoComplete: false,
@@ -222,7 +232,6 @@ await db.insert(schema.recurringRule).values([
 		amountMinor: 15_49n,
 		currency: 'USD',
 		rrule: 'DTSTART=2025-07-03;FREQ=MONTHLY;BYMONTHDAY=3',
-		nextOccurrenceAt: daysAgo(-12),
 		lastGeneratedAt: daysAgo(33),
 		status: 'active' as any,
 		autoComplete: false,
@@ -238,7 +247,6 @@ await db.insert(schema.recurringRule).values([
 		amountMinor: 49_99n,
 		currency: 'USD',
 		rrule: 'DTSTART=2025-07-05;FREQ=MONTHLY;BYMONTHDAY=5',
-		nextOccurrenceAt: daysAgo(-10),
 		lastGeneratedAt: daysAgo(36),
 		status: 'active' as any,
 		autoComplete: false,
@@ -254,7 +262,6 @@ await db.insert(schema.recurringRule).values([
 		amountMinor: 79_99n,
 		currency: 'USD',
 		rrule: 'DTSTART=2025-07-10;FREQ=MONTHLY;BYMONTHDAY=10',
-		nextOccurrenceAt: daysAgo(-5),
 		lastGeneratedAt: daysAgo(40),
 		status: 'active' as any,
 		autoComplete: false,
@@ -270,13 +277,12 @@ await db.insert(schema.recurringRule).values([
 		amountMinor: 85_00n,
 		currency: 'USD',
 		rrule: 'DTSTART=2025-07-12;FREQ=MONTHLY;BYMONTHDAY=12',
-		nextOccurrenceAt: daysAgo(-3),
 		lastGeneratedAt: daysAgo(42),
 		status: 'active' as any,
 		autoComplete: false,
 		endedAt: null
 	}
-]);
+].map((r) => ({ ...r, nextOccurrenceAt: nextOccurrenceOf(r.rrule) })));
 
 // ── Generate monthly recurring purchases ─────────────────────────────
 const recurringPatterns: {

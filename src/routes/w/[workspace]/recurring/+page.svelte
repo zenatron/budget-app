@@ -211,7 +211,7 @@
 		     committed on Done, then remembered for next time. -->
 		<div
 			class="fixed inset-0 z-50"
-			style="background: oklch(0 0 0 / 0.28)"
+			style="background: var(--scrim)"
 			use:dismiss={() => (showSettings = false)}
 			transition:fade={{ duration: 140 }}
 		></div>

@@ -789,7 +789,7 @@
 {#if holdSheet}
 	<div
 		class="fixed inset-0 z-50"
-		style="background: oklch(0 0 0 / 0.28)"
+		style="background: var(--scrim)"
 		use:dismiss={() => (holdSheet = null)}
 		transition:fade={{ duration: 140 }}
 	></div>

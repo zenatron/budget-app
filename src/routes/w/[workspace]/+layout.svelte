@@ -228,7 +228,7 @@
 								href="/w/{ws.slug}"
 								onclick={() => (showSwitcher = false)}
 								class="press flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5"
-								style={active ? 'background: oklch(0.28 0.03 65 / 0.06)' : ''}
+								style={active ? 'background: color-mix(in oklab, var(--ink) 6%, transparent)' : ''}
 							>
 								<span
 									class="flex h-8 w-8 items-center justify-center rounded-[9px] font-[family-name:var(--font-display)] text-[15px] font-semibold text-white"
@@ -316,7 +316,7 @@
 				>
 					<span
 						class="flex h-[52px] w-[52px] -translate-y-3 items-center justify-center rounded-full text-white"
-						style="background: var(--ws-accent); box-shadow: 0 6px 16px -4px color-mix(in oklab, var(--ws-accent) 55%, transparent), 0 1px 2px oklch(0.28 0.03 65 / 0.18); outline: 3px solid var(--paper)"
+						style="background: var(--ws-accent); box-shadow: 0 6px 16px -4px color-mix(in oklab, var(--ws-accent) 55%, transparent), 0 1px 2px light-dark(oklch(0.28 0.03 65 / 0.18), oklch(0 0 0 / 0.55)); outline: 3px solid var(--paper)"
 					>
 						<Plus class="h-6 w-6" />
 					</span>

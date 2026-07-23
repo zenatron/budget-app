@@ -9,7 +9,7 @@
 {#if spec}
 	<div
 		class="fixed inset-0 z-[60]"
-		style="background: oklch(0 0 0 / 0.32)"
+		style="background: var(--scrim)"
 		use:dismiss={() => answerConfirm(false)}
 		transition:fade={{ duration: 120 }}
 	></div>

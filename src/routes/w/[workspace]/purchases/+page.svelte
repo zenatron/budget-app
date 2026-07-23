@@ -613,7 +613,7 @@
 					<span class="num">{formatMinor(f.breakdown.upcomingBillsMinor, data.currency)}</span> bills ·
 					<span class="num">{formatMinor(f.breakdown.savingsMinor, data.currency)}</span> saved{f
 						.breakdown.cashCommittedMinor > 0n
-						? ` · ${formatMinor(f.breakdown.cashCommittedMinor, data.currency)} committed`
+						? ` · ${formatMinor(f.breakdown.cashCommittedMinor, data.currency)} approved`
 						: ''} this month
 				</p>
 				{#if f.breakdown.sleepingMinor > 0n}
@@ -709,7 +709,7 @@
 			you can stack a date, a member and a category in one visit. -->
 		<div
 			class="fixed inset-0 z-50"
-			style="background: oklch(0 0 0 / 0.28)"
+			style="background: var(--scrim)"
 			use:dismiss={() => (showFilter = false)}
 			transition:fade={{ duration: 140 }}
 		></div>

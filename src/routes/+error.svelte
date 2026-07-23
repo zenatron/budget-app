@@ -16,7 +16,7 @@
 
 <div
 	class="min-h-viewport flex items-center justify-center px-6"
-	style="--ws-accent: #B4472B; --accent: #B4472B"
+	style="--ws-accent: light-dark(#B4472B, color-mix(in oklch, #B4472B, white 18%)); --accent: var(--ws-accent)"
 >
 	<div class="text-center">
 		<div

@@ -3,6 +3,10 @@
 	import { Check } from '@lucide/svelte';
 
 	let { value = $bindable(), label = 'Accent color' }: { value: string; label?: string } = $props();
+
+	// Show the swatch as it will actually render — the accent is auto-lifted in
+	// dark, so the picker previews that lift rather than the stored (light-tuned) hex.
+	const lift = (c: string) => `light-dark(${c}, color-mix(in oklch, ${c}, white 18%))`;
 </script>
 
 <!--
@@ -25,11 +29,11 @@
 			>
 				<span
 					class="flex items-center justify-center rounded-full transition-all duration-150"
-					style="background: {c}; width: {selected ? '30px' : '26px'}; height: {selected
+					style="background: {lift(c)}; width: {selected ? '30px' : '26px'}; height: {selected
 						? '30px'
 						: '26px'}; box-shadow: {selected
-						? `0 0 0 2px var(--surface), 0 0 0 4px ${c}`
-						: 'inset 0 0 0 1px oklch(0 0 0 / 0.08)'}"
+						? `0 0 0 2px var(--surface), 0 0 0 4px ${lift(c)}`
+						: 'inset 0 0 0 1px light-dark(oklch(0 0 0 / 0.08), oklch(1 0 0 / 0.14))'}"
 				>
 					{#if selected}
 						<Check class="h-3.5 w-3.5 text-white" />

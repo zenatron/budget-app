@@ -27,7 +27,7 @@
 	const prompts = $derived(completing ? reading.suggestions : EXAMPLE_PROMPTS);
 </script>
 
-<div class="fixed inset-0 z-50" style="background: oklch(0 0 0 / 0.18)" use:dismiss={close}></div>
+<div class="fixed inset-0 z-50" style="background: var(--scrim)" use:dismiss={close}></div>
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="fixed inset-x-4 top-[16vh] z-50 mx-auto max-w-lg" onkeydown={handleKeydown}>
 	<div
