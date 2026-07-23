@@ -18,10 +18,13 @@
 		on,
 		name = 'enabled',
 		label,
-		// Ink, not green: an enabled setting isn't a semantic "approved" state, and
-		// the theme reserves colour for state that must read instantly. Ink is the
-		// primary action colour, and matches the filter modal's toggle.
-		onColor = 'var(--ink)'
+		// The workspace accent, not a semantic colour: an enabled setting isn't an
+		// "approved" state, so it must not borrow the green that reads as one. The
+		// accent is the brand tint the FAB, nav and primary buttons already wear —
+		// joining the switch to that family reads as "on" and keeps the white knob
+		// legible on every accent, in light and (auto-lifted) dark alike. Ink can't:
+		// after dusk it becomes near-white and swallows the knob.
+		onColor = 'var(--accent)'
 	}: {
 		on: boolean;
 		/** Submitted form field name. */

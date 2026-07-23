@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
-	import { Bell, ChevronRight, CircleHelp, Sparkles, Users } from '@lucide/svelte';
+	import { Bell, ChevronRight, CircleHelp, Monitor, Moon, Sparkles, Sun, Users } from '@lucide/svelte';
 	import AccentPicker from '$lib/components/AccentPicker.svelte';
+	import { theme, setTheme, type ThemePref } from '$lib/theme.svelte';
 	import Toggle from '$lib/components/Toggle.svelte';
 	import { accentFor } from '$lib/accent';
 	let { data, form } = $props();
@@ -13,6 +14,12 @@
 	// button only appears once the two diverge.
 	const currentAccent = $derived(accentFor({ slug: slug ?? '', accentColor: data.accentColor }));
 	let accent = $derived(currentAccent);
+
+	const themeOptions: { id: ThemePref; label: string; icon: typeof Sun }[] = [
+		{ id: 'system', label: 'System', icon: Monitor },
+		{ id: 'light', label: 'Light', icon: Sun },
+		{ id: 'dark', label: 'Dark', icon: Moon }
+	];
 
 	let confirmingDelete = $state(false);
 	let deleteConfirmText = $state('');
@@ -225,6 +232,36 @@
 		<form method="POST" action="?/bucketSkipApproval" use:submit={{ success: 'Setting saved' }}>
 			<Toggle on={data.bucketChargesSkipApproval} label="Toggle bucket charges skip approval" />
 		</form>
+	</div>
+
+	<div class="card p-5">
+		<p class="text-[15px] font-medium" style="color: var(--ink)">Appearance</p>
+		<p class="mt-0.5 mb-3.5 text-[13px]" style="color: var(--ink-4)">
+			Follows your device by default. Saved on this device.
+		</p>
+		<div
+			class="flex gap-1 rounded-[var(--r-md)] p-1"
+			role="radiogroup"
+			aria-label="Theme"
+			style="background: var(--surface-2)"
+		>
+			{#each themeOptions as opt (opt.id)}
+				{@const active = theme.pref === opt.id}
+				<button
+					type="button"
+					role="radio"
+					aria-checked={active}
+					onclick={() => setTheme(opt.id)}
+					class="press flex flex-1 items-center justify-center gap-1.5 rounded-[var(--r-sm)] py-2 text-[13px] font-medium"
+					style={active
+						? 'background: var(--surface); color: var(--ink); box-shadow: var(--shadow-card)'
+						: 'color: var(--ink-3)'}
+				>
+					<opt.icon class="h-4 w-4" />
+					{opt.label}
+				</button>
+			{/each}
+		</div>
 	</div>
 
 	{#if data.member.role === 'owner'}

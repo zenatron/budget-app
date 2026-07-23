@@ -12,33 +12,38 @@
 
 /* ───────────────────────── Design tokens ─────────────────────────
    "Paper Statement" — warm printed paper, espresso ink, a didone masthead.
-   Editorial like a bank statement crossed with a magazine. Light, always.
-   OKLCH; neutrals warm (hue ~85). One accent per workspace (--ws-accent). */
+   Editorial like a bank statement crossed with a magazine.
+
+   Light and dark from one source: every colour is `light-dark(light, dark)`,
+   resolved by the single `color-scheme` switch below. Dark is the same world
+   after dusk — warm near-black paper, warm off-white ink — not a cold inversion.
+   OKLCH; neutrals warm (hue ~80). One accent per workspace (--ws-accent),
+   auto-lifted in dark where the light-tuned palette would go muddy. */
 :root {
-	/* Paper & panels — light, warm, tactile */
-	--paper: oklch(0.965 0.013 88);
+	/* Paper & panels — in dark, surfaces sit *above* the canvas (they catch light) */
+	--paper: light-dark(oklch(0.965 0.013 88), oklch(0.18 0.012 78));
 	--canvas: var(--paper);
-	--surface: oklch(0.995 0.004 90);
-	--surface-2: oklch(0.94 0.012 86);
-	--surface-hi: oklch(0.915 0.014 84);
-	--hairline: oklch(0.28 0.02 65 / 0.16);
-	--hairline-strong: oklch(0.28 0.02 65 / 0.3);
+	--surface: light-dark(oklch(0.995 0.004 90), oklch(0.225 0.014 80));
+	--surface-2: light-dark(oklch(0.94 0.012 86), oklch(0.275 0.015 80));
+	--surface-hi: light-dark(oklch(0.915 0.014 84), oklch(0.32 0.016 80));
+	--hairline: light-dark(oklch(0.28 0.02 65 / 0.16), oklch(0.92 0.02 80 / 0.13));
+	--hairline-strong: light-dark(oklch(0.28 0.02 65 / 0.3), oklch(0.92 0.02 80 / 0.26));
 
-	/* Ink — espresso near-black; lighter = less important on light paper */
-	--ink: oklch(0.245 0.021 62);
-	--ink-2: oklch(0.4 0.021 62);
-	--ink-3: oklch(0.52 0.016 64);
-	--ink-4: oklch(0.63 0.012 66);
+	/* Ink — espresso on paper, warm off-white after dusk; fainter = less important */
+	--ink: light-dark(oklch(0.245 0.021 62), oklch(0.95 0.01 84));
+	--ink-2: light-dark(oklch(0.4 0.021 62), oklch(0.81 0.011 84));
+	--ink-3: light-dark(oklch(0.52 0.016 64), oklch(0.67 0.012 84));
+	--ink-4: light-dark(oklch(0.63 0.012 66), oklch(0.55 0.012 84));
 
-	/* Semantic — deepened so they read on paper */
-	--approve: oklch(0.52 0.15 150);
-	--deny: oklch(0.53 0.2 27);
-	--pending: oklch(0.56 0.13 64);
-	--seal: oklch(0.5 0.19 305);
-	--info: oklch(0.52 0.16 250);
+	/* Semantic — deepened for paper, lifted for dark so they read on either ground */
+	--approve: light-dark(oklch(0.52 0.15 150), oklch(0.72 0.15 150));
+	--deny: light-dark(oklch(0.53 0.2 27), oklch(0.68 0.19 27));
+	--pending: light-dark(oklch(0.56 0.13 64), oklch(0.76 0.13 72));
+	--seal: light-dark(oklch(0.5 0.19 305), oklch(0.7 0.18 305));
+	--info: light-dark(oklch(0.52 0.16 250), oklch(0.7 0.15 250));
 
 	/* Accent — default; workspace layout sets a literal on its wrapper. */
-	--accent: oklch(0.55 0.2 25);
+	--accent: light-dark(oklch(0.55 0.2 25), oklch(0.68 0.2 25));
 
 	/* Editorial type scale */
 	--fs-mega: clamp(3.6rem, 3rem + 3vw, 4.6rem);
@@ -64,9 +69,30 @@
 	--dur: 240ms;
 	--dur-slow: 420ms;
 
-	--shadow-card: 0 1px 2px oklch(0.28 0.03 65 / 0.06), 0 8px 24px -14px oklch(0.28 0.05 60 / 0.28);
+	--shadow-card: 0 1px 2px light-dark(oklch(0.28 0.03 65 / 0.06), oklch(0 0 0 / 0.34)),
+		0 8px 24px -14px light-dark(oklch(0.28 0.05 60 / 0.28), oklch(0 0 0 / 0.6));
 	--shadow-float:
-		0 12px 40px -12px oklch(0.28 0.05 60 / 0.35), 0 2px 6px oklch(0.28 0.05 60 / 0.14);
+		0 12px 40px -12px light-dark(oklch(0.28 0.05 60 / 0.35), oklch(0 0 0 / 0.7)),
+		0 2px 6px light-dark(oklch(0.28 0.05 60 / 0.14), oklch(0 0 0 / 0.5));
+}
+
+/* ── The one switch ──────────────────────────────────────────────────
+   `color-scheme` drives every `light-dark()` above, and native controls,
+   scrollbars and form widgets with it. Default light; the OS decides unless
+   the reader has forced a theme (data-theme set by the pre-paint script). */
+:root {
+	color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		color-scheme: dark;
+	}
+}
+:root[data-theme='dark'] {
+	color-scheme: dark;
+}
+:root[data-theme='light'] {
+	color-scheme: light;
 }
 
 @layer base {
@@ -142,10 +168,8 @@
 		box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 32%, transparent);
 	}
 
-	/* Native date/time fields render the picker glyph in the UA's own color. */
-	input[type='date'] {
-		color-scheme: light;
-	}
+	/* Native date/time fields render the picker glyph in the UA's own color —
+	   it inherits color-scheme, so the glyph follows the theme automatically. */
 	input[type='date']::-webkit-calendar-picker-indicator {
 		opacity: 0.45;
 		cursor: pointer;

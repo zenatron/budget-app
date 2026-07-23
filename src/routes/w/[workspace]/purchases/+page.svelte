@@ -847,7 +847,7 @@
 						</span>
 						<span
 							class="relative h-[28px] w-[44px] shrink-0 rounded-full transition-colors"
-							style="background: {data.includeMovements ? 'var(--ink)' : 'var(--surface-hi)'}"
+							style="background: {data.includeMovements ? 'var(--accent)' : 'var(--surface-hi)'}"
 						>
 							<span
 								class="absolute top-1 left-0 h-5 w-5 rounded-full bg-white shadow-sm transition-transform"
