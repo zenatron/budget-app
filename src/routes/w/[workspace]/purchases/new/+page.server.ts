@@ -46,6 +46,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			.map((m) => ({ id: m.member.id, displayName: m.user.displayName })),
 		maxSealDays: locals.workspace!.maxSealDays,
 		billImportEnabled: locals.workspace!.billImportEnabled,
+		// Whether to offer the optional category suggestion. Off = deterministic form.
+		aiEnabled: locals.workspace!.aiMode !== 'off',
 		/*
 		 * How to read 03/04/2026 when the document doesn't say. Writing the month
 		 * first is essentially a US convention, and the timezone is the only locale

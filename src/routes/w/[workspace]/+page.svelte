@@ -211,11 +211,18 @@
 				Harmony works out what's genuinely safe to spend this month, and answers questions about
 				your money in plain language.
 			</p>
-			<a
-				href="/w/{slug}/settings/help?s=safe-to-spend"
-				class="press mt-1 inline-block text-[13px] font-medium"
-				style="color: var(--ws-accent)">How it works</a
-			>
+			<div class="mt-1 flex items-center gap-3">
+				<a
+					href="/w/{slug}/settings/help?s=safe-to-spend"
+					class="press inline-block text-[13px] font-medium"
+					style="color: var(--ws-accent)">How it works</a
+				>
+				<a
+					href="/w/{slug}/settings/intelligence"
+					class="press inline-block text-[13px] font-medium"
+					style="color: var(--ws-accent)">Assist &amp; AI</a
+				>
+			</div>
 		</div>
 		<form method="POST" action="?/intelligence" use:submit={{ success: 'Setting saved' }}>
 			<Toggle on={data.intelligenceEnabled} label="Toggle Harmony" />

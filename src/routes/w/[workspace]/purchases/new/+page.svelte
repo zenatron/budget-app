@@ -15,6 +15,7 @@
 		Moon,
 		Search,
 		ShoppingBag,
+		Sparkles,
 		X
 	} from '@lucide/svelte';
 	import { money } from '$lib/actions/money';
@@ -42,6 +43,52 @@
 	let itemName = $state('');
 	let merchantName = $state('');
 	let photoInput: HTMLInputElement | null = $state(null);
+
+	// Optional category suggestion (the assist layer's first proving ground).
+	// Bound so a suggestion can fill it; a suggestion is only ever offered, never
+	// applied — the person taps Apply. With AI off, none of this runs.
+	let categoryId = $state('');
+	let suggested = $state<{ id: string; name: string; icon: string | null } | null>(null);
+	let suggesting = $state(false);
+	let lastSuggestKey = '';
+
+	async function suggestCategory() {
+		if (!data.aiEnabled) return;
+		const item = itemName.trim();
+		if (!item || categoryId) {
+			suggested = null;
+			return;
+		}
+		const key = `${item}|${merchantName.trim()}`;
+		if (key === lastSuggestKey) return; // already asked about this exact text
+		lastSuggestKey = key;
+		suggesting = true;
+		suggested = null;
+		try {
+			const res = await fetch(`/w/${slug}/purchases/suggest-category`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ itemName: item, merchantName: merchantName.trim() })
+			});
+			if (res.ok) {
+				const d = await res.json();
+				if (d.categoryId && d.categoryId !== categoryId) {
+					suggested = { id: d.categoryId, name: d.name, icon: d.icon };
+				}
+			}
+		} catch {
+			// Any failure just means no suggestion — the form is unchanged.
+		} finally {
+			suggesting = false;
+		}
+	}
+
+	function applySuggestion() {
+		if (suggested) {
+			categoryId = suggested.id;
+			suggested = null;
+		}
+	}
 	const amountMinorForPicker = $derived(
 		BigInt(Math.round((Number((amount || '0').replace(/[^0-9.]/g, '')) || 0) * 100))
 	);
@@ -243,6 +290,7 @@
 					name="itemName"
 					aria-label="Item"
 					bind:value={itemName}
+					onblur={suggestCategory}
 					required
 					maxlength="120"
 					placeholder="What did you buy?"
@@ -256,6 +304,7 @@
 					name="merchantName"
 					aria-label="Merchant"
 					bind:value={merchantName}
+					onblur={suggestCategory}
 					maxlength="200"
 					placeholder="Where did you buy it?"
 					class="flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:opacity-40"
@@ -266,6 +315,8 @@
 				<CreditCard class="h-5 w-5" style="color: var(--ink-4)" />
 				<select
 					name="categoryId"
+					bind:value={categoryId}
+					onchange={() => (suggested = null)}
 					class="-mx-1 flex-1 border-none bg-transparent p-0 text-[17px] outline-none"
 					style="color: var(--ink); appearance: none; background-image: none"
 				>
@@ -274,6 +325,37 @@
 				</select>
 				<ChevronDown class="h-4 w-4" style="color: var(--ink-4)" />
 			</div>
+			{#if data.aiEnabled && !categoryId && (suggesting || suggested)}
+				<div
+					class="row hairline"
+					style="box-shadow: inset 0 0.5px 0 var(--hairline)"
+					transition:fade={{ duration: 120 }}
+				>
+					<Sparkles class="h-5 w-5" style="color: var(--accent)" />
+					{#if suggesting}
+						<span class="flex-1 text-[15px]" style="color: var(--ink-3)">Finding a category…</span>
+					{:else if suggested}
+						<button
+							type="button"
+							onclick={applySuggestion}
+							class="press flex-1 text-left text-[15px]"
+							style="color: var(--ink-2)"
+						>
+							Suggested
+							<strong style="color: var(--ink)">{suggested.icon} {suggested.name}</strong>
+							<span style="color: var(--accent)">· Apply</span>
+						</button>
+						<button
+							type="button"
+							onclick={() => (suggested = null)}
+							aria-label="Dismiss suggestion"
+							class="press"
+						>
+							<X class="h-4 w-4" style="color: var(--ink-4)" />
+						</button>
+					{/if}
+				</div>
+			{/if}
 			{#if data.buckets.length > 0}
 				<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
 					<Landmark class="h-5 w-5" style="color: var(--ink-4)" />

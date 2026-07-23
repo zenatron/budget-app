@@ -38,6 +38,11 @@ export const purchaseState = pgEnum('purchase_state', [
 export const recurringStatus = pgEnum('recurring_rule_status', ['active', 'paused', 'ended']);
 export const budgetPeriod = pgEnum('budget_period', ['month', 'week']);
 export const bucketStatus = pgEnum('bucket_status', ['active', 'paused', 'archived']);
+// How Harmony's optional LLM assist is sourced. 'off' keeps the deterministic
+// parsing we already ship — the LLM is never required. 'local' points at a
+// self-hosted endpoint (Ollama etc.), so nothing leaves the box. 'external'
+// allows a third-party API for those who don't mind the privacy trade.
+export const aiMode = pgEnum('workspace_ai_mode', ['off', 'local', 'external']);
 export const bucketTxnType = pgEnum('bucket_txn_type', ['accrual', 'withdrawal', 'adjustment']);
 
 // "user" is a reserved word in SQL; app_user keeps raw analytics queries sane.
@@ -73,6 +78,16 @@ export const workspace = pgTable('workspace', {
 	/** Alpha: the intelligence surface — the ask palette and periodic summaries.
 	 *  One flag for the whole suite so it promotes out of alpha together. */
 	intelligenceEnabled: boolean('intelligence_enabled').notNull().default(false),
+	/** Optional LLM assist for Harmony. 'off' = deterministic parsing only (the
+	 *  default). A fuzzy reducer, never an approver: it only ever suggests, and
+	 *  every suggestion is validated against a deterministic option set before use. */
+	aiMode: aiMode('ai_mode').notNull().default('off'),
+	/** Base URL of the model endpoint. Local (Ollama) or an OpenAI-compatible API. */
+	aiEndpoint: text('ai_endpoint'),
+	/** Model name to request, e.g. 'llama3.2' or 'gpt-4o-mini'. */
+	aiModel: text('ai_model'),
+	/** Bearer token for an external API. Null for local endpoints that need none. */
+	aiApiKey: text('ai_api_key'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull()
 });
 
