@@ -11,7 +11,11 @@ import { baseUrl, choiceMessages, fetchWithTimeout, labelMessages } from './prom
  * that trade in the settings copy. Same guarantee otherwise: the answer is
  * constrained before it counts.
  */
-export function openaiAssist(cfg: { endpoint: string; model: string; apiKey: string | null }): LlmAssist {
+export function openaiAssist(cfg: {
+	endpoint: string;
+	model: string;
+	apiKey: string | null;
+}): LlmAssist {
 	const base = baseUrl(cfg.endpoint);
 	const authHeaders: Record<string, string> = {
 		'content-type': 'application/json',

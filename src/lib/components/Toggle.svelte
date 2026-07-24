@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
+	import { invalidateAll } from '$app/navigation';
 	import { toastError } from '$lib/toast-state.svelte';
 
 	/**
@@ -26,6 +27,8 @@
 		/** Which workspace boolean this switch writes, e.g. "intelligenceEnabled". */
 		flag,
 		label,
+		/** When true the switch is visible but cannot be flipped. */
+		disabled = false,
 		// The workspace accent, not a semantic colour: an enabled setting isn't an
 		// "approved" state, so it must not borrow the green that reads as one.
 		onColor = 'var(--accent)'
@@ -33,6 +36,7 @@
 		on: boolean;
 		flag: string;
 		label: string;
+		disabled?: boolean;
 		onColor?: string;
 	} = $props();
 
@@ -51,6 +55,7 @@
 	});
 
 	async function toggle() {
+		if (disabled) return;
 		const next = !checked;
 		checked = next; // optimistic
 		saving = true;
@@ -61,6 +66,10 @@
 				body: JSON.stringify({ flag, value: next })
 			});
 			if (!res.ok) throw new Error(String(res.status));
+			// Re-run all load functions so layout-gated features (sparkle button,
+			// Safe to Spend, statement, etc.) react immediately rather than waiting
+			// for the next navigation.
+			await invalidateAll();
 		} catch {
 			checked = !next; // revert
 			toastError('Could not save that. Try again.');
@@ -75,9 +84,11 @@
 	role="switch"
 	aria-checked={checked}
 	aria-label={label}
+	aria-disabled={disabled}
+	{disabled}
 	onclick={toggle}
-	class="press relative inline-flex h-7 w-11 shrink-0 items-center rounded-full transition-colors"
-	style="background: {checked ? onColor : 'var(--surface-hi)'}"
+	class="press relative inline-flex h-7 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+	style="background: {checked && !disabled ? onColor : 'var(--surface-hi)'}"
 >
 	<span
 		class="inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform"

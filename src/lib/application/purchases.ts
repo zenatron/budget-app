@@ -189,6 +189,7 @@ export async function submitPurchase(
 			requestedAt: null,
 			decidedAt: null,
 			completedAt: isLog ? (cmd.spentAt ?? now) : null,
+			clearedAt: null,
 			lastNudgedAt: null,
 			nudgeCount: 0,
 			recurringRuleId: null,
@@ -324,6 +325,7 @@ export async function refundPurchase(
 			requestedAt: null,
 			decidedAt: null,
 			completedAt: now,
+			clearedAt: null,
 			lastNudgedAt: null,
 			nudgeCount: 0,
 			recurringRuleId: null,
@@ -426,8 +428,14 @@ export async function deletePurchase(
 				.from(purchaseTable)
 				.where(eq(purchaseTable.id, p.id))
 				.limit(1);
+			const [ws] = await tx
+				.select({ recentDeleteHours: workspace.recentDeleteHours })
+				.from(workspace)
+				.where(eq(workspace.id, scope.workspaceId))
+				.limit(1);
+			const deleteHours = ws?.recentDeleteHours ?? 72;
 			const ageMs = now.getTime() - row.createdAt.getTime();
-			if (ageMs > RECENT_DELETE_HOURS * 3_600_000) {
+			if (deleteHours > 0 && ageMs > deleteHours * 3_600_000) {
 				throw new PurchaseStateError('This entry is too old to remove — ask a workspace owner');
 			}
 		}

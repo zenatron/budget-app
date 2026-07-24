@@ -113,7 +113,7 @@ const cats = [
 	{ name: 'Shopping', icon: '\u{1F6CD}', color: '#8b5cf6' },
 	{ name: 'Health', icon: '\u{1F3E5}', color: '#ef4444' },
 	{ name: 'Travel', icon: '\u{2708}', color: '#06b6d4' }
-].map((c) => ({ id: uuid(), workspaceId: wsId, ...c }));
+].map((c) => ({ id: uuid(), workspaceId: wsId, ...c, isBuiltIn: true }));
 await db.insert(schema.category).values(cats);
 const catIds = cats.map((c) => c.id);
 
@@ -206,83 +206,85 @@ const recGym = uuid();
 const recInternet = uuid();
 const recPhone = uuid();
 
-await db.insert(schema.recurringRule).values([
-	{
-		id: recRent,
-		workspaceId: wsId,
-		memberId: aliceMember,
-		itemName: 'Rent',
-		categoryId: catId(3),
-		merchantId: null,
-		amountMinor: 1_800_00n,
-		currency: 'USD',
-		rrule: 'DTSTART=2025-07-01;FREQ=MONTHLY;BYMONTHDAY=1',
-		lastGeneratedAt: daysAgo(32),
-		status: 'active' as any,
-		autoComplete: false,
-		endedAt: null
-	},
-	{
-		id: recNetflix,
-		workspaceId: wsId,
-		memberId: aliceMember,
-		itemName: 'Netflix',
-		categoryId: catId(2),
-		merchantId: null,
-		amountMinor: 15_49n,
-		currency: 'USD',
-		rrule: 'DTSTART=2025-07-03;FREQ=MONTHLY;BYMONTHDAY=3',
-		lastGeneratedAt: daysAgo(33),
-		status: 'active' as any,
-		autoComplete: false,
-		endedAt: null
-	},
-	{
-		id: recGym,
-		workspaceId: wsId,
-		memberId: bobMember,
-		itemName: 'Gym membership',
-		categoryId: catId(6),
-		merchantId: null,
-		amountMinor: 49_99n,
-		currency: 'USD',
-		rrule: 'DTSTART=2025-07-05;FREQ=MONTHLY;BYMONTHDAY=5',
-		lastGeneratedAt: daysAgo(36),
-		status: 'active' as any,
-		autoComplete: false,
-		endedAt: null
-	},
-	{
-		id: recInternet,
-		workspaceId: wsId,
-		memberId: aliceMember,
-		itemName: 'Internet',
-		categoryId: catId(3),
-		merchantId: null,
-		amountMinor: 79_99n,
-		currency: 'USD',
-		rrule: 'DTSTART=2025-07-10;FREQ=MONTHLY;BYMONTHDAY=10',
-		lastGeneratedAt: daysAgo(40),
-		status: 'active' as any,
-		autoComplete: false,
-		endedAt: null
-	},
-	{
-		id: recPhone,
-		workspaceId: wsId,
-		memberId: bobMember,
-		itemName: 'Phone bill',
-		categoryId: catId(3),
-		merchantId: null,
-		amountMinor: 85_00n,
-		currency: 'USD',
-		rrule: 'DTSTART=2025-07-12;FREQ=MONTHLY;BYMONTHDAY=12',
-		lastGeneratedAt: daysAgo(42),
-		status: 'active' as any,
-		autoComplete: false,
-		endedAt: null
-	}
-].map((r) => ({ ...r, nextOccurrenceAt: nextOccurrenceOf(r.rrule) })));
+await db.insert(schema.recurringRule).values(
+	[
+		{
+			id: recRent,
+			workspaceId: wsId,
+			memberId: aliceMember,
+			itemName: 'Rent',
+			categoryId: catId(3),
+			merchantId: null,
+			amountMinor: 1_800_00n,
+			currency: 'USD',
+			rrule: 'DTSTART=2025-07-01;FREQ=MONTHLY;BYMONTHDAY=1',
+			lastGeneratedAt: daysAgo(32),
+			status: 'active' as any,
+			autoComplete: false,
+			endedAt: null
+		},
+		{
+			id: recNetflix,
+			workspaceId: wsId,
+			memberId: aliceMember,
+			itemName: 'Netflix',
+			categoryId: catId(2),
+			merchantId: null,
+			amountMinor: 15_49n,
+			currency: 'USD',
+			rrule: 'DTSTART=2025-07-03;FREQ=MONTHLY;BYMONTHDAY=3',
+			lastGeneratedAt: daysAgo(33),
+			status: 'active' as any,
+			autoComplete: false,
+			endedAt: null
+		},
+		{
+			id: recGym,
+			workspaceId: wsId,
+			memberId: bobMember,
+			itemName: 'Gym membership',
+			categoryId: catId(6),
+			merchantId: null,
+			amountMinor: 49_99n,
+			currency: 'USD',
+			rrule: 'DTSTART=2025-07-05;FREQ=MONTHLY;BYMONTHDAY=5',
+			lastGeneratedAt: daysAgo(36),
+			status: 'active' as any,
+			autoComplete: false,
+			endedAt: null
+		},
+		{
+			id: recInternet,
+			workspaceId: wsId,
+			memberId: aliceMember,
+			itemName: 'Internet',
+			categoryId: catId(3),
+			merchantId: null,
+			amountMinor: 79_99n,
+			currency: 'USD',
+			rrule: 'DTSTART=2025-07-10;FREQ=MONTHLY;BYMONTHDAY=10',
+			lastGeneratedAt: daysAgo(40),
+			status: 'active' as any,
+			autoComplete: false,
+			endedAt: null
+		},
+		{
+			id: recPhone,
+			workspaceId: wsId,
+			memberId: bobMember,
+			itemName: 'Phone bill',
+			categoryId: catId(3),
+			merchantId: null,
+			amountMinor: 85_00n,
+			currency: 'USD',
+			rrule: 'DTSTART=2025-07-12;FREQ=MONTHLY;BYMONTHDAY=12',
+			lastGeneratedAt: daysAgo(42),
+			status: 'active' as any,
+			autoComplete: false,
+			endedAt: null
+		}
+	].map((r) => ({ ...r, nextOccurrenceAt: nextOccurrenceOf(r.rrule) }))
+);
 
 // ── Generate monthly recurring purchases ─────────────────────────────
 const recurringPatterns: {

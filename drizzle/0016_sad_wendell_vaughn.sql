@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_member" ADD COLUMN "include_ledger_movements" boolean DEFAULT false NOT NULL;

@@ -15,9 +15,6 @@ import type { Notifier } from '$lib/ports/notifier';
 const MATERIALIZE_HOUR = 9;
 const DAY_MS = 86_400_000;
 
-/** Catch-up guard: at most this many missed occurrences generated per sweep. */
-const MAX_CATCHUP = 36;
-
 interface Deps {
 	clock: Clock;
 	ids: IdGenerator;
@@ -216,17 +213,21 @@ export async function updateRule(
 export async function materializeDueRules(db: Db, deps: Deps): Promise<number> {
 	const now = deps.clock.now();
 	const due = await db
-		.select({ ruleId: recurringRule.id, tz: workspace.timezone })
+		.select({
+			ruleId: recurringRule.id,
+			tz: workspace.timezone,
+			catchupMax: workspace.recurringCatchupMax
+		})
 		.from(recurringRule)
 		.innerJoin(workspace, eq(recurringRule.workspaceId, workspace.id))
 		.where(and(eq(recurringRule.status, 'active'), lte(recurringRule.nextOccurrenceAt, now)));
 
 	let generated = 0;
-	for (const { ruleId, tz } of due) {
+	for (const { ruleId, tz, catchupMax } of due) {
 		// One transaction per occurrence, not per catch-up batch: a failure on the
 		// 30th missed occurrence must not roll back the 29 already generated and
 		// leave next_occurrence_at unadvanced (which would replay them forever).
-		for (let i = 0; i < MAX_CATCHUP; i++) {
+		for (let i = 0; i < catchupMax; i++) {
 			const made = await db.transaction(async (tx) => {
 				// Re-check under lock; a concurrent sweep may have handled this rule.
 				const locked = await tx
@@ -258,6 +259,7 @@ export async function materializeDueRules(db: Db, deps: Deps): Promise<number> {
 					requestedAt: null,
 					decidedAt: occurrenceAt,
 					completedAt: r.autoComplete ? occurrenceAt : null,
+					clearedAt: null,
 					lastNudgedAt: null,
 					nudgeCount: 0,
 					recurringRuleId: r.id,

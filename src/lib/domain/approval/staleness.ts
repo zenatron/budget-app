@@ -1,10 +1,9 @@
 /**
  * Staleness is derived, never stored. A pending request is stale when it has
  * waited longer than the workspace's stale_after window. Nudges escalate then
- * cap: first at the staleness threshold, then daily, at most MAX_NUDGES total.
+ * cap: first at the staleness threshold, then daily, at most maxNudges total.
  */
 
-export const MAX_NUDGES = 5;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
@@ -20,9 +19,11 @@ export function nextNudgeAt(
 	requestedAt: Date,
 	staleAfterHours: number,
 	lastNudgedAt: Date | null,
-	nudgeCount: number
+	nudgeCount: number,
+	maxNudges: number
 ): Date | null {
-	if (nudgeCount >= MAX_NUDGES) return null;
+	if (maxNudges === 0) return null;
+	if (nudgeCount >= maxNudges) return null;
 	if (lastNudgedAt === null) {
 		return new Date(requestedAt.getTime() + staleAfterHours * HOUR_MS);
 	}

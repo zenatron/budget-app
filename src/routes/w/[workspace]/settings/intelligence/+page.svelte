@@ -2,15 +2,36 @@
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
 	import Toggle from '$lib/components/Toggle.svelte';
-	import { ChevronLeft, Check, CircleAlert, Sparkles, ShieldCheck } from '@lucide/svelte';
+	import {
+		ChevronLeft,
+		Check,
+		CircleAlert,
+		ScanEye,
+		ScanLine,
+		ShieldCheck,
+		Sparkles
+	} from '@lucide/svelte';
 
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
 	const owner = $derived(data.isOwner);
 
-	// Initial form value; the user then drives it. Intentionally captured once.
-	// svelte-ignore state_referenced_locally
 	let mode = $state<'off' | 'local' | 'external'>(data.config.mode);
+	let endpoint = $state(data.config.endpoint);
+	let model = $state(data.config.model);
+	let apiKey = $state('');
+
+	// Re-sync form state from the server after a successful save — never after a
+	// test request (which doesn't write), and never during ordinary interaction
+	// (where the server value is stale relative to what the user is typing).
+	$effect(() => {
+		if (!form?.ok) return;
+		mode = data.config.mode;
+		endpoint = data.config.endpoint;
+		model = data.config.model;
+		apiKey = '';
+	});
+
 	const MODES = [
 		{ value: 'off', label: 'Off' },
 		{ value: 'local', label: 'Local' },
@@ -33,7 +54,8 @@
 	<!-- The deterministic suite: master switch + the features it powers. -->
 	<div class="card flex items-start justify-between gap-4 p-4">
 		<div>
-			<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
+			<p class="flex items-center gap-1.5 text-[15px] font-medium" style="color: var(--ink)">
+				<Sparkles class="h-4 w-4 shrink-0" style="color: var(--ws-accent)" />
 				Harmony
 				<span
 					class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
@@ -58,16 +80,61 @@
 
 	<div class="card flex items-center justify-between gap-4 p-4">
 		<div>
-			<p class="text-[15px] font-medium" style="color: var(--ink)">Read bills from PDFs</p>
+			<p class="flex items-center gap-1.5 text-[15px] font-medium" style="color: var(--ink)">
+				<ScanEye class="h-4 w-4 shrink-0" style="color: var(--ws-accent)" />
+				Read a bill or receipt
+			</p>
 			<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
-				Prefills a purchase from a bill PDF. It guesses, so it always asks you to confirm.
+				Extracts text from a PDF or image. The AI can help interpret fuzzy amounts, but always asks
+				you to confirm before anything lands in the ledger.
 			</p>
 		</div>
 		{#if owner}
 			<Toggle
 				on={data.billImportEnabled}
 				flag="billImportEnabled"
-				label="Toggle reading bills from PDFs"
+				label="Toggle reading a bill or receipt"
+			/>
+		{/if}
+	</div>
+
+	<div class="card flex items-start justify-between gap-4 p-4">
+		<div>
+			<p class="flex items-center gap-1.5 text-[15px] font-medium" style="color: var(--ink)">
+				<ScanLine class="h-4 w-4 shrink-0" style="color: var(--ws-accent)" />
+				Scan a barcode
+			</p>
+			<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
+				Point your camera at a barcode to capture the product code. To look up a product name and
+				category, wire up a product-lookup API like <a
+					href="https://world.openfoodfacts.org/data"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="underline decoration-dotted"
+					style="color: var(--ws-accent)">Open Food Facts</a
+				> — set the URL in your deployment's environment.
+			</p>
+			{#if !data.barcodeConfigured}
+				<p
+					class="mt-2 flex items-start gap-1.5 text-[12px] leading-relaxed"
+					style="color: var(--pending)"
+				>
+					<CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+					<span>
+						Barcode lookup isn't configured. Set <code class="font-mono text-[11px]"
+							>BARCODE_LOOKUP_URL</code
+						>
+						in your deployment environment to enable this.
+					</span>
+				</p>
+			{/if}
+		</div>
+		{#if owner}
+			<Toggle
+				on={data.barcodeEnabled}
+				flag="barcodeEnabled"
+				label="Toggle scanning a barcode"
+				disabled={!data.barcodeConfigured}
 			/>
 		{/if}
 	</div>
@@ -80,7 +147,7 @@
 			class="flex items-center gap-2 font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
 			style="color: var(--ink)"
 		>
-			<Sparkles class="h-4 w-4" style="color: var(--accent)" /> A helper, never a decider
+			<Sparkles class="h-4 w-4" style="color: var(--ws-accent)" /> A helper, never a decider
 		</h2>
 		<p class="mt-2 text-[13px] leading-relaxed" style="color: var(--ink-2)">
 			Harmony works entirely on plain arithmetic and pattern matching. You can optionally let a
@@ -90,8 +157,8 @@
 			is checked against the app's own options before you see it, so a bad answer becomes no answer.
 		</p>
 		<p class="mt-2 text-[13px] leading-relaxed" style="color: var(--ink-3)">
-			Leave it <strong style="color: var(--ink-2)">Off</strong> and nothing changes: Harmony keeps
-			using the deterministic parsing it already ships with.
+			Leave it <strong style="color: var(--ink-2)">Off</strong> and nothing changes: Harmony keeps using
+			the deterministic parsing it already ships with.
 		</p>
 	</section>
 
@@ -107,8 +174,9 @@
 					{#each MODES as m}
 						<label
 							class="press cursor-pointer rounded-lg py-2 text-center text-[14px] font-medium"
-							style="background: {mode === m.value ? 'var(--surface)' : 'transparent'}; color: {mode ===
-							m.value
+							style="background: {mode === m.value
+								? 'var(--surface)'
+								: 'transparent'}; color: {mode === m.value
 								? 'var(--ink)'
 								: 'var(--ink-3)'}; box-shadow: {mode === m.value
 								? 'inset 0 0 0 1px var(--hairline)'
@@ -144,7 +212,7 @@
 					<input
 						id="endpoint"
 						name="endpoint"
-						value={data.config.endpoint}
+						bind:value={endpoint}
 						disabled={!owner}
 						placeholder={mode === 'local' ? 'http://localhost:11434' : 'https://api.openai.com'}
 						class="field mt-1 font-mono text-[15px]"
@@ -155,7 +223,7 @@
 					<input
 						id="model"
 						name="model"
-						value={data.config.model}
+						bind:value={model}
 						disabled={!owner}
 						placeholder={mode === 'local' ? 'llama3.2' : 'gpt-4o-mini'}
 						class="field mt-1 font-mono text-[15px]"
@@ -168,6 +236,7 @@
 							id="apiKey"
 							name="apiKey"
 							type="password"
+							bind:value={apiKey}
 							disabled={!owner}
 							placeholder={data.config.apiKeySet ? 'Stored. Leave blank to keep it.' : 'sk-...'}
 							class="field mt-1 font-mono text-[15px]"
@@ -188,9 +257,7 @@
 					class="flex items-center gap-1.5 text-[13px]"
 					style="color: {testResult.ok ? 'var(--approve)' : 'var(--deny)'}"
 				>
-					{#if testResult.ok}<Check class="h-4 w-4" />{:else}<CircleAlert
-							class="h-4 w-4"
-						/>{/if}
+					{#if testResult.ok}<Check class="h-4 w-4" />{:else}<CircleAlert class="h-4 w-4" />{/if}
 					{testResult.detail}
 				</p>
 			{/if}

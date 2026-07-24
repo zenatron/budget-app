@@ -4,6 +4,7 @@ import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
 import { workspace } from '$lib/server/db/schema';
 import { getLlmAssist, type AssistConfig } from '$lib/infra/llm';
+import { getEnv } from '$lib/server/env';
 import type { Actions, PageServerLoad } from './$types';
 
 const ConfigSchema = v.object({
@@ -27,10 +28,13 @@ function validateEndpoint(endpoint: string): string | null {
 export const load: PageServerLoad = async ({ locals, params }) => {
 	void params.workspace;
 	const ws = locals.workspace!;
+	const env = getEnv();
 	return {
 		isOwner: locals.member!.role === 'owner',
 		intelligenceEnabled: ws.intelligenceEnabled,
 		billImportEnabled: ws.billImportEnabled,
+		barcodeEnabled: ws.barcodeEnabled,
+		barcodeConfigured: !!env.BARCODE_LOOKUP_URL,
 		config: {
 			mode: ws.aiMode,
 			endpoint: ws.aiEndpoint ?? '',
@@ -40,7 +44,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		}
 	};
 };
-
 
 /** Resolve the config a form submission describes, keeping the stored key if blank. */
 function configFromForm(
@@ -57,7 +60,8 @@ function configFromForm(
 
 export const actions: Actions = {
 	save: async ({ locals, request }) => {
-		if (locals.member!.role !== 'owner') error(403, 'Only the owner can change intelligence settings');
+		if (locals.member!.role !== 'owner')
+			error(403, 'Only the owner can change intelligence settings');
 		const parsed = v.safeParse(ConfigSchema, Object.fromEntries(await request.formData()));
 		if (!parsed.success) return fail(400, { error: parsed.issues[0].message });
 		const out = parsed.output;
@@ -86,11 +90,13 @@ export const actions: Actions = {
 
 	/** Ping the endpoint described by the form (unsaved), so it can be checked first. */
 	test: async ({ locals, request }) => {
-		if (locals.member!.role !== 'owner') error(403, 'Only the owner can test intelligence settings');
+		if (locals.member!.role !== 'owner')
+			error(403, 'Only the owner can test intelligence settings');
 		const parsed = v.safeParse(ConfigSchema, Object.fromEntries(await request.formData()));
 		if (!parsed.success) return fail(400, { error: parsed.issues[0].message });
 		const out = parsed.output;
-		if (out.mode === 'off') return { test: { ok: false, detail: 'Turn a provider on to test it.' } };
+		if (out.mode === 'off')
+			return { test: { ok: false, detail: 'Turn a provider on to test it.' } };
 		if (!out.endpoint || !out.model) {
 			return { test: { ok: false, detail: 'Fill in the endpoint and model first.' } };
 		}

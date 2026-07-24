@@ -3,10 +3,10 @@ import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
 import { calDateInZone } from '$lib/domain/time/zoned';
 import { Money, InvalidMoneyError } from '$lib/domain/money/money';
+import { nextAccrualDate } from '$lib/application/buckets';
 import {
 	createBucket,
 	listBuckets,
-	bucketsAccruedInMonth,
 	lifetimeSaved,
 	loadOwnBucket,
 	updateBucket,
@@ -32,29 +32,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		lifetimeSaved(db, ws.id)
 	]);
 
-	/*
-	 * When each bucket next takes its monthly amount. Recurring charges have
-	 * always shown "next Jul 28"; buckets showed nothing, so a new one sat at
-	 * $0.00 with no hint that anything was going to happen.
-	 *
-	 * Mirrors the sweep exactly: it accrues once the day of the month has
-	 * arrived and this month hasn't been taken yet.
-	 */
-	const today = calDateInZone(systemClock.now(), ws.timezone);
-	const accrued = await bucketsAccruedInMonth(db, ws.id, today.y, today.m);
-	const nextAccrual = (b: { id: string; dayOfMonth: number; status: string }) => {
-		if (b.status !== 'active') return null;
-		const day = Math.min(b.dayOfMonth, 28);
-		if (!accrued.has(b.id)) {
-			// Due already, or later this month.
-			const d = today.d >= day ? today.d : day;
-			return { y: today.y, m: today.m, d, due: today.d >= day };
-		}
-		const m = today.m === 12 ? 1 : today.m + 1;
-		const y = today.m === 12 ? today.y + 1 : today.y;
-		return { y, m, d: day, due: false };
-	};
-
 	return {
 		currency: ws.currency,
 		// What's actually in the visible buckets right now (active + paused;
@@ -76,12 +53,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			balanceMinor: r.balanceMinor,
 			memberName: r.memberName,
 			mine: r.bucket.memberId === locals.member!.id,
-			nextAccrual: nextAccrual({
-				id: r.bucket.id,
-				dayOfMonth: r.bucket.dayOfMonth,
-				status: r.bucket.status
-			}),
-			everAccrued: r.balanceMinor !== 0n || accrued.has(r.bucket.id)
+			nextAccrualAt: r.bucket.nextAccrualAt,
+			everAccrued: r.balanceMinor !== 0n
 		}))
 	};
 };
@@ -108,6 +81,10 @@ export const actions: Actions = {
 				goalCapMinor = Money.fromDecimal(f.goalCap, locals.workspace!.currency).minor;
 			}
 
+			const now = deps.clock.now();
+			const today = calDateInZone(now, locals.workspace!.timezone);
+			const initialAccrual = nextAccrualDate(today, dayOfMonth, locals.workspace!.timezone);
+
 			await createBucket(getDb(), deps, {
 				workspaceId: locals.workspace!.id,
 				memberId: locals.member!.id,
@@ -117,7 +94,8 @@ export const actions: Actions = {
 				dayOfMonth,
 				goalCapMinor,
 				color: f.color?.trim() || null,
-				icon: null
+				icon: null,
+				nextAccrualAt: initialAccrual
 			});
 		} catch (e) {
 			if (e instanceof InvalidMoneyError) return fail(400, { error: e.message });

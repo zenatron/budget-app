@@ -54,7 +54,7 @@
 	let lastSuggestKey = '';
 
 	async function suggestCategory() {
-		if (!data.aiEnabled) return;
+		if (!data.harmonyEnabled) return;
 		const item = itemName.trim();
 		if (!item || categoryId) {
 			suggested = null;
@@ -271,7 +271,7 @@
 		<ChevronLeft class="h-4 w-4" /> Ledger
 	</a>
 
-	{#if data.billImportEnabled}
+	{#if data.barcodeEnabled}
 		<button
 			type="button"
 			onclick={() => (scanning = true)}
@@ -279,9 +279,9 @@
 		>
 			<span
 				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-				style="background: color-mix(in oklab, var(--pending) 14%, var(--surface))"
+				style="background: color-mix(in oklab, var(--ws-accent) 14%, var(--surface))"
 			>
-				<Search class="h-[18px] w-[18px]" style="color: var(--pending)" />
+				<Search class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
 			</span>
 			<span class="min-w-0 flex-1">
 				<span class="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -300,7 +300,9 @@
 		</button>
 
 		<BarcodeScanner bind:open={scanning} onscan={applyScan} onphoto={applyScanPhoto} />
+	{/if}
 
+	{#if data.billImportEnabled}
 		<BillImport currency={data.workspace.currency} dayFirst={data.dayFirst} onapply={applyBill} />
 	{/if}
 
@@ -308,46 +310,51 @@
 		<!-- Describe it: a sentence (typed or dictated) parsed into the fields below.
 		     Accent-tinted so it reads as the optional smart shortcut, not another
 		     required field competing with Amount. -->
-		<div class="card p-3" style="background: color-mix(in oklab, var(--accent) 7%, var(--surface))">
-			<div class="flex items-center gap-2.5">
-				<Sparkles class="h-5 w-5 shrink-0" style="color: var(--accent)" />
-				<input
-					bind:value={describeText}
-					onkeydown={(e) => {
-						if (e.key === 'Enter') {
-							e.preventDefault();
-							parseDescription();
-						}
-					}}
-					aria-label="Describe the purchase in words"
-					placeholder="Describe it, or dictate"
-					class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:opacity-40"
-					style="color: var(--ink)"
-				/>
-				<button
-					type="button"
-					onclick={parseDescription}
-					disabled={!describeText.trim() || parsing}
-					aria-label="Fill the form from your description"
-					class="press grid h-8 w-8 shrink-0 place-items-center rounded-full transition-opacity disabled:opacity-30"
-					style="background: var(--accent); color: var(--paper)"
-				>
-					{#if parsing}
-						<span
-							class="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-current border-t-transparent"
-						></span>
-					{:else}
-						<ArrowRight class="h-4 w-4" />
-					{/if}
-				</button>
+		{#if data.harmonyEnabled}
+			<div
+				class="card p-3"
+				style="background: color-mix(in oklab, var(--ws-accent) 7%, var(--surface))"
+			>
+				<div class="flex items-center gap-2.5">
+					<Sparkles class="h-5 w-5 shrink-0" style="color: var(--ws-accent)" />
+					<input
+						bind:value={describeText}
+						onkeydown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								parseDescription();
+							}
+						}}
+						aria-label="Describe the purchase in words"
+						placeholder="Describe it, or dictate"
+						class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:opacity-40"
+						style="color: var(--ink)"
+					/>
+					<button
+						type="button"
+						onclick={parseDescription}
+						disabled={!describeText.trim() || parsing}
+						aria-label="Fill the form from your description"
+						class="press grid h-8 w-8 shrink-0 place-items-center rounded-full transition-opacity disabled:opacity-30"
+						style="background: var(--ws-accent); color: var(--paper)"
+					>
+						{#if parsing}
+							<span
+								class="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-current border-t-transparent"
+							></span>
+						{:else}
+							<ArrowRight class="h-4 w-4" />
+						{/if}
+					</button>
+				</div>
+				{#if !describeText}
+					<p class="mt-2 pl-[30px] text-[12px] leading-snug" style="color: var(--ink-3)">
+						Type or dictate a sentence like "23 on lunch at Chipotle yesterday". Harmony fills in
+						the amount, item, and category; you confirm before saving.
+					</p>
+				{/if}
 			</div>
-			{#if !describeText}
-				<p class="mt-2 pl-[30px] text-[12px] leading-snug" style="color: var(--ink-3)">
-					Type or dictate a sentence like “23 on lunch at Chipotle yesterday”. Harmony fills in the
-					amount, item, and category; you confirm before saving.
-				</p>
-			{/if}
-		</div>
+		{/if}
 
 		<!-- Amount: the focal point -->
 		<div class="card-lg card px-6 py-8 text-center">
@@ -417,13 +424,13 @@
 				</select>
 				<ChevronDown class="h-4 w-4" style="color: var(--ink-4)" />
 			</div>
-			{#if data.aiEnabled && !categoryId && (suggesting || suggested)}
+			{#if data.harmonyEnabled && !categoryId && (suggesting || suggested)}
 				<div
 					class="row hairline"
 					style="box-shadow: inset 0 0.5px 0 var(--hairline)"
 					transition:fade={{ duration: 120 }}
 				>
-					<Sparkles class="h-5 w-5" style="color: var(--accent)" />
+					<Sparkles class="h-5 w-5" style="color: var(--ws-accent)" />
 					{#if suggesting}
 						<span class="flex-1 text-[15px]" style="color: var(--ink-3)">Finding a category…</span>
 					{:else if suggested}
@@ -435,7 +442,7 @@
 						>
 							Suggested
 							<strong style="color: var(--ink)">{suggested.icon} {suggested.name}</strong>
-							<span style="color: var(--accent)">· Apply</span>
+							<span style="color: var(--ws-accent)">· Apply</span>
 						</button>
 						<button
 							type="button"

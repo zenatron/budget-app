@@ -59,7 +59,11 @@ export const actions: Actions = {
 		await createInvite(
 			getDb(),
 			{ clock: systemClock, ids: uuidv7 },
-			{ workspaceId: locals.workspace!.id, createdByMemberId: locals.member!.id }
+			{
+				workspaceId: locals.workspace!.id,
+				createdByMemberId: locals.member!.id,
+				ttlDays: locals.workspace!.inviteTtlDays
+			}
 		);
 		return { ok: true };
 	},

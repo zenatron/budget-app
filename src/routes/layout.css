@@ -74,7 +74,8 @@
 	--dur: 240ms;
 	--dur-slow: 420ms;
 
-	--shadow-card: 0 1px 2px light-dark(oklch(0.28 0.03 65 / 0.06), oklch(0 0 0 / 0.34)),
+	--shadow-card:
+		0 1px 2px light-dark(oklch(0.28 0.03 65 / 0.06), oklch(0 0 0 / 0.34)),
 		0 8px 24px -14px light-dark(oklch(0.28 0.05 60 / 0.28), oklch(0 0 0 / 0.6));
 	--shadow-float:
 		0 12px 40px -12px light-dark(oklch(0.28 0.05 60 / 0.35), oklch(0 0 0 / 0.7)),

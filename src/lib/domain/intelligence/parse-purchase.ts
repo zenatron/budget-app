@@ -35,7 +35,8 @@ const REQUEST_CUES =
 function extractAmount(text: string): { amount: string | null; span: [number, number] | null } {
 	// 1) An explicit currency marker is the strongest signal: $23, £4.50, €10.
 	const sym = /(?:[$£€])\s?(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)/.exec(text);
-	if (sym) return { amount: sym[1].replace(/,/g, ''), span: [sym.index, sym.index + sym[0].length] };
+	if (sym)
+		return { amount: sym[1].replace(/,/g, ''), span: [sym.index, sym.index + sym[0].length] };
 
 	// 2) A number followed by a money word: "23 dollars", "5 bucks".
 	const word = /\b(\d+(?:\.\d{1,2})?)\s?(dollars?|bucks?|quid|euros?|pounds?)\b/i.exec(text);
@@ -85,12 +86,13 @@ function extractDate(text: string): {
 
 /** Extract a merchant named with "at"/"from", stopping at a natural boundary. */
 function extractMerchant(text: string): { merchant: string | null; span: [number, number] | null } {
-	const m = /\b(?:at|from)\s+([A-Za-z0-9&'.\- ]+?)(?=\s+(?:yesterday|today|for|on|and|,|\d)|$)/i.exec(
-		text
-	);
+	const m =
+		/\b(?:at|from)\s+([A-Za-z0-9&'.\- ]+?)(?=\s+(?:yesterday|today|for|on|and|,|\d)|$)/i.exec(text);
 	if (!m) return { merchant: null, span: null };
 	const merchant = titleCase(m[1].trim());
-	return merchant ? { merchant, span: [m.index, m.index + m[0].length] } : { merchant: null, span: null };
+	return merchant
+		? { merchant, span: [m.index, m.index + m[0].length] }
+		: { merchant: null, span: null };
 }
 
 function titleCase(s: string): string {
@@ -124,11 +126,7 @@ export function parsePurchaseText(text: string): ParsedPurchase {
 	residual = blank(residual, amt.span);
 	residual = blank(residual, date.span);
 	residual = blank(residual, merch.span);
-	residual = residual
-		.replace(REQUEST_CUES, ' ')
-		.replace(/[$£€]/g, ' ')
-		.replace(/\s+/g, ' ')
-		.trim();
+	residual = residual.replace(REQUEST_CUES, ' ').replace(/[$£€]/g, ' ').replace(/\s+/g, ' ').trim();
 
 	// Peel leading filler words ("i bought a", "spent on", …) one at a time.
 	let prev: string;

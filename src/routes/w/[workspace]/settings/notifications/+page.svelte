@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
-	import { Check, ChevronLeft, CircleAlert } from '@lucide/svelte';
+	import {
+		Antenna,
+		Check,
+		ChevronLeft,
+		CircleAlert,
+		Newspaper,
+		Route,
+		Smartphone
+	} from '@lucide/svelte';
 
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
@@ -11,6 +19,17 @@
 	let busy = $state(false);
 	let pushError: string | null = $state(null);
 	let showA2hs = $state(false);
+
+	let ntfyServerUrl = $state(data.ntfy.serverUrl);
+	let ntfyTopic = $state(data.ntfy.topic);
+
+	// Re-sync from server only after a successful ntfy save — never after a test
+	// (which doesn't write) or on initial load (the $state init handles that).
+	$effect(() => {
+		if (form?.section !== 'ntfy' || !form.ok || form.tested) return;
+		ntfyServerUrl = data.ntfy.serverUrl;
+		ntfyTopic = data.ntfy.topic;
+	});
 
 	$effect(() => {
 		const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -113,10 +132,10 @@
 
 	<section class="card p-5">
 		<h2
-			class="font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
+			class="flex items-center gap-2 font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
 			style="color: var(--ink)"
 		>
-			Push on this device
+			<Smartphone class="h-4 w-4" style="color: var(--ws-accent)" /> Push on this device
 		</h2>
 		{#if !data.vapidPublicKey}
 			<p class="mt-2 text-[14px]" style="color: var(--ink-3)">
@@ -164,10 +183,10 @@
 
 	<section class="card p-5">
 		<h2
-			class="font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
+			class="flex items-center gap-2 font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
 			style="color: var(--ink)"
 		>
-			ntfy
+			<Antenna class="h-4 w-4" style="color: var(--ws-accent)" /> ntfy
 		</h2>
 		<p class="mt-1 text-[13px]" style="color: var(--ink-3)">
 			Reliable delivery via the ntfy app — subscribe to your topic there.
@@ -175,12 +194,12 @@
 		<form method="POST" action="?/ntfy" use:submit class="mt-3.5 space-y-3">
 			<label class="block">
 				<span class="text-[12px]" style="color: var(--ink-3)">Server</span>
-				<input name="serverUrl" value={data.ntfy.serverUrl} class="field mt-1 text-[16px]" />
+				<input name="serverUrl" bind:value={ntfyServerUrl} class="field mt-1 text-[16px]" />
 			</label>
 			<label class="block">
 				<span class="text-[12px]" style="color: var(--ink-3)">Topic — treat it like a password</span
 				>
-				<input name="topic" value={data.ntfy.topic} class="field mt-1 font-mono text-[16px]" />
+				<input name="topic" bind:value={ntfyTopic} class="field mt-1 font-mono text-[16px]" />
 			</label>
 			<div class="flex flex-wrap items-center gap-2.5">
 				<button class="btn btn-accent px-4 py-2 text-[14px]">Save</button>
@@ -209,10 +228,10 @@
 
 	<section class="card p-5">
 		<h2
-			class="font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
+			class="flex items-center gap-2 font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
 			style="color: var(--ink)"
 		>
-			What to send where
+			<Route class="h-4 w-4" style="color: var(--ws-accent)" /> What to send where
 		</h2>
 		<form
 			method="POST"
@@ -292,7 +311,7 @@
 				class="flex items-center gap-2 font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
 				style="color: var(--ink)"
 			>
-				Spending summary
+				<Newspaper class="h-4 w-4" style="color: var(--ws-accent)" /> Spending summary
 				<span
 					class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
 					style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"

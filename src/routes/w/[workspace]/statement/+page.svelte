@@ -49,15 +49,18 @@
 <svelte:head><title>{data.label} statement · {data.workspace.name}</title></svelte:head>
 
 <!-- Month navigation: screen only, never printed. -->
-<header class="screen-only sticky top-0 z-10 flex items-center justify-between px-4 py-3"
-	style="background: color-mix(in oklab, var(--paper) 92%, transparent); box-shadow: 0 0.5px 0 var(--hairline)">
+<header
+	class="screen-only sticky top-0 z-10 flex items-center justify-between px-4 py-3"
+	style="background: color-mix(in oklab, var(--paper) 92%, transparent); box-shadow: 0 0.5px 0 var(--hairline)"
+>
 	<a
 		class="grid h-9 w-9 place-items-center rounded-full"
 		style="color: {data.hasPrev ? 'var(--ink-2)' : 'var(--ink-4)'}; pointer-events: {data.hasPrev
 			? 'auto'
 			: 'none'}"
 		href="?month={data.prevMonth}"
-		aria-label="Previous month"><ChevronLeft size={20} /></a>
+		aria-label="Previous month"><ChevronLeft size={20} /></a
+	>
 	<div class="text-center">
 		<p class="text-[15px] font-semibold" style="color: var(--ink)">{data.label}</p>
 		{#if data.isPartial}
@@ -72,7 +75,8 @@
 			? 'auto'
 			: 'none'}"
 		href="?month={data.nextMonth}"
-		aria-label="Next month"><ChevronRight size={20} /></a>
+		aria-label="Next month"><ChevronRight size={20} /></a
+	>
 </header>
 
 <article class="sheet mx-auto max-w-[560px] px-6 pt-6 pb-24">
@@ -81,8 +85,9 @@
 		<div>
 			<p class="section-label">Statement</p>
 			<h1
-				class="mt-1 text-[26px] leading-none font-semibold font-[family-name:var(--font-display)]"
-				style="color: var(--ink)">
+				class="mt-1 font-[family-name:var(--font-display)] text-[26px] leading-none font-semibold"
+				style="color: var(--ink)"
+			>
 				{data.workspace.name}
 			</h1>
 		</div>
@@ -90,7 +95,8 @@
 			onclick={printSheet}
 			class="screen-only grid h-9 w-9 place-items-center rounded-full"
 			style="color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--hairline)"
-			aria-label="Print this statement"><Printer size={16} /></button>
+			aria-label="Print this statement"><Printer size={16} /></button
+		>
 	</div>
 	<p class="mt-1.5 text-[13px]" style="color: var(--ink-3)">
 		{data.label}{#if data.isPartial}, through {data.asOf}{/if}
@@ -107,7 +113,7 @@
 				{currency}
 				sign={heroSign}
 				block
-				class="text-[44px] leading-none font-semibold font-[family-name:var(--font-display)]"
+				class="font-[family-name:var(--font-display)] text-[44px] leading-none font-semibold"
 			/>
 		</div>
 		<p class="mt-2 text-[13px]" style="color: {heroColor}">{data.narration.lead}</p>
@@ -115,8 +121,11 @@
 
 	<!-- Harmony's read -->
 	{#if data.narration.notes.length > 0}
-		<div class="mt-6 rounded-2xl p-4" style="background: var(--surface); box-shadow: inset 0 0 0 1px var(--hairline)">
-			<p class="mb-2 flex items-center gap-1.5 section-label">
+		<div
+			class="mt-6 rounded-2xl p-4"
+			style="background: var(--surface); box-shadow: inset 0 0 0 1px var(--hairline)"
+		>
+			<p class="section-label mb-2 flex items-center gap-1.5">
 				<Sparkles size={13} style="color: var(--accent)" /> Harmony's read
 			</p>
 			<ul class="space-y-1.5">
@@ -133,7 +142,8 @@
 			{#if !row.hide}
 				<div
 					class="flex items-baseline justify-between border-b py-2.5"
-					style="border-color: var(--hairline)">
+					style="border-color: var(--hairline)"
+				>
 					<dt class="text-[14px]" style="color: var(--ink-2)">{row.label}</dt>
 					<dd class="num text-[15px] font-medium" style="color: var(--ink)">
 						<Money minor={row.minor} {currency} sign={row.sign} />
@@ -145,8 +155,9 @@
 			<div class="flex items-baseline justify-between py-3">
 				<dt class="text-[14px] font-semibold" style="color: var(--ink)">Net</dt>
 				<dd
-					class="num text-[17px] font-semibold font-[family-name:var(--font-display)]"
-					style="color: {heroColor}">
+					class="num font-[family-name:var(--font-display)] text-[17px] font-semibold"
+					style="color: {heroColor}"
+				>
 					<Money minor={s.netMinor} {currency} sign />
 				</dd>
 			</div>
@@ -165,18 +176,22 @@
 							to: data.rangeTo,
 							category: c.categoryId
 						})}
-						class="block">
+						class="block"
+					>
 						<div class="flex items-baseline justify-between">
 							<span class="text-[14px]" style="color: var(--ink-2)">{c.name}</span>
 							<span class="num text-[14px] font-medium" style="color: var(--ink)">
 								<Money minor={c.totalMinor} {currency} />
 							</span>
 						</div>
-						<div class="mt-1.5 h-1 overflow-hidden rounded-full" style="background: var(--hairline)">
+						<div
+							class="mt-1.5 h-1 overflow-hidden rounded-full"
+							style="background: var(--hairline)"
+						>
 							<div
 								class="h-full rounded-full"
-								style="width: {pct(c.totalMinor, catMax)}%; background: {c.color ?? 'var(--ink-3)'}">
-							</div>
+								style="width: {pct(c.totalMinor, catMax)}%; background: {c.color ?? 'var(--ink-3)'}"
+							></div>
 						</div>
 					</a>
 				{/each}
@@ -202,13 +217,20 @@
 	{/if}
 
 	<!-- Fine print -->
-	<footer class="mt-8 border-t pt-4 text-[11px] leading-relaxed" style="border-color: var(--hairline); color: var(--ink-3)">
+	<footer
+		class="mt-8 border-t pt-4 text-[11px] leading-relaxed"
+		style="border-color: var(--hairline); color: var(--ink-3)"
+	>
 		<p>
 			{f.txCount}
-			{f.txCount === 1 ? 'purchase' : 'purchases'} recorded{#if data.isPartial}, through {data.asOf}{/if}. Figures reflect
-			what you can see: sealed purchases appear only to those they're shared with.
+			{f.txCount === 1 ? 'purchase' : 'purchases'} recorded{#if data.isPartial}, through {data.asOf}{/if}.
+			Figures reflect what you can see: sealed purchases appear only to those they're shared with.
 		</p>
-		<a href={ledgerLink(slug, { from: data.rangeFrom, to: data.rangeTo })} class="screen-only mt-2 inline-block font-medium" style="color: var(--accent)">
+		<a
+			href={ledgerLink(slug, { from: data.rangeFrom, to: data.rangeTo })}
+			class="screen-only mt-2 inline-block font-medium"
+			style="color: var(--accent)"
+		>
 			Open the full ledger for {data.label}
 		</a>
 	</footer>

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
-	import { Check, ChevronLeft } from '@lucide/svelte';
+	import { Check, ChevronLeft, Key, KeyRound, Webhook } from '@lucide/svelte';
 
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
@@ -55,7 +55,12 @@
 
 	<!-- What this is -->
 	<div class="card p-4">
-		<p class="text-[15px] font-medium" style="color: var(--ink)">Connect your assistant</p>
+		<h2
+			class="flex items-center gap-2 font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
+			style="color: var(--ink)"
+		>
+			<Webhook class="h-4 w-4" style="color: var(--ws-accent)" /> Connect your assistant
+		</h2>
 		<p class="mt-1 text-[13px] leading-relaxed" style="color: var(--ink-3)">
 			Add this workspace as an <strong>MCP server</strong> in Claude, ChatGPT, or your editor, and ask
 			about your budget in plain language — “how much did we spend on groceries?”, “log $40 at Trader
@@ -124,7 +129,12 @@
 
 	<!-- Create -->
 	<div class="card p-5">
-		<p class="text-[15px] font-medium" style="color: var(--ink)">New token</p>
+		<h2
+			class="flex items-center gap-2 font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
+			style="color: var(--ink)"
+		>
+			<KeyRound class="h-4 w-4" style="color: var(--ws-accent)" /> New token
+		</h2>
 		<form
 			method="POST"
 			action="?/create"
@@ -184,16 +194,24 @@
 	</div>
 
 	<!-- Existing tokens -->
-	<div>
-		<p class="section-label mb-2 px-1">Your tokens</p>
+	<div class="card p-5">
+		<h2
+			class="flex items-center gap-2 font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
+			style="color: var(--ink)"
+		>
+			<Key class="h-4 w-4" style="color: var(--ws-accent)" /> Your tokens
+		</h2>
 		{#if data.tokens.length === 0}
-			<div class="card p-4 text-[14px]" style="color: var(--ink-3)">
+			<p class="mt-3 text-[14px]" style="color: var(--ink-3)">
 				No tokens yet. Create one above to connect a client.
-			</div>
+			</p>
 		{:else}
-			<div class="space-y-2.5">
+			<div class="mt-3 space-y-2.5">
 				{#each data.tokens as t (t.id)}
-					<div class="card flex items-center gap-3 p-4">
+					<div
+						class="flex items-center gap-3 p-4"
+						style="box-shadow: inset 0 0 0 1px var(--hairline); border-radius: var(--r-sm)"
+					>
 						<div class="min-w-0 flex-1">
 							<p class="truncate text-[15px] font-medium" style="color: var(--ink)">{t.name}</p>
 							<p class="num mt-0.5 text-[12px]" style="color: var(--ink-3)">

@@ -136,7 +136,11 @@ export const init: ServerInit = async () => {
 			const stsAlerts = await sendSafeToSpendAlerts(getDb(), deps);
 			if (stsAlerts > 0) {
 				console.log(
-					JSON.stringify({ level: 'info', msg: 'sweep: safe-to-spend alerts sent', count: stsAlerts })
+					JSON.stringify({
+						level: 'info',
+						msg: 'sweep: safe-to-spend alerts sent',
+						count: stsAlerts
+					})
 				);
 			}
 		} catch (e) {

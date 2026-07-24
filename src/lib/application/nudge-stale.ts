@@ -8,7 +8,7 @@ import {
 	workspaceMember
 } from '$lib/server/db/schema';
 import { Money } from '$lib/domain/money/money';
-import { MAX_NUDGES, nextNudgeAt, waitingDays } from '$lib/domain/approval/staleness';
+import { nextNudgeAt, waitingDays } from '$lib/domain/approval/staleness';
 import type { Clock } from '$lib/ports/clock';
 import type { Notifier, Recipient } from '$lib/ports/notifier';
 
@@ -27,6 +27,7 @@ export async function nudgeStaleRequests(
 		.select({
 			p: purchase,
 			staleAfterHours: workspace.staleAfterHours,
+			maxNudges: workspace.maxNudges,
 			slug: workspace.slug,
 			requesterName: user.displayName
 		})
@@ -34,7 +35,9 @@ export async function nudgeStaleRequests(
 		.innerJoin(workspace, eq(purchase.workspaceId, workspace.id))
 		.innerJoin(workspaceMember, eq(purchase.memberId, workspaceMember.id))
 		.innerJoin(user, eq(workspaceMember.userId, user.id))
-		.where(and(eq(purchase.state, 'pending_approval'), lt(purchase.nudgeCount, MAX_NUDGES)));
+		.where(
+			and(eq(purchase.state, 'pending_approval'), lt(purchase.nudgeCount, workspace.maxNudges))
+		);
 
 	let nudged = 0;
 	for (const row of rows) {
@@ -43,7 +46,8 @@ export async function nudgeStaleRequests(
 			row.p.requestedAt,
 			row.staleAfterHours,
 			row.p.lastNudgedAt,
-			row.p.nudgeCount
+			row.p.nudgeCount,
+			row.maxNudges
 		);
 		if (due === null || due.getTime() > now.getTime()) continue;
 

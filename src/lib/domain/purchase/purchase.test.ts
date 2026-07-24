@@ -35,6 +35,7 @@ function draft(overrides: Partial<Purchase> = {}): Purchase {
 		requestedAt: null,
 		decidedAt: null,
 		completedAt: null,
+		clearedAt: null,
 		lastNudgedAt: null,
 		nudgeCount: 0,
 		recurringRuleId: null,

@@ -114,9 +114,9 @@
 		<label class="flex cursor-pointer items-center gap-3 p-4">
 			<span
 				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-				style="background: color-mix(in oklab, var(--pending) 14%, var(--surface))"
+				style="background: color-mix(in oklab, var(--ws-accent) 14%, var(--surface))"
 			>
-				<Sparkles class="h-[18px] w-[18px]" style="color: var(--pending)" />
+				<Sparkles class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
 			</span>
 			<span class="min-w-0 flex-1">
 				<span class="flex flex-wrap items-center gap-x-2 gap-y-1">

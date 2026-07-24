@@ -44,6 +44,14 @@ export const bucketStatus = pgEnum('bucket_status', ['active', 'paused', 'archiv
 // allows a third-party API for those who don't mind the privacy trade.
 export const aiMode = pgEnum('workspace_ai_mode', ['off', 'local', 'external']);
 export const bucketTxnType = pgEnum('bucket_txn_type', ['accrual', 'withdrawal', 'adjustment']);
+export const statementImportFormat = pgEnum('statement_import_format', ['csv', 'ofx']);
+export const statementLineMatchState = pgEnum('statement_line_match_state', [
+	'unmatched',
+	'matched',
+	'confirmed',
+	'private',
+	'ignored'
+]);
 
 // "user" is a reserved word in SQL; app_user keeps raw analytics queries sane.
 export const user = pgTable('app_user', {
@@ -73,8 +81,11 @@ export const workspace = pgTable('workspace', {
 	maxSealDays: integer('max_seal_days').notNull().default(90),
 	accentColor: text('accent_color'),
 	bucketChargesSkipApproval: boolean('bucket_charges_skip_approval').notNull().default(false),
+	keepStatementFiles: boolean('keep_statement_files').notNull().default(false),
 	/** Alpha: read a bill PDF to prefill a purchase. Off until asked for. */
 	billImportEnabled: boolean('bill_import_enabled').notNull().default(false),
+	/** Alpha: barcode scanning. Off until a product-lookup API is wired up. */
+	barcodeEnabled: boolean('barcode_enabled').notNull().default(false),
 	/** Alpha: the intelligence surface — the ask palette and periodic summaries.
 	 *  One flag for the whole suite so it promotes out of alpha together. */
 	intelligenceEnabled: boolean('intelligence_enabled').notNull().default(false),
@@ -88,6 +99,24 @@ export const workspace = pgTable('workspace', {
 	aiModel: text('ai_model'),
 	/** Bearer token for an external API. Null for local endpoints that need none. */
 	aiApiKey: text('ai_api_key'),
+	/** Budget alert threshold: percentage of a budget consumed when the first
+	 *  warning fires. Default 80. */
+	budgetAlertPct: integer('budget_alert_pct').notNull().default(80),
+	/** Minimum hours between re-alerts for the same overspent budget. */
+	budgetAlertCooldownHours: integer('budget_alert_cooldown_hours').notNull().default(24),
+	/** Hours after creation a non-owner can still hard-delete their own purchase.
+	 *  Zero means only the owner can delete. */
+	recentDeleteHours: integer('recent_delete_hours').notNull().default(72),
+	/** How many nudge notifications a stale pending request gets before the
+	 *  system stops poking. */
+	maxNudges: integer('max_nudges').notNull().default(5),
+	/** Number of days an invite link remains valid. */
+	inviteTtlDays: integer('invite_ttl_days').notNull().default(7),
+	/** Maximum missed recurring occurrences generated in one sweep. Caps the
+	 *  flood after a long period of downtime. */
+	recurringCatchupMax: integer('recurring_catchup_max').notNull().default(36),
+	/** Require category names to be unique within this workspace. */
+	uniqueCategories: boolean('unique_categories').notNull().default(false),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull()
 });
 
@@ -115,6 +144,9 @@ export const workspaceMember = pgTable(
 		 *  a high-water mark so we nudge once per level per month, not every sweep. */
 		safeToSpendAlertMonth: date('safe_to_spend_alert_month'),
 		safeToSpendAlertLevel: integer('safe_to_spend_alert_level').notNull().default(0),
+		/** Whether to show bucket activity on the ledger. A display preference, not a
+		 *  permissions control — persisted here so it follows you across devices. */
+		includeLedgerMovements: boolean('include_ledger_movements').notNull().default(false),
 		joinedAt: timestamp('joined_at', { withTimezone: true }).notNull()
 	},
 	(t) => [uniqueIndex('workspace_member_workspace_user_uq').on(t.workspaceId, t.userId)]
@@ -145,7 +177,8 @@ export const category = pgTable(
 		icon: text('icon'),
 		color: text('color'),
 		parentId: uuid('parent_id').references((): AnyPgColumn => category.id),
-		isArchived: boolean('is_archived').notNull().default(false)
+		isArchived: boolean('is_archived').notNull().default(false),
+		isBuiltIn: boolean('is_built_in').notNull().default(false)
 	},
 	(t) => [index('category_workspace_idx').on(t.workspaceId)]
 );
@@ -190,6 +223,7 @@ export const purchase = pgTable(
 		requestedAt: timestamp('requested_at', { withTimezone: true }),
 		decidedAt: timestamp('decided_at', { withTimezone: true }),
 		completedAt: timestamp('completed_at', { withTimezone: true }),
+		clearedAt: timestamp('cleared_at', { withTimezone: true }),
 		lastNudgedAt: timestamp('last_nudged_at', { withTimezone: true }),
 		nudgeCount: integer('nudge_count').notNull().default(0),
 		recurringRuleId: uuid('recurring_rule_id'),
@@ -359,6 +393,9 @@ export const bucket = pgTable(
 		icon: text('icon'),
 		status: bucketStatus('status').notNull().default('active'),
 		dayOfMonth: integer('day_of_month').notNull().default(1),
+		/** When the next monthly accrual is due. Null = next closest occurrence of
+		 *  day_of_month. The sweep advances it to the following month after accruing. */
+		nextAccrualAt: timestamp('next_accrual_at', { withTimezone: true }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull()
 	},
 	(t) => [index('bucket_workspace_idx').on(t.workspaceId)]
@@ -378,6 +415,59 @@ export const bucketTransaction = pgTable(
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull()
 	},
 	(t) => [index('bucket_txn_bucket_idx').on(t.bucketId)]
+);
+
+export const statementImport = pgTable(
+	'statement_import',
+	{
+		id: uuid('id').primaryKey(),
+		workspaceId: uuid('workspace_id')
+			.notNull()
+			.references(() => workspace.id),
+		memberId: uuid('member_id')
+			.notNull()
+			.references(() => workspaceMember.id),
+		filename: text('filename').notNull(),
+		format: statementImportFormat('format').notNull(),
+		currency: text('currency').notNull(),
+		blobId: text('blob_id'),
+		periodStart: timestamp('period_start', { withTimezone: true }),
+		periodEnd: timestamp('period_end', { withTimezone: true }),
+		lineCount: integer('line_count').notNull(),
+		matchedCount: integer('matched_count').notNull(),
+		status: text('status').notNull().default('reviewing'),
+		contentHash: text('content_hash').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull()
+	},
+	(t) => [index('statement_import_workspace_idx').on(t.workspaceId, t.createdAt)]
+);
+
+export const statementLine = pgTable(
+	'statement_line',
+	{
+		id: uuid('id').primaryKey(),
+		importId: uuid('import_id')
+			.notNull()
+			.references(() => statementImport.id),
+		workspaceId: uuid('workspace_id')
+			.notNull()
+			.references(() => workspace.id),
+		postedAt: timestamp('posted_at', { withTimezone: true }).notNull(),
+		amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+		currency: text('currency').notNull(),
+		rawDescription: text('raw_description').notNull(),
+		normalizedDescription: text('normalized_description').notNull(),
+		externalId: text('external_id'),
+		matchState: statementLineMatchState('match_state').notNull().default('unmatched'),
+		matchedPurchaseId: uuid('matched_purchase_id').references(() => purchase.id),
+		matchReason: text('match_reason'),
+		dedupHash: text('dedup_hash').notNull()
+	},
+	(t) => [
+		index('statement_line_import_idx').on(t.importId),
+		index('statement_line_matched_purchase_idx').on(t.matchedPurchaseId),
+		uniqueIndex('statement_line_import_dedup_uq').on(t.importId, t.dedupHash)
+	]
 );
 
 export const pushSubscription = pgTable('push_subscription', {

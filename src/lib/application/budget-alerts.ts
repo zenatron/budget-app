@@ -7,8 +7,6 @@ import { Money } from '$lib/domain/money/money';
 import type { Clock } from '$lib/ports/clock';
 import type { Notifier, Recipient } from '$lib/ports/notifier';
 
-const ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-
 export async function checkBudgetAlerts(
 	db: Db,
 	deps: { clock: Clock; notifier: Notifier }
@@ -22,7 +20,9 @@ export async function checkBudgetAlerts(
 			slug: workspace.slug,
 			timezone: workspace.timezone,
 			currency: workspace.currency,
-			ownerUserId: workspace.ownerUserId
+			ownerUserId: workspace.ownerUserId,
+			budgetAlertPct: workspace.budgetAlertPct,
+			budgetAlertCooldownHours: workspace.budgetAlertCooldownHours
 		})
 		.from(workspace);
 
@@ -67,7 +67,8 @@ export async function checkBudgetAlerts(
 		if (!ownerMember) continue;
 
 		for (const b of budgets) {
-			if (b.lastAlertedAt && now.getTime() - b.lastAlertedAt.getTime() < ALERT_COOLDOWN_MS) {
+			const cooldownMs = ws.budgetAlertCooldownHours * 3_600_000;
+			if (b.lastAlertedAt && now.getTime() - b.lastAlertedAt.getTime() < cooldownMs) {
 				continue;
 			}
 
@@ -90,9 +91,10 @@ export async function checkBudgetAlerts(
 
 			const actualMinor = BigInt(row.total);
 			const budgetMinor = b.amountMinor;
-			const eightyPctMinor = (budgetMinor * 80n) / 100n;
+			const alertPct = BigInt(ws.budgetAlertPct);
+			const alertThresholdMinor = (budgetMinor * alertPct) / 100n;
 
-			if (actualMinor <= eightyPctMinor) continue;
+			if (actualMinor <= alertThresholdMinor) continue;
 
 			const over = actualMinor > budgetMinor;
 			const budgetMoney = Money.of(budgetMinor, ws.currency);
@@ -113,7 +115,7 @@ export async function checkBudgetAlerts(
 						eq(budget.id, b.id),
 						or(
 							isNull(budget.lastAlertedAt),
-							lt(budget.lastAlertedAt, new Date(now.getTime() - ALERT_COOLDOWN_MS))
+							lt(budget.lastAlertedAt, new Date(now.getTime() - cooldownMs))
 						)
 					)
 				)

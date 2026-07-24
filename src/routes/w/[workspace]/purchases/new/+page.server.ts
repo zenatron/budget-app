@@ -17,6 +17,7 @@ import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { getNotifier } from '$lib/server/notify';
+import { getEnv } from '$lib/server/env';
 import type { Actions, PageServerLoad } from './$types';
 
 /** A chosen duration → wake instant. "1 night" (<1 day) wakes at 9am tomorrow. */
@@ -38,6 +39,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		listMembers(db, locals.workspace!.id),
 		listBuckets(db, locals.workspace!.id)
 	]);
+	const env = getEnv();
 	return {
 		categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
 		// Members the purchase could be hidden from (everyone active but me).
@@ -46,6 +48,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			.map((m) => ({ id: m.member.id, displayName: m.user.displayName })),
 		maxSealDays: locals.workspace!.maxSealDays,
 		billImportEnabled: locals.workspace!.billImportEnabled,
+		barcodeEnabled: locals.workspace!.barcodeEnabled && !!env.BARCODE_LOOKUP_URL,
+		barcodeConfigured: !!env.BARCODE_LOOKUP_URL,
+		harmonyEnabled: locals.workspace!.intelligenceEnabled,
 		// Whether to offer the optional category suggestion. Off = deterministic form.
 		aiEnabled: locals.workspace!.aiMode !== 'off',
 		/*

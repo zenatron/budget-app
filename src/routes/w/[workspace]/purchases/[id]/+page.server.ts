@@ -10,7 +10,6 @@ import { ImageValidationError } from '$lib/infra/images/process';
 import { getBlobStore } from '$lib/server/blobs';
 import {
 	PurchaseNotFoundError,
-	RECENT_DELETE_HOURS,
 	approvePurchase,
 	cancelPurchase,
 	completePurchase,
@@ -139,7 +138,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 				locals.member!.role === 'owner' ||
 				(mine &&
 					createdRow !== undefined &&
-					now.getTime() - createdRow.createdAt.getTime() <= RECENT_DELETE_HOURS * 3_600_000),
+					locals.workspace!.recentDeleteHours > 0 &&
+					now.getTime() - createdRow.createdAt.getTime() <=
+						locals.workspace!.recentDeleteHours * 3_600_000),
 			// Sleep on it: either the requester or an approver, on a pending request.
 			hold: pending && (mine || p.approverMemberIds.includes(locals.member!.id)),
 			// While asleep, either side can wake it, extend it, or let it go.

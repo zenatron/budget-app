@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	narrateMonth,
-	summarizeMonth,
-	type MonthStatementFigures
-} from './month-statement';
+import { narrateMonth, summarizeMonth, type MonthStatementFigures } from './month-statement';
 
 const fmt = (m: bigint) => {
 	const neg = m < 0n;
@@ -89,10 +85,7 @@ describe('narrateMonth', () => {
 	});
 
 	it('leads with the shortfall when over', () => {
-		const n = narrateMonth(
-			{ ...base, incomeMinor: 100_000n, spentMinor: 150_000n },
-			fmt
-		);
+		const n = narrateMonth({ ...base, incomeMinor: 100_000n, spentMinor: 150_000n }, fmt);
 		expect(n.tone).toBe('over');
 		expect(n.lead).toContain('$500.00 behind');
 	});
@@ -131,27 +124,18 @@ describe('narrateMonth', () => {
 	});
 
 	it('describes the month-over-month move both ways', () => {
-		const up = narrateMonth(
-			{ ...base, spentMinor: 120_000n, prevSpentMinor: 100_000n },
-			fmt
-		);
+		const up = narrateMonth({ ...base, spentMinor: 120_000n, prevSpentMinor: 100_000n }, fmt);
 		expect(up.notes.some((x) => x.includes('more than last month') && x.includes('20%'))).toBe(
 			true
 		);
-		const down = narrateMonth(
-			{ ...base, spentMinor: 80_000n, prevSpentMinor: 100_000n },
-			fmt
-		);
+		const down = narrateMonth({ ...base, spentMinor: 80_000n, prevSpentMinor: 100_000n }, fmt);
 		expect(down.notes.some((x) => x.includes('less than last month') && x.includes('20%'))).toBe(
 			true
 		);
 	});
 
 	it('calls a small change roughly level', () => {
-		const n = narrateMonth(
-			{ ...base, spentMinor: 102_000n, prevSpentMinor: 100_000n },
-			fmt
-		);
+		const n = narrateMonth({ ...base, spentMinor: 102_000n, prevSpentMinor: 100_000n }, fmt);
 		expect(n.notes.some((x) => x.includes('roughly level'))).toBe(true);
 	});
 

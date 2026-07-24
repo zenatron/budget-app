@@ -8,7 +8,10 @@ import type { LlmAssist } from '$lib/ports/llm-assist';
 export const nullAssist: LlmAssist = {
 	available: false,
 	describe: () => ({ mode: 'off', endpoint: null, model: null }),
-	ping: async () => ({ ok: false, detail: 'AI assist is off. Harmony uses deterministic parsing.' }),
+	ping: async () => ({
+		ok: false,
+		detail: 'AI assist is off. Harmony uses deterministic parsing.'
+	}),
 	pickChoice: async () => null,
 	cleanLabel: async () => null
 };

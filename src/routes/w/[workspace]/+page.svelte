@@ -1,10 +1,21 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
-	import { Bell, ChevronRight, CircleHelp, Monitor, Moon, Sparkles, Sun, Users } from '@lucide/svelte';
+	import {
+		Bell,
+		ChevronRight,
+		CircleHelp,
+		Monitor,
+		Moon,
+		Settings,
+		Shapes,
+		Sparkles,
+		Sun,
+		Users,
+		Webhook
+	} from '@lucide/svelte';
 	import AccentPicker from '$lib/components/AccentPicker.svelte';
 	import { theme, setTheme, type ThemePref } from '$lib/theme.svelte';
-	import Toggle from '$lib/components/Toggle.svelte';
 	import { accentFor } from '$lib/accent';
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
@@ -106,16 +117,31 @@
 		</a>
 	{/if}
 
-	<a href="/w/{slug}/settings/help" class="press card flex items-center gap-3.5 p-4">
+	<!-- Workspace -->
+	<a href="/w/{slug}/settings/members" class="press card flex items-center gap-3.5 p-4">
 		<span
 			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
 			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
 		>
-			<CircleHelp class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+			<Users class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
 		</span>
 		<div class="flex-1">
-			<p class="text-[15px] font-medium" style="color: var(--ink)">Help</p>
-			<p class="text-[13px]" style="color: var(--ink-3)">Approvals, gift mode, buckets, budgets</p>
+			<p class="text-[15px] font-medium" style="color: var(--ink)">Members</p>
+			<p class="text-[13px]" style="color: var(--ink-3)">{memberSummary}</p>
+		</div>
+		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
+	</a>
+
+	<a href="/w/{slug}/settings/categories" class="press card flex items-center gap-3.5 p-4">
+		<span
+			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+		>
+			<Shapes class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+		</span>
+		<div class="flex-1">
+			<p class="text-[15px] font-medium" style="color: var(--ink)">Categories</p>
+			<p class="text-[13px]" style="color: var(--ink-3)">Add custom spending categories</p>
 		</div>
 		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
 	</a>
@@ -133,50 +159,6 @@
 		</div>
 		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
 	</a>
-
-	<a href="/w/{slug}/settings/api" class="press card flex items-center gap-3.5 p-4">
-		<span
-			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
-		>
-			<Sparkles class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
-		</span>
-		<div class="flex-1">
-			<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
-				API &amp; MCP
-				<span
-					class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
-					style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
-					>Alpha</span
-				>
-			</p>
-			<p class="text-[13px]" style="color: var(--ink-3)">Connect Claude or another assistant</p>
-		</div>
-		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
-	</a>
-
-	<a href="/w/{slug}/settings/members" class="press card flex items-center gap-3.5 p-4">
-		<span
-			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
-		>
-			<Users class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
-		</span>
-		<div class="flex-1">
-			<p class="text-[15px] font-medium" style="color: var(--ink)">Members</p>
-			<p class="text-[13px]" style="color: var(--ink-3)">{memberSummary}</p>
-		</div>
-		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
-	</a>
-
-	{#if form?.error}
-		<div
-			class="card p-4 text-[15px]"
-			style="color: var(--deny); background: color-mix(in oklab, var(--deny) 12%, var(--surface))"
-		>
-			{form.error}
-		</div>
-	{/if}
 
 	<a href="/w/{slug}/settings/intelligence" class="press card flex items-center gap-3.5 p-4">
 		<span
@@ -201,19 +183,49 @@
 		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
 	</a>
 
-	<div class="card flex items-center justify-between p-4">
-		<div>
-			<p class="text-[15px] font-medium" style="color: var(--ink)">Bucket charges</p>
-			<p class="text-[13px]" style="color: var(--ink-3)">
-				Skip approval for purchases charged to a bucket
-			</p>
+	<a href="/w/{slug}/settings/advanced" class="press card flex items-center gap-3.5 p-4">
+		<span
+			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+		>
+			<Settings class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+		</span>
+		<div class="flex-1">
+			<p class="text-[15px] font-medium" style="color: var(--ink)">Advanced</p>
+			<p class="text-[13px]" style="color: var(--ink-3)">Timing, thresholds, nudges, and limits</p>
 		</div>
-		<Toggle
-			on={data.bucketChargesSkipApproval}
-			flag="bucketChargesSkipApproval"
-			label="Toggle bucket charges skip approval"
-		/>
-	</div>
+		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
+	</a>
+
+	<a href="/w/{slug}/settings/api" class="press card flex items-center gap-3.5 p-4">
+		<span
+			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+		>
+			<Webhook class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+		</span>
+		<div class="flex-1">
+			<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
+				API &amp; MCP
+				<span
+					class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
+					style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
+					>Alpha</span
+				>
+			</p>
+			<p class="text-[13px]" style="color: var(--ink-3)">Connect Claude or another assistant</p>
+		</div>
+		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
+	</a>
+
+	{#if form?.error}
+		<div
+			class="card p-4 text-[15px]"
+			style="color: var(--deny); background: color-mix(in oklab, var(--deny) 12%, var(--surface))"
+		>
+			{form.error}
+		</div>
+	{/if}
 
 	<div class="card p-5">
 		<p class="text-[15px] font-medium" style="color: var(--ink)">Appearance</p>
@@ -259,7 +271,23 @@
 				{/if}
 			</form>
 		</div>
+	{/if}
 
+	<a href="/w/{slug}/settings/help" class="press card flex items-center gap-3.5 p-4">
+		<span
+			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+		>
+			<CircleHelp class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+		</span>
+		<div class="flex-1">
+			<p class="text-[15px] font-medium" style="color: var(--ink)">Help</p>
+			<p class="text-[13px]" style="color: var(--ink-3)">Approvals, gift mode, buckets, budgets</p>
+		</div>
+		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
+	</a>
+
+	{#if data.member.role === 'owner'}
 		<!--
 			Danger zone. Collapsed by default so the delete control isn't sitting
 			under your thumb during ordinary settings changes — you have to open it,

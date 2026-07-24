@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Money } from '../money/money';
 import { ApprovalRoutingError, approvalRequired, resolveApprovers } from './evaluate';
 import { strandedByRemoving, type ApprovalPolicy } from './policy';
-import { isStale, nextNudgeAt, waitingDays, MAX_NUDGES } from './staleness';
+import { isStale, nextNudgeAt, waitingDays } from './staleness';
 
 const usd = (n: number) => Money.of(n, 'USD');
 
@@ -145,16 +145,16 @@ describe('staleness', () => {
 	});
 
 	it('first nudge is due at the staleness threshold', () => {
-		expect(nextNudgeAt(requestedAt, 48, null, 0)).toEqual(new Date('2026-07-03T00:00:00Z'));
+		expect(nextNudgeAt(requestedAt, 48, null, 0, 5)).toEqual(new Date('2026-07-03T00:00:00Z'));
 	});
 
 	it('subsequent nudges are daily after the last one', () => {
 		const last = new Date('2026-07-03T00:00:00Z');
-		expect(nextNudgeAt(requestedAt, 48, last, 1)).toEqual(new Date('2026-07-04T00:00:00Z'));
+		expect(nextNudgeAt(requestedAt, 48, last, 1, 5)).toEqual(new Date('2026-07-04T00:00:00Z'));
 	});
 
-	it('caps at MAX_NUDGES then goes silent', () => {
-		expect(nextNudgeAt(requestedAt, 48, new Date(), MAX_NUDGES)).toBeNull();
+	it('caps at maxNudges then goes silent', () => {
+		expect(nextNudgeAt(requestedAt, 48, new Date(), 5, 5)).toBeNull();
 	});
 
 	it('reports whole waiting days', () => {

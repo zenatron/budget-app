@@ -45,7 +45,8 @@ for (const ws of workspaces) {
 			workspaceId: ws.id,
 			name: c.name,
 			icon: c.icon,
-			color: c.color
+			color: c.color,
+			isBuiltIn: true
 		}))
 	);
 	added += missing.length;

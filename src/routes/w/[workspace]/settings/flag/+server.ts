@@ -2,6 +2,7 @@ import { error, json } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { getDb } from '$lib/server/db';
 import { workspace } from '$lib/server/db/schema';
+import { getEnv } from '$lib/server/env';
 import type { RequestHandler } from './$types';
 
 /**
@@ -25,6 +26,13 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	if (flag === 'intelligenceEnabled') updates.intelligenceEnabled = value;
 	else if (flag === 'billImportEnabled') updates.billImportEnabled = value;
 	else if (flag === 'bucketChargesSkipApproval') updates.bucketChargesSkipApproval = value;
+	else if (flag === 'keepStatementFiles') updates.keepStatementFiles = value;
+	else if (flag === 'barcodeEnabled') {
+		if (value && !getEnv().BARCODE_LOOKUP_URL) {
+			error(403, 'Barcode scanning requires BARCODE_LOOKUP_URL to be set in the environment');
+		}
+		updates.barcodeEnabled = value;
+	} else if (flag === 'uniqueCategories') updates.uniqueCategories = value;
 	else error(400, 'Unknown setting');
 
 	await getDb().update(workspace).set(updates).where(eq(workspace.id, locals.workspace!.id));

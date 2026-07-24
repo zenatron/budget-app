@@ -1,4 +1,4 @@
-import { json } from '@sveltejs/kit';
+import { error, json } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
 import { listCategories } from '$lib/server/repo/workspaces';
 import { getLlmAssist } from '$lib/infra/llm';
@@ -14,6 +14,7 @@ import type { RequestHandler } from './$types';
  * category. Nothing is submitted — the client fills the form, the person confirms.
  */
 export const POST: RequestHandler = async ({ locals, request }) => {
+	if (!locals.workspace!.intelligenceEnabled) error(403, 'Harmony is not enabled');
 	const ws = locals.workspace!;
 	const body = await request.json().catch(() => ({}));
 	const text = typeof body?.text === 'string' ? body.text.slice(0, 300) : '';
@@ -43,7 +44,9 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		if (categories.length > 0) {
 			const picked = await assist.pickChoice({
 				instruction: 'Pick the spending category that best fits this purchase.',
-				text: parsed.merchantName ? `${parsed.itemName} (from ${parsed.merchantName})` : parsed.itemName,
+				text: parsed.merchantName
+					? `${parsed.itemName} (from ${parsed.merchantName})`
+					: parsed.itemName,
 				choices: categories.map((c) => ({ id: c.id, label: c.name }))
 			});
 			const match = picked ? categories.find((c) => c.id === picked) : null;

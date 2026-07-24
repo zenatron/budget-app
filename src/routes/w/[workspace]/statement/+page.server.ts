@@ -1,11 +1,8 @@
 import { getDb } from '$lib/server/db';
+import { error } from '@sveltejs/kit';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { calDateInZone } from '$lib/domain/time/zoned';
-import {
-	monthLabel,
-	monthPeriod,
-	previousMonthPeriod
-} from '$lib/domain/analytics/period';
+import { monthLabel, monthPeriod, previousMonthPeriod } from '$lib/domain/analytics/period';
 import {
 	budgetVsActual,
 	categoryBreakdown,
@@ -43,6 +40,7 @@ const MONTH_ABBR = [
 export const load: PageServerLoad = async ({ locals, url, params }) => {
 	// Depend on the workspace param so a switch always re-runs (see +layout.server.ts).
 	void params.workspace;
+	if (!locals.workspace!.intelligenceEnabled) error(404, 'Not found');
 	const db = getDb();
 	const now = systemClock.now();
 	const ws = locals.workspace!;
@@ -114,7 +112,9 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 	const hasPrev = target.y > EARLIEST || (target.y === EARLIEST && target.m > 1);
 
 	// Inclusive range for links into the ledger, read the way a person does.
-	const lastDay = new Date(Date.UTC(period.toExclusive.y, period.toExclusive.m - 1, 0)).getUTCDate();
+	const lastDay = new Date(
+		Date.UTC(period.toExclusive.y, period.toExclusive.m - 1, 0)
+	).getUTCDate();
 	const rangeFrom = `${target.y}-${pad(target.m)}-01`;
 	const rangeTo = `${target.y}-${pad(target.m)}-${pad(lastDay)}`;
 

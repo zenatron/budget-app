@@ -19,9 +19,10 @@ function generateCode(): string {
 export async function createInvite(
 	db: Db,
 	deps: { clock: Clock; ids: IdGenerator },
-	cmd: { workspaceId: string; createdByMemberId: string }
+	cmd: { workspaceId: string; createdByMemberId: string; ttlDays: number }
 ): Promise<typeof invite.$inferSelect> {
 	const now = deps.clock.now();
+	const ttlMs = cmd.ttlDays * 24 * 60 * 60 * 1000;
 	const rows = await db
 		.insert(invite)
 		.values({
@@ -29,7 +30,7 @@ export async function createInvite(
 			workspaceId: cmd.workspaceId,
 			code: generateCode(),
 			createdBy: cmd.createdByMemberId,
-			expiresAt: new Date(now.getTime() + INVITE_TTL_MS)
+			expiresAt: new Date(now.getTime() + ttlMs)
 		})
 		.returning();
 	return rows[0];

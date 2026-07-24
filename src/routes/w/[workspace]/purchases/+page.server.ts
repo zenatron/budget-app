@@ -86,7 +86,7 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 			.filter((m) => m.member.status === 'active')
 			.map((m) => ({ id: m.member.id, name: m.user.displayName })),
 		hasMore: feed.hasMore,
-		includeMovements: opts.includeMovements ?? false,
+		includeMovements: opts.includeMovements ?? locals.member!.includeLedgerMovements,
 		awaitingConfirmation,
 		sleeping,
 		forecast,

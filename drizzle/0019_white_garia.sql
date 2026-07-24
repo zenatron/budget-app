@@ -1,0 +1,1 @@
+ALTER TABLE "bucket" ADD COLUMN "next_accrual_at" timestamp with time zone;

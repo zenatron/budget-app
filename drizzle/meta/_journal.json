@@ -99,6 +99,48 @@
       "when": 1784839062263,
       "tag": "0013_supreme_bishop",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1784848330059,
+      "tag": "0014_real_millenium_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1784849607288,
+      "tag": "0015_glossy_madame_masque",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1784852913937,
+      "tag": "0016_sad_wendell_vaughn",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1784853419540,
+      "tag": "0017_famous_captain_britain",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784857268048,
+      "tag": "0018_free_black_bolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1784857789007,
+      "tag": "0019_white_garia",
+      "breakpoints": true
     }
   ]
 }

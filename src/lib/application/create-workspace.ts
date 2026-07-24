@@ -106,7 +106,8 @@ export async function createWorkspace(
 				workspaceId,
 				name: c.name,
 				icon: c.icon,
-				color: c.color
+				color: c.color,
+				isBuiltIn: true
 			}))
 		);
 	});

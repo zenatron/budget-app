@@ -38,15 +38,18 @@
 	/**
 	 * "+$400.00/mo on the 1st · next Aug 1" — assembled here rather than inline,
 	 * where the separator's whitespace kept collapsing against the date.
-	 * Recurring has always said "next Jul 28"; buckets now say the same thing.
+	 * Recurring has always said "next Jul 28"; buckets now say the same thing,
+	 * reading the actual next_accrual_at timestamp so the sweep and the display
+	 * agree exactly.
 	 */
 	function cadenceLine(b: (typeof data.buckets)[number]): string {
 		const base = formatMonthly(b.monthlyAmountMinor, b.currency, b.dayOfMonth);
-		const a = b.nextAccrual;
+		const a = b.nextAccrualAt;
 		if (!a) return base;
-		const when = a.due
+		const dueNow = new Date(a).getTime() <= Date.now();
+		const when = dueNow
 			? 'due now'
-			: new Date(Date.UTC(a.y, a.m - 1, a.d)).toLocaleDateString(undefined, {
+			: new Date(a).toLocaleDateString(undefined, {
 					month: 'short',
 					day: 'numeric',
 					timeZone: 'UTC'

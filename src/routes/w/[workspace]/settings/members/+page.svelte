@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
-	import { ChevronLeft } from '@lucide/svelte';
+	import { ChevronLeft, Mail, Users } from '@lucide/svelte';
 	import { money } from '$lib/actions/money';
 	import { formatMinor } from '$lib/money-format';
 
@@ -169,8 +169,13 @@
 	{/if}
 
 	<div class="card p-5">
-		<p class="section-label">People</p>
-		<div class="mt-1">
+		<h2
+			class="flex items-center gap-2 font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
+			style="color: var(--ink)"
+		>
+			<Users class="h-4 w-4" style="color: var(--ws-accent)" /> People
+		</h2>
+		<div class="mt-3">
 			{#each data.members as m (m.id)}
 				<!-- One wrapper per member: the row and its policy editor belong
 				     together, and without it nothing scopes to a single member. -->
@@ -396,7 +401,12 @@
 	{#if data.isOwner}
 		<div class="card p-5">
 			<div class="flex items-center justify-between">
-				<p class="section-label">Invites</p>
+				<h2
+					class="flex items-center gap-2 font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
+					style="color: var(--ink)"
+				>
+					<Mail class="h-4 w-4" style="color: var(--ws-accent)" /> Invites
+				</h2>
 				<form method="POST" action="?/invite" use:submit={{ success: 'Invite created' }}>
 					<button class="btn btn-tint px-4 py-1.5 text-[13px]">New code</button>
 				</form>

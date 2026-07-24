@@ -169,16 +169,16 @@ describe('sumRecurringInWindow', () => {
 	it('counts every weekly occurrence in the window', () => {
 		const weekly = parseRRule('DTSTART=2026-07-06;FREQ=WEEKLY;BYDAY=MO');
 		// Mondays in July 2026: 6, 13, 20, 27 → 4 occurrences
-		expect(sumRecurringInWindow(weekly, usd, { y: 2026, m: 7, d: 1 }, { y: 2026, m: 8, d: 1 })).toBe(
-			4n * usd
-		);
+		expect(
+			sumRecurringInWindow(weekly, usd, { y: 2026, m: 7, d: 1 }, { y: 2026, m: 8, d: 1 })
+		).toBe(4n * usd);
 	});
 
 	it('is zero when the next occurrence is past the window', () => {
 		const yearly = parseRRule('DTSTART=2026-01-15;FREQ=YEARLY;BYMONTH=1;BYMONTHDAY=15');
-		expect(sumRecurringInWindow(yearly, usd, { y: 2026, m: 7, d: 1 }, { y: 2026, m: 8, d: 1 })).toBe(
-			0n
-		);
+		expect(
+			sumRecurringInWindow(yearly, usd, { y: 2026, m: 7, d: 1 }, { y: 2026, m: 8, d: 1 })
+		).toBe(0n);
 	});
 
 	it('is zero for an empty or inverted window', () => {

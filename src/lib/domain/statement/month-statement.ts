@@ -58,14 +58,10 @@ export interface MonthSummary {
 export function summarizeMonth(f: MonthStatementFigures): MonthSummary {
 	const netMinor = f.incomeMinor - f.spentMinor - f.savingsMinor;
 	const hasIncome = f.incomeMinor > 0n;
-	const savingsRateBps = hasIncome
-		? Number((f.savingsMinor * 10_000n) / f.incomeMinor)
-		: null;
+	const savingsRateBps = hasIncome ? Number((f.savingsMinor * 10_000n) / f.incomeMinor) : null;
 	const momDeltaMinor = f.spentMinor - f.prevSpentMinor;
 	const momDeltaPct =
-		f.prevSpentMinor > 0n
-			? Number((momDeltaMinor * 100n) / f.prevSpentMinor)
-			: null;
+		f.prevSpentMinor > 0n ? Number((momDeltaMinor * 100n) / f.prevSpentMinor) : null;
 	const budgetVarianceMinor = f.budget ? f.budget.limitMinor - f.budget.actualMinor : null;
 
 	const status: MonthStatus = !hasIncome
@@ -120,9 +116,10 @@ export function narrateMonth(
 	} else if (s.status === 'over') {
 		tone = 'over';
 		const behind = fmt(-s.netMinor);
-		lead = f.savingsMinor > 0n
-			? `${fmt(f.incomeMinor)} came in and ${fmt(f.spentMinor)} went out. After ${fmt(f.savingsMinor)} set aside, you're ${behind} behind ${openerLower}.`
-			: `${fmt(f.incomeMinor)} came in and ${fmt(f.spentMinor)} went out, leaving you ${behind} behind ${openerLower}.`;
+		lead =
+			f.savingsMinor > 0n
+				? `${fmt(f.incomeMinor)} came in and ${fmt(f.spentMinor)} went out. After ${fmt(f.savingsMinor)} set aside, you're ${behind} behind ${openerLower}.`
+				: `${fmt(f.incomeMinor)} came in and ${fmt(f.spentMinor)} went out, leaving you ${behind} behind ${openerLower}.`;
 	} else if (s.status === 'even') {
 		tone = 'even';
 		lead = `${fmt(f.incomeMinor)} in, ${fmt(f.spentMinor)} out, ${fmt(f.savingsMinor)} saved. You broke exactly even ${openerLower}.`;
@@ -130,9 +127,10 @@ export function narrateMonth(
 		// saved
 		tone = 'saved';
 		const ahead = fmt(s.netMinor);
-		lead = f.savingsMinor > 0n
-			? `${fmt(f.incomeMinor)} came in against ${fmt(f.spentMinor)} out. You set aside ${fmt(f.savingsMinor)} and still closed ${ahead} ahead.`
-			: `${fmt(f.incomeMinor)} came in against ${fmt(f.spentMinor)} out, leaving you ${ahead} ahead ${openerLower}.`;
+		lead =
+			f.savingsMinor > 0n
+				? `${fmt(f.incomeMinor)} came in against ${fmt(f.spentMinor)} out. You set aside ${fmt(f.savingsMinor)} and still closed ${ahead} ahead.`
+				: `${fmt(f.incomeMinor)} came in against ${fmt(f.spentMinor)} out, leaving you ${ahead} ahead ${openerLower}.`;
 		if (f.isPartial) {
 			// "Closed ahead" overclaims a month that hasn't ended.
 			lead = lead.replace('closed', 'sitting').replace(`ahead ${openerLower}`, `ahead so far`);

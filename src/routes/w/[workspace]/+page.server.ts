@@ -46,7 +46,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	return {
 		pendingCount: pendingRow[0].count,
 		confirmCount: confirmRow[0].count,
-		bucketChargesSkipApproval: locals.workspace!.bucketChargesSkipApproval,
 		billImportEnabled: locals.workspace!.billImportEnabled,
 		intelligenceEnabled: locals.workspace!.intelligenceEnabled,
 		accentColor: locals.workspace!.accentColor,

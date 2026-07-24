@@ -161,16 +161,29 @@
 
 	// The "Bucket activity" toggle is remembered per user: it's a lasting
 	// preference about how you read the ledger, not a per-visit filter.
+	// Persisted to the DB so it follows you across devices; localStorage is a
+	// fast cache for the initial mount before the server round-trip completes.
 	const MOVEMENTS_KEY = 'ledger-movements';
 
 	/** Reloads from the server: it changes what gets paged over, not just shown. */
 	function toggleMovements() {
 		const next = data.includeMovements ? '' : '1';
+		const on = next === '1';
 		try {
-			localStorage.setItem(MOVEMENTS_KEY, next === '1' ? '1' : '0');
+			localStorage.setItem(MOVEMENTS_KEY, on ? '1' : '0');
 		} catch {
 			/* storage unavailable — still applies for this session */
 		}
+		// Persist to the server in the background — fire-and-forget so the toggle
+		// feels instant; the server-side load already reads from the DB so the
+		// next page load naturally reflects the saved value.
+		fetch(`/w/${page.params.workspace}/settings/member-flag`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ flag: 'includeLedgerMovements', value: on })
+		}).catch(() => {
+			/* silent — preference didn't save, but the toggle already moved */
+		});
 		void navigateWith({ movements: next });
 	}
 
@@ -551,7 +564,10 @@
 				/>
 			</button>
 			<!-- Harmony's read: always present, the story above the numbers. -->
-			<p class="mt-2 flex items-start gap-1.5 text-[13px] leading-snug" style="color: {narrationColor}">
+			<p
+				class="mt-2 flex items-start gap-1.5 text-[13px] leading-snug"
+				style="color: {narrationColor}"
+			>
 				<Sparkles class="mt-[3px] h-3.5 w-3.5 shrink-0" />
 				<span>{narration.text}</span>
 			</p>
@@ -587,10 +603,7 @@
 						</div>
 					{/if}
 					{#if f.breakdown.sleepingMinor > 0n}
-						<div
-							class="mt-1 flex items-center justify-between gap-1.5"
-							style="color: var(--seal)"
-						>
+						<div class="mt-1 flex items-center justify-between gap-1.5" style="color: var(--seal)">
 							<span class="flex items-center gap-1.5"><Moon class="h-3.5 w-3.5" /> Sleeping</span>
 							<span class="num">{formatMinor(f.breakdown.sleepingMinor, data.currency)}</span>
 						</div>
@@ -602,7 +615,8 @@
 								class="num"
 								style="color: {f.breakdown.budgetRemainingMinor < 0n
 									? 'var(--pending)'
-									: 'var(--ink-2)'}">{formatMinor(f.breakdown.budgetRemainingMinor, data.currency)}</span
+									: 'var(--ink-2)'}"
+								>{formatMinor(f.breakdown.budgetRemainingMinor, data.currency)}</span
 							>
 						</div>
 					{/if}
@@ -610,7 +624,8 @@
 			{/if}
 			{#if !showRunway}
 				<p class="mt-2 text-[13px]" style="color: var(--ink-3)">
-					<span class="num">{formatMinor(f.breakdown.upcomingBillsMinor, data.currency)}</span> bills ·
+					<span class="num">{formatMinor(f.breakdown.upcomingBillsMinor, data.currency)}</span>
+					bills ·
 					<span class="num">{formatMinor(f.breakdown.savingsMinor, data.currency)}</span> saved{f
 						.breakdown.cashCommittedMinor > 0n
 						? ` · ${formatMinor(f.breakdown.cashCommittedMinor, data.currency)} approved`

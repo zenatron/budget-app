@@ -32,7 +32,10 @@ const EnvSchema = v.object({
 	VAPID_PRIVATE_KEY: v.optional(v.string()),
 	VAPID_SUBJECT: v.optional(v.string()),
 	NTFY_SERVER_URL: v.optional(v.pipe(v.string(), v.url())),
-	NTFY_DEFAULT_TOKEN: v.optional(v.string())
+	NTFY_DEFAULT_TOKEN: v.optional(v.string()),
+
+	// Phase 6 — barcode product lookup
+	BARCODE_LOOKUP_URL: v.optional(v.pipe(v.string(), v.url()))
 });
 
 export type Env = v.InferOutput<typeof EnvSchema>;

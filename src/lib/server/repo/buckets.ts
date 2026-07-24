@@ -19,6 +19,7 @@ export interface CreateBucketCmd {
 	goalCapMinor?: bigint | null;
 	color?: string | null;
 	icon?: string | null;
+	nextAccrualAt?: Date | null;
 }
 
 export interface BucketListItem {
@@ -53,6 +54,7 @@ export async function createBucket(
 		goalCapMinor: cmd.goalCapMinor ?? null,
 		color: cmd.color ?? null,
 		icon: cmd.icon ?? null,
+		nextAccrualAt: cmd.nextAccrualAt ?? null,
 		status: 'active',
 		createdAt: now
 	});
