@@ -154,9 +154,9 @@ export function narrateMonth(
 		if (mag < 5) {
 			notes.push('Spending held roughly level with last month.');
 		} else if (s.momDeltaMinor > 0n) {
-			notes.push(`That's ${fmt(s.momDeltaMinor)} more than last month, up ${mag}%.`);
+			notes.push(`As a whole, that's ${fmt(s.momDeltaMinor)} more than last month, up ${mag}%.`);
 		} else {
-			notes.push(`That's ${fmt(-s.momDeltaMinor)} less than last month, down ${mag}%.`);
+			notes.push(`As a whole, that's ${fmt(-s.momDeltaMinor)} less than last month, down ${mag}%.`);
 		}
 	}
 
@@ -177,7 +177,7 @@ export function narrateMonth(
 	if (s.savingsRateBps !== null && f.savingsMinor > 0n) {
 		const pct = Math.round(s.savingsRateBps / 100);
 		if (pct >= 1) {
-			notes.push(`You kept ${pct}% of what came in.`);
+			notes.push(`You set aside ${pct}% of what came in.`);
 		}
 	}
 

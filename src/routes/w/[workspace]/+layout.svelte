@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
-	import { page } from '$app/state';
+	import { page, navigating } from '$app/state';
 	import {
 		Check,
 		ChevronDown,
@@ -17,6 +17,7 @@
 	import { dismiss } from '$lib/actions/dismiss';
 	import { longpress } from '$lib/actions/longpress';
 	import { toastError } from '$lib/toast-state.svelte';
+	import { submitting } from '$lib/submit-state.svelte';
 	import { accentFor } from '$lib/accent';
 	import QuickLog from '$lib/components/QuickLog.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -55,10 +56,22 @@
 	$effect(() => {
 		const source = new EventSource(`/w/${slug}/events`);
 		let t: ReturnType<typeof setTimeout> | undefined;
+		// A purchase action publishes its SSE event before it finishes and then
+		// redirects, so this same browser can receive the event mid-submit. Running
+		// invalidateAll() then races the redirect and strands the progress bar (see
+		// submit-state). Wait for the submit and any navigation to settle, then
+		// refresh — the redirect already refreshes its own destination.
+		const refresh = () => {
+			if (submitting.active || navigating.to) {
+				t = setTimeout(refresh, 200);
+				return;
+			}
+			void invalidateAll();
+		};
 		source.onmessage = (e) => {
 			if (e.data.includes('"hello"')) return;
 			clearTimeout(t);
-			t = setTimeout(() => invalidateAll(), 200);
+			t = setTimeout(refresh, 200);
 		};
 		return () => {
 			clearTimeout(t);
@@ -185,7 +198,7 @@
 				>
 					<span
 						class="flex h-7 w-7 items-center justify-center rounded-[8px] font-[family-name:var(--font-display)] text-[15px] font-semibold text-white"
-						style="background: color-mix(in oklab, var(--ws-accent) 80%, black)"
+						style="background: light-dark(color-mix(in oklab, var(--ws-accent-base) 80%, black), var(--ws-accent-base))"
 						>{wsName.charAt(0)}</span
 					>
 					<span class="max-w-[140px] truncate text-[17px] font-semibold" style="color: var(--ink)"
@@ -226,11 +239,13 @@
 								href="/w/{ws.slug}"
 								onclick={() => (showSwitcher = false)}
 								class="press flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5"
-								style={active ? 'background: color-mix(in oklab, var(--ink) 6%, transparent)' : ''}
+								style={active
+									? 'background: light-dark(color-mix(in oklab, var(--ink) 6%, transparent), color-mix(in oklab, var(--ink) 7%, transparent))'
+									: ''}
 							>
 								<span
 									class="flex h-8 w-8 items-center justify-center rounded-[9px] font-[family-name:var(--font-display)] text-[15px] font-semibold text-white"
-									style="background: color-mix(in oklab, {wsAccent} 80%, black)"
+									style="background: light-dark(color-mix(in oklab, {wsAccent} 80%, black), {wsAccent})"
 									>{ws.name.charAt(0)}</span
 								>
 								<span class="text-[17px]" style="color: var(--ink)">{ws.name}</span>
@@ -276,7 +291,10 @@
 		</main>
 
 		{#if paletteOpen.value}
-			<CommandPaletteOverlay currency={data.workspace.currency} />
+			<CommandPaletteOverlay
+				currency={data.workspace.currency}
+				assistEnabled={data.workspace.assistEnabled}
+			/>
 		{/if}
 
 		<!-- Bottom tab bar. Compositing + keyboard-hide behavior is in <style> below. -->
@@ -293,7 +311,7 @@
 					<a
 						href="/w/{slug}/{tab.section}"
 						class="press flex flex-1 flex-col items-center gap-1 py-1 text-[10px]"
-						style="color: {active ? 'var(--ink)' : 'var(--ink-4)'}"
+						style="color: {active ? 'var(--ws-accent)' : 'var(--ink-4)'}"
 						aria-current={active ? 'page' : undefined}
 					>
 						<TabIcon class="h-[24px] w-[24px]" />
@@ -326,7 +344,7 @@
 					<a
 						href="/w/{slug}/{tab.section}"
 						class="press flex flex-1 flex-col items-center gap-1 py-1 text-[10px]"
-						style="color: {active ? 'var(--ink)' : 'var(--ink-4)'}"
+						style="color: {active ? 'var(--ws-accent)' : 'var(--ink-4)'}"
 						aria-current={active ? 'page' : undefined}
 					>
 						<TabIcon class="h-[24px] w-[24px]" />

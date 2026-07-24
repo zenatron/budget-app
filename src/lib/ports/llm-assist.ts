@@ -71,4 +71,15 @@ export interface LlmAssist {
 	 * The caller still validates every field before showing a proposal.
 	 */
 	parseCommand(req: { query: string }): Promise<ParsedAction | null>;
+
+	/**
+	 * Answer a natural-language question about the workspace's finances, grounded
+	 * strictly in the `briefing` the caller supplies. This is the one method that
+	 * *narrates* rather than reduces — but it stays inside the same guarantee: the
+	 * numbers are computed deterministically by the caller and handed in as text;
+	 * the model only phrases an answer over them and may never invent a figure or
+	 * take an action. Returns null when off, unreachable, or empty, so the caller
+	 * falls back to its deterministic "I couldn't understand that" reply.
+	 */
+	answerQuestion(req: { query: string; briefing: string }): Promise<string | null>;
 }

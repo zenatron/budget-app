@@ -18,11 +18,24 @@
 		type Proposal
 	} from '$lib/command-palette-state.svelte';
 
-	let { currency = 'USD' }: { currency?: string } = $props();
+	let { currency = 'USD', assistEnabled = false }: { currency?: string; assistEnabled?: boolean } =
+		$props();
 
 	// The parser is pure and synchronous, so this runs on every keystroke with no
 	// network and no debounce — that's the whole point of showing it live.
 	const reading = $derived(understand(paletteQuery.value));
+
+	// When a model is configured, Harmony can answer free text the parser doesn't
+	// recognize — so any non-trivial query is submittable, not just grammar the
+	// deterministic parser owns. Without a model we keep the old gate: unrecognized
+	// input stays a dead end and we show suggestions instead.
+	// Only 'unknown' input is handed to the model. 'incomplete' (a command missing
+	// its amount, say) keeps the deterministic completion hints — those guide the
+	// user better than a round-trip would.
+	const canAsk = $derived(
+		assistEnabled && reading.intent === 'unknown' && paletteQuery.value.trim().length >= 3
+	);
+	const ready = $derived(reading.ready || canAsk);
 
 	// Completing a half-typed command, versus offering cold-start examples.
 	const completing = $derived(reading.suggestions.length > 0 && paletteQuery.value.length > 0);
@@ -71,7 +84,7 @@
 					bind:this={paletteInputEl.value}
 					bind:value={paletteQuery.value}
 					onkeydown={(e) => {
-						if (e.key === 'Enter' && reading.ready) submit();
+						if (e.key === 'Enter' && ready) submit();
 					}}
 					placeholder="Ask Harmony…"
 					autocomplete="off"
@@ -84,9 +97,9 @@
 				{#if paletteQuery.value}
 					<button
 						onclick={submit}
-						disabled={paletteLoading.value || !reading.ready}
+						disabled={paletteLoading.value || !ready}
 						class="press shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-opacity"
-						style="background: var(--ws-accent); color: white; opacity: {reading.ready &&
+						style="background: var(--ws-accent); color: white; opacity: {ready &&
 						!paletteLoading.value
 							? '1'
 							: '0.35'}"
@@ -202,7 +215,7 @@
 						</button>
 					{/if}
 				</div>
-			{:else if !reading.ready}
+			{:else if !ready}
 				<div class="p-4">
 					<p
 						class="text-[11px] font-semibold tracking-[0.08em] uppercase"

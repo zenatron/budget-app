@@ -1,6 +1,7 @@
 import { applyAction, enhance } from '$app/forms';
 import { toastError, toastSuccess } from '$lib/toast-state.svelte';
 import { requestConfirm, type ConfirmSpec } from '$lib/confirm-state.svelte';
+import { beginSubmit, endSubmit } from '$lib/submit-state.svelte';
 
 export interface SubmitOptions {
 	/**
@@ -47,6 +48,23 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 	// sails past the gate instead of prompting again.
 	let confirmed = false;
 
+	// True from the moment a submission is actually in flight until it settles.
+	// A redirect result keeps it true through the navigation (cleared on destroy),
+	// so the live-refresh SSE can't invalidate mid-redirect. See submit-state.
+	let counted = false;
+	const markBusy = () => {
+		if (!counted) {
+			counted = true;
+			beginSubmit();
+		}
+	};
+	const clearBusy = () => {
+		if (counted) {
+			counted = false;
+			endSubmit();
+		}
+	};
+
 	const enhanced = enhance(node, ({ cancel }) => {
 		if (opts.confirm && !confirmed) {
 			cancel();
@@ -62,6 +80,7 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 		}
 		confirmed = false;
 		setPending(true);
+		markBusy();
 
 		return async ({ result, update }) => {
 			if (result.type === 'redirect') {
@@ -70,11 +89,13 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 				// buttons back to live while the (often slow) destination load is still
 				// in flight, and a second tap then fires a duplicate submit that can
 				// wedge the navigation, stranding the progress bar on a page whose
-				// submit already succeeded.
+				// submit already succeeded. `counted` likewise stays set until destroy,
+				// so a background SSE invalidateAll can't land mid-redirect and drop it.
 				await applyAction(result);
 				return;
 			}
 			setPending(false);
+			clearBusy();
 			const reset = opts.reset ?? true;
 			if (result.type === 'success') {
 				if (opts.success) toastSuccess(opts.success);
@@ -100,6 +121,9 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 		},
 		destroy() {
 			setPending(false);
+			// Redirect submits leave `counted` set on purpose; the navigation that
+			// unmounts this form is where it's finally released.
+			clearBusy();
 			enhanced.destroy();
 		}
 	};

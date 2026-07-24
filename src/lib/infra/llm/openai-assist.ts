@@ -1,11 +1,13 @@
 import type { LlmAssist } from '$lib/ports/llm-assist';
 import { constrainToChoice, sanitizeLabel } from '$lib/domain/intelligence/constrain';
 import {
+	answerQuestionMessages,
 	baseUrl,
 	choiceMessages,
 	fetchWithTimeout,
 	labelMessages,
-	parseCommandMessages
+	parseCommandMessages,
+	sanitizeAnswer
 } from './prompt';
 import { parseActionJson } from './parse-action';
 
@@ -69,6 +71,10 @@ export function openaiAssist(cfg: {
 		async parseCommand({ query }) {
 			const raw = await complete(parseCommandMessages(query));
 			return raw === null ? null : parseActionJson(raw);
+		},
+		async answerQuestion({ query, briefing }) {
+			const raw = await complete(answerQuestionMessages(query, briefing));
+			return raw === null ? null : sanitizeAnswer(raw);
 		}
 	};
 }

@@ -218,8 +218,8 @@
 					title: 'Asking questions',
 					body: [
 						'The sparkle in the header takes plain language: *how much did I spend on groceries last month*, *what’s my net position*, *add income of 4800 per month on the first*, or *log 23 for lunch* to open the Add screen filled in.',
-						'It shows what it understood as you type. If it cannot act on something, it says what is missing rather than guessing.',
-						'This is pattern matching, not an AI service, and it stays on your server. It works the same whether or not AI assistance is turned on.'
+						'It shows what it understood as you type, and offers to complete a half-typed command rather than guessing at what is missing.',
+						'The commands it recognizes and the totals it computes are plain pattern matching and arithmetic that stay on your server, the same whether or not AI assistance is on. With a model turned on, it can also answer open-ended questions — *am I spending more than last month*, *what’s my biggest expense* — phrased over your real figures. It reads those numbers from the app, never invents them, and says so plainly when the answer isn’t in the data.'
 					]
 				},
 				{
@@ -227,8 +227,8 @@
 					icon: 'sparkle',
 					title: 'AI assistance',
 					body: [
-						'Harmony works entirely on plain arithmetic and pattern matching. In Settings → Harmony you can optionally let a language model help with the fuzzy parts, like suggesting a category or reading a cryptic bank line into a merchant name.',
-						'It only ever **suggests**. It never approves a purchase, moves money, or decides your Safe to Spend, and every suggestion is checked against the app’s own options before you see it, so a bad answer becomes no answer.',
+						'Harmony works entirely on plain arithmetic and pattern matching. In Settings → Harmony you can optionally let a language model help with the fuzzy parts: suggesting a category, reading a cryptic bank line into a merchant name, or answering an open-ended question in words over figures the app has already computed.',
+						'It only ever **suggests** or **explains**. It never approves a purchase, moves money, or decides your Safe to Spend; when it answers a question it reads your real figures rather than inventing any; and every suggestion is checked against the app’s own options before you see it, so a bad answer becomes no answer.',
 						'You choose the source. **Local** runs a model on your own machine, so nothing leaves your server. **External** uses an outside API, which means the text you send is processed by a third party. **Off**, the default, keeps everything deterministic and contacts no model at all.'
 					]
 				}

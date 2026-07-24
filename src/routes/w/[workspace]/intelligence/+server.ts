@@ -5,7 +5,14 @@ import { savingsInPeriod } from '$lib/server/repo/buckets';
 import { Money } from '$lib/domain/money/money';
 import { periodTotal, categoryBreakdown, memberBreakdown } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
-import { monthPeriod, yearPeriod } from '$lib/domain/analytics/period';
+import { safeToSpend } from '$lib/server/repo/forecast';
+import {
+	monthPeriod,
+	yearPeriod,
+	previousMonthPeriod,
+	monthLabel,
+	type Period
+} from '$lib/domain/analytics/period';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { calDateInZone } from '$lib/domain/time/zoned';
 import { parse, type ParsedIntent, type TimePeriod } from '$lib/intelligence/parser';
@@ -181,6 +188,57 @@ function deterministicAction(parsed: ParsedIntent): ParsedAction | null {
 	}
 }
 
+/**
+ * A compact, factual snapshot of the workspace's money, computed entirely by the
+ * deterministic core. It is the *only* ground the LLM is allowed to answer from:
+ * every figure here is real and seal-scoped to the viewer, so the model narrates
+ * truth rather than guessing. Kept short on purpose — a small model reasons more
+ * reliably over a tight briefing, and it's cheaper to send.
+ */
+async function buildBriefing(
+	db: ReturnType<typeof getDb>,
+	scope: { workspaceId: string; viewerId: string; timezone: string },
+	ws: WorkspaceRow,
+	now: Date,
+	today: { y: number; m: number; d: number }
+): Promise<string> {
+	const currency = ws.currency;
+	const fmt = (m: bigint) => Money.of(m, currency).format();
+	const thisMonth: Period = monthPeriod(today);
+	const lastMonth: Period = previousMonthPeriod(today);
+
+	const [thisSpent, lastSpent, cats, members, income, savings, sts] = await Promise.all([
+		periodTotal(db, scope, thisMonth, now),
+		periodTotal(db, scope, lastMonth, now),
+		categoryBreakdown(db, scope, thisMonth, now),
+		memberBreakdown(db, scope, thisMonth, now),
+		incomeInPeriod(db, ws.id, thisMonth, scope.timezone, today),
+		savingsInPeriod(db, ws.id, thisMonth, scope.timezone),
+		safeToSpend(db, scope, now)
+	]);
+
+	const net = income - thisSpent - savings;
+	const topCats = cats
+		.slice(0, 6)
+		.map((c) => `${c.name} ${fmt(c.totalMinor)}`)
+		.join(', ');
+	const memberLine = members.map((m) => `${m.name} ${fmt(m.totalMinor)}`).join(', ');
+	const isoToday = `${today.y}-${String(today.m).padStart(2, '0')}-${String(today.d).padStart(2, '0')}`;
+
+	const lines = [
+		`Workspace: ${ws.name}. Currency: ${currency}. Today: ${isoToday}.`,
+		`This month (${monthLabel(today)}): spent ${fmt(thisSpent)}, income ${fmt(income)}, set aside in savings ${fmt(savings)}, net ${fmt(net)}.`,
+		`Safe to Spend right now (free cash left this month): ${fmt(sts.freeMinor)} — status ${sts.status}.`,
+		`Last month (${monthLabel(lastMonth.from)}): spent ${fmt(lastSpent)}.`,
+		topCats
+			? `Spending by category this month: ${topCats}.`
+			: 'No categorized spending this month yet.',
+		members.length > 1 ? `Spending by member this month: ${memberLine}.` : null
+	].filter(Boolean);
+
+	return lines.join('\n');
+}
+
 export const POST: RequestHandler = async ({ locals, request }) => {
 	assertSameOrigin(request);
 
@@ -215,22 +273,24 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		if (response) return jsonSafe(response);
 	}
 
+	// The optional model, shared by the two things it can help with below: turning
+	// a stumped command into a safe action, and — failing that — answering a
+	// free-text question. Absent by default, in which case both paths no-op.
+	const assist = getLlmAssist({
+		aiMode: ws.aiMode,
+		aiEndpoint: ws.aiEndpoint,
+		aiModel: ws.aiModel,
+		aiApiKey: ws.aiApiKey
+	});
+
 	// If the deterministic parser is stumped and an LLM is configured, let the
 	// model extract a safe, constructive action. It is still only preparing; the
 	// response below always asks the user to confirm before writing.
-	if (parsed.intent === 'unknown') {
-		const assist = getLlmAssist({
-			aiMode: ws.aiMode,
-			aiEndpoint: ws.aiEndpoint,
-			aiModel: ws.aiModel,
-			aiApiKey: ws.aiApiKey
-		});
-		if (assist.available) {
-			const guessed = await assist.parseCommand({ query });
-			if (guessed && guessed.intent !== 'unknown') {
-				const response = buildActionResponse(guessed, ws, query);
-				if (response) return jsonSafe(response);
-			}
+	if (parsed.intent === 'unknown' && assist.available) {
+		const guessed = await assist.parseCommand({ query });
+		if (guessed && guessed.intent !== 'unknown') {
+			const response = buildActionResponse(guessed, ws, query);
+			if (response) return jsonSafe(response);
 		}
 	}
 
@@ -304,6 +364,17 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			intent: parsed.intent,
 			answer: `That needs ${parsed.missing.join(' and ')}.`
 		});
+	}
+
+	// Nothing deterministic matched. If a model is configured, let Harmony answer
+	// the question in plain language — but only over the real figures the core
+	// computes below, never numbers it invents. This is the path that makes the
+	// palette feel intelligent for anything phrased outside the parser's grammar
+	// ("am I spending more than last month?", "what's my biggest expense?").
+	if (assist.available) {
+		const briefing = await buildBriefing(db, scope, ws, now, today);
+		const answer = await assist.answerQuestion({ query, briefing });
+		if (answer) return jsonSafe({ intent: 'answer', answer });
 	}
 
 	return jsonSafe({

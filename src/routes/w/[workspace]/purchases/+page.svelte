@@ -679,16 +679,16 @@
 		</label>
 		<button
 			onclick={() => (showFilter = !showFilter)}
-			class="press relative flex h-[45px] w-[45px] shrink-0 items-center justify-center rounded-[var(--r-sm)]"
-			style="box-shadow: inset 0 0 0 1px {category
-				? 'var(--hairline-strong)'
-				: 'var(--hairline)'}; background: var(--surface)"
+			class="press relative flex h-[45px] w-11 shrink-0 items-center justify-center rounded-[var(--r-sm)]"
 			aria-label="Filter the ledger"
 		>
-			<Funnel class="h-4 w-4" style="color: {hasFilters ? 'var(--ink)' : 'var(--ink-4)'}" />
+			<Funnel
+				class="h-[18px] w-[18px] transition-colors"
+				style="color: {hasFilters ? 'var(--ws-accent)' : 'var(--ink-4)'}"
+			/>
 			{#if hasFilters}
 				<span
-					class="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full"
+					class="absolute top-1.5 right-1 h-2 w-2 rounded-full"
 					style="background: var(--ws-accent)"
 				></span>
 			{/if}

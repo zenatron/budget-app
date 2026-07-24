@@ -10,5 +10,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 	if (memberships.length === 0) redirect(303, '/welcome');
 
 	const active = memberships.find((m) => m.workspace.id === locals.session?.activeWorkspaceId);
-	redirect(303, `/w/${(active ?? memberships[0]).workspace.slug}`);
+	// Land on the ledger, not the workspace root (which is the settings/overview
+	// page). The ledger is where day-to-day activity lives, so it's the sensible
+	// default when opening the app; Settings stays a tap away in the header.
+	redirect(303, `/w/${(active ?? memberships[0]).workspace.slug}/purchases`);
 };

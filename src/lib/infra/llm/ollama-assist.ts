@@ -1,11 +1,13 @@
 import type { LlmAssist } from '$lib/ports/llm-assist';
 import { constrainToChoice, sanitizeLabel } from '$lib/domain/intelligence/constrain';
 import {
+	answerQuestionMessages,
 	baseUrl,
 	choiceMessages,
 	fetchWithTimeout,
 	labelMessages,
-	parseCommandMessages
+	parseCommandMessages,
+	sanitizeAnswer
 } from './prompt';
 import { parseActionJson } from './parse-action';
 
@@ -74,6 +76,11 @@ export function ollamaAssist(cfg: { endpoint: string; model: string }): LlmAssis
 		async parseCommand({ query }) {
 			const raw = await complete(parseCommandMessages(query), true);
 			return raw === null ? null : parseActionJson(raw);
+		},
+		async answerQuestion({ query, briefing }) {
+			// Plain prose, not JSON — narration wants sentences, not a schema.
+			const raw = await complete(answerQuestionMessages(query, briefing));
+			return raw === null ? null : sanitizeAnswer(raw);
 		}
 	};
 }

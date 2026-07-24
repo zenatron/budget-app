@@ -122,7 +122,7 @@
 	>
 </header>
 
-<article class="sheet mx-auto max-w-[640px] px-6 pt-6 pb-24">
+<article class="sheet w-full pt-6 pb-24">
 	<!-- Letterhead -->
 	<header class="flex items-start justify-between gap-4">
 		<div>

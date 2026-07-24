@@ -20,7 +20,12 @@ export const load: LayoutServerLoad = async ({ locals, params }) => {
 			name: workspace!.name,
 			currency: workspace!.currency,
 			timezone: workspace!.timezone,
-			accentColor: workspace!.accentColor
+			accentColor: workspace!.accentColor,
+			// Drives whether "Ask Harmony" accepts a free-text question: with a model
+			// configured the palette can answer anything, so unrecognized input is
+			// submittable; without one it stays a deterministic parser and only acts
+			// on grammar it knows.
+			assistEnabled: workspace!.aiMode !== 'off'
 		},
 		member: { id: member!.id, role: member!.role },
 		workspaces: memberships.map((m) => ({
