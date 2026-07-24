@@ -13,5 +13,6 @@ export const nullAssist: LlmAssist = {
 		detail: 'AI assist is off. Harmony uses deterministic parsing.'
 	}),
 	pickChoice: async () => null,
-	cleanLabel: async () => null
+	cleanLabel: async () => null,
+	parseCommand: async () => null
 };

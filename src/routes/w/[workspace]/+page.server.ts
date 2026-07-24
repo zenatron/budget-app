@@ -47,7 +47,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		pendingCount: pendingRow[0].count,
 		confirmCount: confirmRow[0].count,
 		billImportEnabled: locals.workspace!.billImportEnabled,
-		intelligenceEnabled: locals.workspace!.intelligenceEnabled,
 		accentColor: locals.workspace!.accentColor,
 		// Just the headline for the Members row. The list, the policies and the
 		// invites all live on settings/members now, which loads its own.

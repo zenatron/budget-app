@@ -1,8 +1,12 @@
 import { getDb } from '$lib/server/db';
-import { error } from '@sveltejs/kit';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { calDateInZone } from '$lib/domain/time/zoned';
-import { monthLabel, monthPeriod, previousMonthPeriod } from '$lib/domain/analytics/period';
+import {
+	monthLabel,
+	monthPeriod,
+	periodBoundsUtc,
+	previousMonthPeriod
+} from '$lib/domain/analytics/period';
 import {
 	budgetVsActual,
 	categoryBreakdown,
@@ -13,6 +17,7 @@ import {
 } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
 import { savingsInPeriod } from '$lib/server/repo/buckets';
+import { listLedger } from '$lib/server/repo/ledger';
 import { formatMinor } from '$lib/money-format';
 import {
 	narrateMonth,
@@ -40,7 +45,6 @@ const MONTH_ABBR = [
 export const load: PageServerLoad = async ({ locals, url, params }) => {
 	// Depend on the workspace param so a switch always re-runs (see +layout.server.ts).
 	void params.workspace;
-	if (!locals.workspace!.intelligenceEnabled) error(404, 'Not found');
 	const db = getDb();
 	const now = systemClock.now();
 	const ws = locals.workspace!;
@@ -59,19 +63,36 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 	const period = monthPeriod(target);
 	const prevPeriod = previousMonthPeriod(target);
 	const isPartial = target.y === today.y && target.m === today.m;
+	const bounds = periodBoundsUtc(period, ws.timezone);
 
-	const [spent, prevSpent, income, savings, categories, members, txCount, trend, budgetLines] =
-		await Promise.all([
-			periodTotal(db, scope, period, now),
-			periodTotal(db, scope, prevPeriod, now),
-			incomeInPeriod(db, ws.id, period, ws.timezone, today),
-			savingsInPeriod(db, ws.id, period, ws.timezone),
-			categoryBreakdown(db, scope, period, now),
-			memberBreakdown(db, scope, period, now),
-			periodCount(db, scope, period, now),
-			dailyTrend(db, scope, period, now),
-			budgetVsActual(db, scope, period, now)
-		]);
+	const [
+		spent,
+		prevSpent,
+		income,
+		savings,
+		categories,
+		members,
+		txCount,
+		trend,
+		budgetLines,
+		ledger
+	] = await Promise.all([
+		periodTotal(db, scope, period, now),
+		periodTotal(db, scope, prevPeriod, now),
+		incomeInPeriod(db, ws.id, period, ws.timezone, today),
+		savingsInPeriod(db, ws.id, period, ws.timezone),
+		categoryBreakdown(db, scope, period, now),
+		memberBreakdown(db, scope, period, now),
+		periodCount(db, scope, period, now),
+		dailyTrend(db, scope, period, now),
+		budgetVsActual(db, scope, period, now),
+		listLedger(db, scope, now, {
+			from: bounds.from,
+			to: bounds.to,
+			basis: 'spend',
+			limit: 1000
+		})
+	]);
 
 	// The single heaviest day, straight off the daily trend (no extra query).
 	let biggestDay: { key: string; totalMinor: bigint } | null = null;
@@ -127,6 +148,9 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		narration,
 		categories: categories.map((c) => ({ ...c })),
 		members: members.map((m) => ({ ...m })),
+		transactions: ledger.entries
+			.filter((e): e is typeof e & { kind: 'purchase' } => e.kind === 'purchase')
+			.reverse(),
 		rangeFrom,
 		rangeTo,
 		asOf: isPartial
@@ -136,6 +160,11 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		hasNext,
 		prevMonth: `${pm.y}-${pad(pm.m)}`,
 		nextMonth: `${nm.y}-${pad(nm.m)}`,
-		workspace: { name: ws.name, currency: ws.currency }
+		workspace: { name: ws.name, currency: ws.currency, timezone: ws.timezone },
+		generatedAt: now.toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		})
 	};
 };

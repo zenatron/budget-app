@@ -122,7 +122,7 @@
 						'Not sure about a purchase? Put it to sleep instead of deciding now. The request pauses for a set time, then comes back so you can decide with a clearer head — a gentle guard against impulse buys.',
 						'On a request that’s waiting, tap **Sleep on it** and choose how long. The length is suggested from the amount — bigger buys wait a bit longer — and you can spin the dial to change it. Either the person who asked or an approver can start a pause.',
 						'While it’s asleep it can’t be approved or bought, and it shows on the Ledger under **Sleeping on it** with a countdown. You can wake it early or let it go at any time.',
-						'When the time is up it’s marked **Ready to decide** and you get a reminder. From there it’s **Buy it** (back in the approval queue), **a few more days**, or **let it go** — and changing your mind is a perfectly good outcome.'
+						'When the time is up it’s marked **Ready to decide** and you get a reminder. From there it’s **Buy it** (back in the approval queue), **wait more**, or **let it go** — and changing your mind is a perfectly good outcome.'
 					]
 				},
 				{
@@ -188,7 +188,7 @@
 			]
 		},
 		{
-			label: 'Harmony',
+			label: 'Harmony Intelligence',
 			sections: [
 				{
 					id: 'safe-to-spend',

@@ -8,7 +8,7 @@ import type { Notifier } from '$lib/ports/notifier';
 
 /**
  * Sweep: a held purchase whose pause has lifted is "ready to decide". This
- * doesn't change its state — the human chooses (buy it / a few more days / let
+ * doesn't change its state — the human chooses (buy it / wait more / let
  * it go) — it only rings the requester once, then marks it notified so a request
  * that sits ready for a while doesn't nag every interval.
  */

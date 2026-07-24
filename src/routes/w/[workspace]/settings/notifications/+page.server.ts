@@ -33,6 +33,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		listPushSubscriptions(db, [locals.user!.id])
 	]);
 	return {
+		isOwner: locals.member!.role === 'owner',
 		vapidPublicKey: env.VAPID_PUBLIC_KEY ?? null,
 		ntfy: ntfy
 			? { topic: ntfy.topic, serverUrl: ntfy.serverUrl }
@@ -44,7 +45,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		subscriptionCount: subs.length,
 		disabled: disabled.map((d) => `${d.eventType}:${d.channel}`),
 		eventTypes: EVENT_TYPES.map((e) => ({ ...e })),
-		intelligenceEnabled: locals.workspace!.intelligenceEnabled,
+		safeToSpendAlertsEnabled: locals.workspace!.safeToSpendAlertsEnabled,
 		summaryCadence: locals.member!.summaryCadence
 	};
 };
@@ -62,7 +63,6 @@ const NtfySchema = v.object({
 
 export const actions: Actions = {
 	summary: async ({ locals, request }) => {
-		if (!locals.workspace!.intelligenceEnabled) return fail(403, { error: 'Intelligence is off' });
 		const cadence = String((await request.formData()).get('cadence') ?? '');
 		if (!(SUMMARY_CADENCES as readonly string[]).includes(cadence)) {
 			return fail(400, { error: 'Unknown cadence' });

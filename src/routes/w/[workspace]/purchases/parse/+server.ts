@@ -1,4 +1,4 @@
-import { error, json } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
 import { listCategories } from '$lib/server/repo/workspaces';
 import { getLlmAssist } from '$lib/infra/llm';
@@ -14,7 +14,6 @@ import type { RequestHandler } from './$types';
  * category. Nothing is submitted — the client fills the form, the person confirms.
  */
 export const POST: RequestHandler = async ({ locals, request }) => {
-	if (!locals.workspace!.intelligenceEnabled) error(403, 'Harmony is not enabled');
 	const ws = locals.workspace!;
 	const body = await request.json().catch(() => ({}));
 	const text = typeof body?.text === 'string' ? body.text.slice(0, 300) : '';

@@ -27,6 +27,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	else if (flag === 'billImportEnabled') updates.billImportEnabled = value;
 	else if (flag === 'bucketChargesSkipApproval') updates.bucketChargesSkipApproval = value;
 	else if (flag === 'keepStatementFiles') updates.keepStatementFiles = value;
+	else if (flag === 'safeToSpendAlertsEnabled') updates.safeToSpendAlertsEnabled = value;
 	else if (flag === 'barcodeEnabled') {
 		if (value && !getEnv().BARCODE_LOOKUP_URL) {
 			error(403, 'Barcode scanning requires BARCODE_LOOKUP_URL to be set in the environment');

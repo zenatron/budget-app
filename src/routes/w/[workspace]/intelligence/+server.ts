@@ -1,17 +1,18 @@
 import { error } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
 import { getEnv } from '$lib/server/env';
-import { createBucket, savingsInPeriod } from '$lib/server/repo/buckets';
+import { savingsInPeriod } from '$lib/server/repo/buckets';
 import { Money } from '$lib/domain/money/money';
 import { periodTotal, categoryBreakdown, memberBreakdown } from '$lib/server/repo/analytics';
-import { addIncome, incomeInPeriod } from '$lib/server/repo/income';
-import { formatRRule } from '$lib/domain/recurrence/rrule';
+import { incomeInPeriod } from '$lib/server/repo/income';
 import { monthPeriod, yearPeriod } from '$lib/domain/analytics/period';
 import { systemClock } from '$lib/infra/time/system-clock';
-import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
-import { uuidv7 } from '$lib/infra/id/uuidv7';
-import { parse, type TimePeriod } from '$lib/intelligence/parser';
+import { calDateInZone } from '$lib/domain/time/zoned';
+import { parse, type ParsedIntent, type TimePeriod } from '$lib/intelligence/parser';
 import { formatPct } from '$lib/format';
+import { getLlmAssist } from '$lib/infra/llm';
+import type { ParsedAction } from '$lib/ports/llm-assist';
+import type { WorkspaceRow } from '$lib/server/repo/workspaces';
 import type { RequestHandler } from './$types';
 
 /** Amounts cross the wire as bigint minor units; JSON.stringify can't do those. */
@@ -37,11 +38,151 @@ function assertSameOrigin(request: Request): void {
 	}
 }
 
+function stripControlChars(s: string): string {
+	return s
+		.split('')
+		.filter((c) => {
+			const code = c.charCodeAt(0);
+			return code > 0x1f && code !== 0x7f;
+		})
+		.join('');
+}
+
+/** Strip control characters, collapse whitespace, and cap length for a label. */
+function safeName(raw: string, maxLen = 120): string | null {
+	const cleaned = stripControlChars(raw).replace(/\s+/g, ' ').trim();
+	if (!cleaned) return null;
+	return cleaned.length > maxLen ? cleaned.slice(0, maxLen).trim() : cleaned;
+}
+
+/** -1 means "last day of the month"; otherwise clamp to 1-28. */
+function normalizeDay(d: number): number {
+	if (d === -1) return 28;
+	return Math.min(Math.max(d, 1), 28);
+}
+
+function moneyFromNumber(amount: number, currency: string): Money | null {
+	if (!Number.isFinite(amount) || amount <= 0) return null;
+	try {
+		return Money.fromDecimal(String(amount), currency);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Build a response that asks the user to confirm before anything is written.
+ * The LLM (or deterministic parser) only ever *prepares* an action here; it
+ * never executes one.
+ */
+function buildActionResponse(
+	action: ParsedAction,
+	ws: WorkspaceRow,
+	query: string
+): { intent: string; answer: string; describe?: string; propose?: unknown } | null {
+	const currency = ws.currency;
+
+	if (action.intent === 'log_purchase') {
+		return {
+			intent: 'log_purchase',
+			answer: 'I’ll open the add screen with what you said. You can edit before saving.',
+			describe: query
+		};
+	}
+
+	if (action.intent === 'navigate') {
+		return {
+			intent: 'navigate',
+			answer: `Open ${action.target}`,
+			propose: { intent: 'navigate', target: action.target, label: action.target }
+		};
+	}
+
+	if (action.intent === 'create_bucket') {
+		const name = safeName(action.name);
+		const amount = moneyFromNumber(action.amount, currency);
+		if (!name) {
+			return { intent: 'create_bucket', answer: 'I need a name for the bucket.' };
+		}
+		if (!amount) {
+			return { intent: 'create_bucket', answer: 'I need a positive amount for the bucket.' };
+		}
+		const day = normalizeDay(action.dayOfMonth);
+		return {
+			intent: 'propose',
+			answer: `Create bucket “${name}” — ${amount.format()}/mo on day ${day}`,
+			propose: {
+				intent: 'create_bucket',
+				name,
+				amount: action.amount,
+				amountMinor: amount.minor.toString(),
+				dayOfMonth: day,
+				currency
+			}
+		};
+	}
+
+	if (action.intent === 'create_income') {
+		const source = safeName(action.source);
+		const amount = moneyFromNumber(action.amount, currency);
+		if (!source) {
+			return { intent: 'create_income', answer: 'I need a source for the income.' };
+		}
+		if (!amount) {
+			return { intent: 'create_income', answer: 'I need a positive amount for the income.' };
+		}
+		const day = normalizeDay(action.dayOfMonth);
+		const cadence = action.monthly ? 'monthly' : 'once';
+		return {
+			intent: 'propose',
+			answer: `Add income “${source}” — ${amount.format()} ${cadence}${action.monthly ? ` on day ${day}` : ''}`,
+			propose: {
+				intent: 'create_income',
+				source,
+				amount: action.amount,
+				amountMinor: amount.minor.toString(),
+				monthly: action.monthly,
+				dayOfMonth: day,
+				currency
+			}
+		};
+	}
+
+	return null;
+}
+
+/**
+ * Convert the deterministic parser's output into the same closed action shape
+ * the LLM uses, so both paths share the same proposal/confirmation flow.
+ */
+function deterministicAction(parsed: ParsedIntent): ParsedAction | null {
+	switch (parsed.intent) {
+		case 'create_bucket':
+			return {
+				intent: 'create_bucket',
+				name: parsed.name,
+				amount: parsed.amount,
+				dayOfMonth: parsed.dayOfMonth
+			};
+		case 'create_income':
+			return {
+				intent: 'create_income',
+				source: parsed.source,
+				amount: parsed.amount,
+				monthly: parsed.cadence === 'monthly',
+				dayOfMonth: parsed.dayOfMonth
+			};
+		case 'navigate':
+			return { intent: 'navigate', target: parsed.target };
+		case 'log_purchase':
+			return { intent: 'log_purchase' };
+		default:
+			return null;
+	}
+}
+
 export const POST: RequestHandler = async ({ locals, request }) => {
 	assertSameOrigin(request);
-	// Alpha gate: the button is hidden when off, but the endpoint is the boundary
-	// that actually protects it.
-	if (!locals.workspace!.intelligenceEnabled) error(403, 'Intelligence is not enabled');
 
 	let body: unknown;
 	try {
@@ -57,19 +198,40 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 
 	const parsed = parse(query);
 	const db = getDb();
+	const ws = locals.workspace!;
 	const scope = {
-		workspaceId: locals.workspace!.id,
+		workspaceId: ws.id,
 		viewerId: locals.member!.id,
-		timezone: locals.workspace!.timezone
+		timezone: ws.timezone
 	};
-	const currency = locals.workspace!.currency;
+	const currency = ws.currency;
 	const now = systemClock.now();
 	const today = calDateInZone(now, scope.timezone);
 
-	// The Add screen owns purchase parsing (money/date stay deterministic there),
-	// so the palette just forwards the sentence for it to fill in.
-	if (parsed.intent === 'log_purchase') {
-		return jsonSafe({ intent: 'log_purchase', describe: parsed.text });
+	// First, try the deterministic parser for anything it already understands.
+	const action = deterministicAction(parsed);
+	if (action) {
+		const response = buildActionResponse(action, ws, query);
+		if (response) return jsonSafe(response);
+	}
+
+	// If the deterministic parser is stumped and an LLM is configured, let the
+	// model extract a safe, constructive action. It is still only preparing; the
+	// response below always asks the user to confirm before writing.
+	if (parsed.intent === 'unknown') {
+		const assist = getLlmAssist({
+			aiMode: ws.aiMode,
+			aiEndpoint: ws.aiEndpoint,
+			aiModel: ws.aiModel,
+			aiApiKey: ws.aiApiKey
+		});
+		if (assist.available) {
+			const guessed = await assist.parseCommand({ query });
+			if (guessed && guessed.intent !== 'unknown') {
+				const response = buildActionResponse(guessed, ws, query);
+				if (response) return jsonSafe(response);
+			}
+		}
 	}
 
 	if (parsed.intent === 'spending_query') {
@@ -77,7 +239,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		const total = await periodTotal(db, scope, period, now);
 		const categories = await categoryBreakdown(db, scope, period, now);
 		const members = await memberBreakdown(db, scope, period, now);
-		const income = await incomeInPeriod(db, locals.workspace!.id, period, scope.timezone, today);
+		const income = await incomeInPeriod(db, ws.id, period, scope.timezone, today);
 		let answer: string;
 		let detail: unknown[] = [];
 		let highlight: number | null = null;
@@ -89,7 +251,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			if (matched.length > 0) {
 				const catTotal = matched.reduce((s, c) => s + c.totalMinor, 0n);
 				answer = `${Money.of(catTotal, currency).format()} spent on ${matched.map((c) => c.name).join(', ')} in ${parsed.period.label}`;
-				detail = matched.map((c) => ({ label: c.name, amountMinor: c.totalMinor }));
+				detail = matched.map((c) => ({ label: c.name, amountMinor: c.totalMinor.toString() }));
 				highlight = Number(catTotal);
 			} else {
 				answer = `No spending found for "${parsed.category}" in ${parsed.period.label}`;
@@ -111,7 +273,9 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 				const pct = Number((total * 1000n) / income) / 10;
 				answer += ` (${formatPct(pct)} of income)`;
 			}
-			detail = categories.slice(0, 5).map((c) => ({ label: c.name, amountMinor: c.totalMinor }));
+			detail = categories
+				.slice(0, 5)
+				.map((c) => ({ label: c.name, amountMinor: c.totalMinor.toString() }));
 		}
 
 		return jsonSafe({ intent: parsed.intent, answer, detail, highlight });
@@ -120,8 +284,8 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	if (parsed.intent === 'net_position') {
 		const period = timeToPeriod(parsed.period);
 		const total = await periodTotal(db, scope, period, now);
-		const income = await incomeInPeriod(db, locals.workspace!.id, period, scope.timezone, today);
-		const savings = await savingsInPeriod(db, locals.workspace!.id, period, scope.timezone);
+		const income = await incomeInPeriod(db, ws.id, period, scope.timezone, today);
+		const savings = await savingsInPeriod(db, ws.id, period, scope.timezone);
 		const net = income - total - savings;
 		const pct = income > 0n ? Number((net * 1000n) / income) / 10 : 0;
 
@@ -135,97 +299,10 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		return jsonSafe({ intent: parsed.intent, answer });
 	}
 
-	if (parsed.intent === 'create_bucket') {
-		try {
-			const amount = Money.fromDecimal(String(parsed.amount), currency);
-			if (!amount.isPositive) {
-				return jsonSafe({ intent: parsed.intent, answer: 'Amount must be positive' });
-			}
-			await createBucket(
-				getDb(),
-				{ clock: systemClock, ids: uuidv7 },
-				{
-					workspaceId: locals.workspace!.id,
-					memberId: locals.member!.id,
-					name: parsed.name,
-					monthlyAmountMinor: amount.minor,
-					currency,
-					dayOfMonth: parsed.dayOfMonth
-				}
-			);
-			return jsonSafe({
-				intent: parsed.intent,
-				answer: `Bucket "${parsed.name}" created — ${amount.format()}/mo on day ${parsed.dayOfMonth}`
-			});
-		} catch (e) {
-			return jsonSafe({
-				intent: parsed.intent,
-				answer: `Couldn't create bucket: ${(e as Error).message}`
-			});
-		}
-	}
-
-	if (parsed.intent === 'create_income') {
-		try {
-			const amount = Money.fromDecimal(String(parsed.amount), currency);
-			if (!amount.isPositive) {
-				return jsonSafe({ intent: parsed.intent, answer: 'Amount must be positive' });
-			}
-			// Recurring entries anchor on the requested day of the current month;
-			// one-offs land today. Both at 09:00 workspace-local, like the form does.
-			const day = parsed.dayOfMonth === -1 ? 28 : parsed.dayOfMonth;
-			const start =
-				parsed.cadence === 'monthly'
-					? { y: today.y, m: today.m, d: Math.min(day, 28) }
-					: { y: today.y, m: today.m, d: today.d };
-			const rrule =
-				parsed.cadence === 'monthly'
-					? formatRRule({ start, freq: 'monthly', interval: 1, byMonthDay: start.d })
-					: null;
-
-			await addIncome(
-				db,
-				{ clock: systemClock, ids: uuidv7 },
-				{
-					workspaceId: locals.workspace!.id,
-					memberId: locals.member!.id,
-					source: parsed.source,
-					amountMinor: amount.minor,
-					currency,
-					receivedAt: zonedTimeToUtc(start, 9, 0, scope.timezone),
-					rrule,
-					note: null
-				}
-			);
-
-			return jsonSafe({
-				intent: parsed.intent,
-				answer:
-					parsed.cadence === 'monthly'
-						? `Income "${parsed.source}" added — ${amount.format()} monthly on day ${start.d}`
-						: `Income "${parsed.source}" added — ${amount.format()}`,
-				target: 'income'
-			});
-		} catch (e) {
-			return jsonSafe({
-				intent: parsed.intent,
-				answer: `Couldn't add income: ${(e as Error).message}`
-			});
-		}
-	}
-
 	if (parsed.intent === 'incomplete') {
 		return jsonSafe({
 			intent: parsed.intent,
 			answer: `That needs ${parsed.missing.join(' and ')}.`
-		});
-	}
-
-	if (parsed.intent === 'navigate') {
-		return jsonSafe({
-			intent: parsed.intent,
-			target: parsed.target,
-			answer: `Opening ${parsed.target}...`
 		});
 	}
 

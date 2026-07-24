@@ -15,7 +15,7 @@ import type { Notifier, Recipient } from '$lib/ports/notifier';
  * past what's coming in). Part of the sweep.
  *
  * Deterministic, and quiet by design:
- *   - Only workspaces with Harmony (intelligence) enabled.
+ *   - Only workspaces with Safe-to-Spend alerts enabled.
  *   - Per member, computed as *they* see it — so a sealed gift never leaks and a
  *     member is only ever told about their own number.
  *   - High-water mark per month (`safeToSpendAlertMonth` / `safeToSpendAlertLevel`):
@@ -37,7 +37,7 @@ export async function sendSafeToSpendAlerts(
 			currency: workspace.currency
 		})
 		.from(workspace)
-		.where(eq(workspace.intelligenceEnabled, true));
+		.where(eq(workspace.safeToSpendAlertsEnabled, true));
 
 	let alerted = 0;
 	for (const ws of workspaces) {

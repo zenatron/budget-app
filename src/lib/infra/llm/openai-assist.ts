@@ -1,6 +1,13 @@
 import type { LlmAssist } from '$lib/ports/llm-assist';
 import { constrainToChoice, sanitizeLabel } from '$lib/domain/intelligence/constrain';
-import { baseUrl, choiceMessages, fetchWithTimeout, labelMessages } from './prompt';
+import {
+	baseUrl,
+	choiceMessages,
+	fetchWithTimeout,
+	labelMessages,
+	parseCommandMessages
+} from './prompt';
+import { parseActionJson } from './parse-action';
 
 /**
  * External assist over any OpenAI-compatible chat API (OpenAI, Groq, Together,
@@ -58,6 +65,10 @@ export function openaiAssist(cfg: {
 		async cleanLabel(req) {
 			const raw = await complete(labelMessages(req));
 			return raw === null ? null : sanitizeLabel(raw, req.maxLen);
+		},
+		async parseCommand({ query }) {
+			const raw = await complete(parseCommandMessages(query));
+			return raw === null ? null : parseActionJson(raw);
 		}
 	};
 }

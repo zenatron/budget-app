@@ -7,10 +7,33 @@ import type { Choice } from '$lib/domain/intelligence/constrain';
  * or writes — those live entirely in the deterministic core, and the assist
  * layer can be absent (the null adapter) with zero behaviour change.
  *
- * Neither `pickChoice` nor `cleanLabel` ever throws: any failure (off, offline,
- * timeout, garbage) resolves to null, and the caller falls back to exactly what
- * it would have done with no model at all.
+ * Neither `pickChoice`, `cleanLabel`, nor `parseCommand` ever throws: any
+ * failure (off, offline, timeout, garbage) resolves to null, and the caller
+ * falls back to exactly what it would have done with no model at all.
  */
+
+/** Targets the palette's deterministic parser already knows how to open. */
+export type NavigateTarget =
+	'analytics' | 'buckets' | 'recurring' | 'income' | 'purchases' | 'settings';
+
+/**
+ * A structured action the model extracted from free text. The set is
+ * intentionally small and constructive: the model is never allowed to propose
+ * deletes, edits, spending, approvals, or money movement. Anything outside this
+ * set resolves to `unknown`.
+ */
+export type ParsedAction =
+	| { intent: 'create_bucket'; name: string; amount: number; dayOfMonth: number }
+	| {
+			intent: 'create_income';
+			source: string;
+			amount: number;
+			monthly: boolean;
+			dayOfMonth: number;
+	  }
+	| { intent: 'log_purchase' }
+	| { intent: 'navigate'; target: NavigateTarget }
+	| { intent: 'unknown' };
 
 export interface AssistProvider {
 	mode: 'off' | 'local' | 'external';
@@ -40,4 +63,12 @@ export interface LlmAssist {
 	 * descriptor, say), or null. Passed through `sanitizeLabel` before return.
 	 */
 	cleanLabel(req: { instruction: string; text: string; maxLen?: number }): Promise<string | null>;
+
+	/**
+	 * Parse a free-text command into one of the safe, constructive actions the
+	 * app can prepare for confirmation. Returns `unknown` when the text is a
+	 * question, a destructive operation, or anything outside the allowed set.
+	 * The caller still validates every field before showing a proposal.
+	 */
+	parseCommand(req: { query: string }): Promise<ParsedAction | null>;
 }

@@ -50,7 +50,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		billImportEnabled: locals.workspace!.billImportEnabled,
 		barcodeEnabled: locals.workspace!.barcodeEnabled && !!env.BARCODE_LOOKUP_URL,
 		barcodeConfigured: !!env.BARCODE_LOOKUP_URL,
-		harmonyEnabled: locals.workspace!.intelligenceEnabled,
 		// Whether to offer the optional category suggestion. Off = deterministic form.
 		aiEnabled: locals.workspace!.aiMode !== 'off',
 		/*

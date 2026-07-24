@@ -141,6 +141,13 @@
       "when": 1784857789007,
       "tag": "0019_white_garia",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1784898437136,
+      "tag": "0020_foamy_jack_murdock",
+      "breakpoints": true
     }
   ]
 }

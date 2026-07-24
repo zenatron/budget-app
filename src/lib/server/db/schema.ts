@@ -87,8 +87,11 @@ export const workspace = pgTable('workspace', {
 	/** Alpha: barcode scanning. Off until a product-lookup API is wired up. */
 	barcodeEnabled: boolean('barcode_enabled').notNull().default(false),
 	/** Alpha: the intelligence surface — the ask palette and periodic summaries.
-	 *  One flag for the whole suite so it promotes out of alpha together. */
-	intelligenceEnabled: boolean('intelligence_enabled').notNull().default(false),
+	 *  Now defaults to true; deterministic Harmony is always on, only the optional
+	 *  LLM assist is toggled. Kept as a column so it can be gated again in future. */
+	intelligenceEnabled: boolean('intelligence_enabled').notNull().default(true),
+	/** Whether Harmony's deterministic Safe-to-Spend alerts are sent. Workspace-wide. */
+	safeToSpendAlertsEnabled: boolean('safe_to_spend_alerts_enabled').notNull().default(true),
 	/** Optional LLM assist for Harmony. 'off' = deterministic parsing only (the
 	 *  default). A fuzzy reducer, never an approver: it only ever suggests, and
 	 *  every suggestion is validated against a deterministic option set before use. */

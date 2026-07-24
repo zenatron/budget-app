@@ -44,6 +44,38 @@ export function labelMessages(req: { instruction: string; text: string }): ChatM
 	];
 }
 
+/**
+ * Prompt for turning free text into a closed, safe action object. The allowed
+ * intents are constructive-only: buckets, income, purchase logging, and page
+ * navigation. Deletes, edits, spending approvals, or money movement are not in
+ * the set, so a model can never autonomously trigger them.
+ */
+export function parseCommandMessages(query: string): ChatMessage[] {
+	return [
+		{
+			role: 'system',
+			content:
+				'You parse user commands for a personal-finance assistant. ' +
+				'Reply with ONLY a single JSON object containing an "intent" field. ' +
+				'Allowed intents: create_bucket, create_income, log_purchase, navigate, unknown.\n\n' +
+				'Examples:\n' +
+				'{"intent":"create_bucket","name":"Vacation","amount":200,"dayOfMonth":1}\n' +
+				'{"intent":"create_income","source":"Salary","amount":4800,"monthly":true,"dayOfMonth":1}\n' +
+				'{"intent":"log_purchase"}\n' +
+				'{"intent":"navigate","target":"purchases"}\n' +
+				'{"intent":"unknown"}\n\n' +
+				'Rules:\n' +
+				'- amount is a number in dollars, no currency symbols.\n' +
+				'- dayOfMonth is 1-28, or -1 for the last day of the month.\n' +
+				'- target for navigate must be one of: analytics, buckets, recurring, income, purchases, settings.\n' +
+				'- If the request is a question, output unknown.\n' +
+				'- If the request could delete, edit, move, spend, approve, or send money, output unknown.\n' +
+				'- No explanation, no markdown, no text outside the JSON object.'
+		},
+		{ role: 'user', content: query }
+	];
+}
+
 /** One place to bound a call — local models can be slow, but not unbounded. */
 export const ASSIST_TIMEOUT_MS = 15_000;
 

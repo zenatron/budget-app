@@ -13,15 +13,43 @@ function createBoxedState<T>(initial: T) {
 	};
 }
 
+export type Proposal =
+	| {
+			intent: 'create_bucket';
+			name: string;
+			amount: number;
+			amountMinor: string;
+			dayOfMonth: number;
+			currency: string;
+	  }
+	| {
+			intent: 'create_income';
+			source: string;
+			amount: number;
+			amountMinor: string;
+			monthly: boolean;
+			dayOfMonth: number;
+			currency: string;
+	  }
+	| {
+			intent: 'navigate';
+			target: string;
+			label: string;
+	  };
+
+export type PaletteResponse = {
+	intent: string;
+	answer: string;
+	detail?: { label: string; amountMinor: string }[];
+	target?: string;
+	describe?: string;
+	propose?: Proposal;
+};
+
 export const paletteOpen = createBoxedState(false);
 export const paletteQuery = createBoxedState('');
 export const paletteLoading = createBoxedState(false);
-export const paletteResponse = createBoxedState<{
-	intent: string;
-	answer: string;
-	detail?: { label: string; amountMinor: bigint }[];
-	target?: string;
-} | null>(null);
+export const paletteResponse = createBoxedState<PaletteResponse | null>(null);
 export const paletteInputEl = createBoxedState<HTMLInputElement | null>(null);
 
 export function toggle() {
@@ -59,6 +87,17 @@ export function fillExample(prompt: string) {
 	});
 }
 
+function handleResult(data: PaletteResponse) {
+	paletteResponse.value = data;
+	if (data.describe) {
+		// Hand the sentence to the Add screen, which parses and prefills it.
+		close();
+		void goto(
+			`/w/${page.params.workspace}/purchases/new?describe=${encodeURIComponent(data.describe)}`
+		);
+	}
+}
+
 export async function submit() {
 	const q = paletteQuery.value.trim();
 	if (!q || paletteLoading.value) return;
@@ -70,19 +109,34 @@ export async function submit() {
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ query: q })
 		});
-		const data = await res.json();
-		paletteResponse.value = data;
+		const data = (await res.json()) as PaletteResponse;
+		handleResult(data);
+	} catch {
+		paletteResponse.value = { intent: 'error', answer: 'Something went wrong. Try again.' };
+	}
+	paletteLoading.value = false;
+}
+
+export async function executeProposal(proposal: Proposal) {
+	if (paletteLoading.value) return;
+	paletteLoading.value = true;
+	try {
+		const res = await fetch(`/w/${page.params.workspace}/intelligence/execute`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ proposal })
+		});
+		const data = (await res.json()) as PaletteResponse;
 		if (data.describe) {
-			// Hand the sentence to the Add screen, which parses and prefills it.
 			close();
 			void goto(
 				`/w/${page.params.workspace}/purchases/new?describe=${encodeURIComponent(data.describe)}`
 			);
 		} else if (data.target) {
-			setTimeout(() => {
-				close();
-				void goto(`/w/${page.params.workspace}/${data.target}`);
-			}, 600);
+			close();
+			void goto(`/w/${page.params.workspace}/${data.target}`);
+		} else {
+			paletteResponse.value = data;
 		}
 	} catch {
 		paletteResponse.value = { intent: 'error', answer: 'Something went wrong. Try again.' };

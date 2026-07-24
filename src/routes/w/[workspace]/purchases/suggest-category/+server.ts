@@ -1,4 +1,4 @@
-import { error, json } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
 import { listCategories } from '$lib/server/repo/workspaces';
 import { getLlmAssist } from '$lib/infra/llm';
@@ -12,7 +12,6 @@ import type { RequestHandler } from './$types';
  * client shows it as a chip the person taps to accept.
  */
 export const POST: RequestHandler = async ({ locals, request }) => {
-	if (!locals.workspace!.intelligenceEnabled) error(403, 'Harmony is not enabled');
 	const ws = locals.workspace!;
 	const assist = getLlmAssist({
 		aiMode: ws.aiMode,

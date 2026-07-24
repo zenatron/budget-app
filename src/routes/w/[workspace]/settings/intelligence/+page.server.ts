@@ -31,7 +31,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const env = getEnv();
 	return {
 		isOwner: locals.member!.role === 'owner',
-		intelligenceEnabled: ws.intelligenceEnabled,
 		billImportEnabled: ws.billImportEnabled,
 		barcodeEnabled: ws.barcodeEnabled,
 		barcodeConfigured: !!env.BARCODE_LOOKUP_URL,
@@ -97,12 +96,59 @@ export const actions: Actions = {
 		const out = parsed.output;
 		if (out.mode === 'off')
 			return { test: { ok: false, detail: 'Turn a provider on to test it.' } };
-		if (!out.endpoint || !out.model) {
-			return { test: { ok: false, detail: 'Fill in the endpoint and model first.' } };
+		if (!out.endpoint) {
+			return { test: { ok: false, detail: 'Fill in the endpoint first.' } };
 		}
 		const bad = validateEndpoint(out.endpoint);
 		if (bad) return fail(400, { error: bad });
 
+		// For local Ollama, the connection test is the model list itself: if we can
+		// reach /api/tags, the endpoint is good and we can offer the models in a
+		// dropdown. The user hasn't picked a model yet at this step.
+		if (out.mode === 'local') {
+			let base: string;
+			try {
+				const u = new URL(out.endpoint);
+				base = `${u.protocol}//${u.host}`;
+			} catch {
+				return { test: { ok: false, detail: 'Endpoint is not a valid URL' } };
+			}
+			try {
+				const res = await fetch(`${base}/api/tags`, { headers: { Accept: 'application/json' } });
+				if (!res.ok) {
+					return {
+						test: {
+							ok: false,
+							detail: `Could not list models (${res.status}).`
+						}
+					};
+				}
+				const data = (await res.json()) as { models?: { name: string }[] };
+				const models = (data.models ?? [])
+					.map((m) => m.name)
+					.filter((name): name is string => typeof name === 'string' && name.length > 0)
+					.sort();
+				return {
+					test: {
+						ok: true,
+						detail: models.length > 0 ? 'Connected.' : 'Connected, but no models found.',
+						models
+					}
+				};
+			} catch (e) {
+				return {
+					test: {
+						ok: false,
+						detail: e instanceof Error ? e.message : 'Could not reach Ollama'
+					}
+				};
+			}
+		}
+
+		// External provider: we need a model to test against.
+		if (!out.model) {
+			return { test: { ok: false, detail: 'Fill in the model first.' } };
+		}
 		const assist = getLlmAssist(configFromForm(out, { aiApiKey: locals.workspace!.aiApiKey }));
 		const result = await assist.ping();
 		return { test: result };

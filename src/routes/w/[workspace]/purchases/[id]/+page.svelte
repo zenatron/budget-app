@@ -173,7 +173,7 @@
 								holdDays = 3;
 								holdSheet = 'extend';
 							}}
-							class="btn btn-ghost flex-1 py-2.5 text-[14px]">A few more days</button
+							class="btn btn-ghost flex-1 py-2.5 text-[14px]">Wait more</button
 						>
 					{:else}
 						<form
@@ -806,7 +806,7 @@
 		>
 			<div class="flex items-center justify-between">
 				<h2 class="font-[family-name:var(--font-display)] text-[22px]" style="color: var(--ink)">
-					{holdSheet === 'extend' ? 'A few more days' : 'Sleep on it'}
+					{holdSheet === 'extend' ? 'Wait more' : 'Sleep on it'}
 				</h2>
 				<button
 					onclick={() => (holdSheet = null)}

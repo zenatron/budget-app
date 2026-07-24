@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import {
 		Antenna,
+		Bell,
 		Check,
 		ChevronLeft,
 		CircleAlert,
@@ -10,6 +11,7 @@
 		Route,
 		Smartphone
 	} from '@lucide/svelte';
+	import Toggle from '$lib/components/Toggle.svelte';
 
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
@@ -305,57 +307,77 @@
 		</form>
 	</section>
 
-	{#if data.intelligenceEnabled}
-		<section class="card p-5">
+	<section class="card p-5">
+		<h2
+			class="flex items-center gap-2 font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
+			style="color: var(--ink)"
+		>
+			<Newspaper class="h-4 w-4" style="color: var(--ws-accent)" /> Spending summary
+			<span
+				class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
+				style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
+				>Alpha</span
+			>
+		</h2>
+		<p class="mt-1 text-[13px]" style="color: var(--ink-3)">
+			A short digest of your spending — total, top category and net — sent to your notifications.
+			It’s your own view, so sealed purchases stay hidden.
+		</p>
+		<form
+			method="POST"
+			action="?/summary"
+			use:submit={{ success: 'Summary updated' }}
+			class="mt-3.5"
+		>
+			<!--
+				Segmented control, not the checkbox matrix: this is a frequency, not a
+				per-channel on/off, and it delivers wherever your other notifications go.
+			-->
+			<div class="inline-flex rounded-[12px] p-1" style="background: var(--surface-2)">
+				{#each [{ v: 'off', l: 'Off' }, { v: 'weekly', l: 'Weekly' }, { v: 'monthly', l: 'Monthly' }] as opt (opt.v)}
+					{@const active = data.summaryCadence === opt.v}
+					<button
+						name="cadence"
+						value={opt.v}
+						class="press rounded-[9px] px-4 py-1.5 text-[14px] font-semibold transition-colors"
+						style="color: {active ? 'var(--ink)' : 'var(--ink-3)'}; background: {active
+							? 'var(--surface)'
+							: 'transparent'}; box-shadow: {active
+							? 'var(--shadow-card), inset 0 0 0 0.5px var(--hairline)'
+							: 'none'}"
+					>
+						{opt.l}
+					</button>
+				{/each}
+			</div>
+			{#if data.summaryCadence !== 'off'}
+				<p class="mt-2.5 text-[12px]" style="color: var(--ink-3)">
+					Arrives at the start of each {data.summaryCadence === 'weekly' ? 'week' : 'month'}, for
+					the one just ended.
+				</p>
+			{/if}
+		</form>
+	</section>
+
+	<section class="card flex items-start justify-between gap-4 p-4">
+		<div>
 			<h2
 				class="flex items-center gap-2 font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
 				style="color: var(--ink)"
 			>
-				<Newspaper class="h-4 w-4" style="color: var(--ws-accent)" /> Spending summary
-				<span
-					class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
-					style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
-					>Alpha</span
-				>
+				<Bell class="h-4 w-4" style="color: var(--ws-accent)" /> Safe-to-Spend alerts
 			</h2>
-			<p class="mt-1 text-[13px]" style="color: var(--ink-3)">
-				A short digest of your spending — total, top category and net — sent to your notifications.
-				It’s your own view, so sealed purchases stay hidden.
+			<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
+				Notify each member when their month tips into "tight" or "over", computed from their own
+				seal-aware view.
 			</p>
-			<form
-				method="POST"
-				action="?/summary"
-				use:submit={{ success: 'Summary updated' }}
-				class="mt-3.5"
-			>
-				<!--
-					Segmented control, not the checkbox matrix: this is a frequency, not a
-					per-channel on/off, and it delivers wherever your other notifications go.
-				-->
-				<div class="inline-flex rounded-[12px] p-1" style="background: var(--surface-2)">
-					{#each [{ v: 'off', l: 'Off' }, { v: 'weekly', l: 'Weekly' }, { v: 'monthly', l: 'Monthly' }] as opt (opt.v)}
-						{@const active = data.summaryCadence === opt.v}
-						<button
-							name="cadence"
-							value={opt.v}
-							class="press rounded-[9px] px-4 py-1.5 text-[14px] font-semibold transition-colors"
-							style="color: {active ? 'var(--ink)' : 'var(--ink-3)'}; background: {active
-								? 'var(--surface)'
-								: 'transparent'}; box-shadow: {active
-								? 'var(--shadow-card), inset 0 0 0 0.5px var(--hairline)'
-								: 'none'}"
-						>
-							{opt.l}
-						</button>
-					{/each}
-				</div>
-				{#if data.summaryCadence !== 'off'}
-					<p class="mt-2.5 text-[12px]" style="color: var(--ink-3)">
-						Arrives at the start of each {data.summaryCadence === 'weekly' ? 'week' : 'month'}, for
-						the one just ended.
-					</p>
-				{/if}
-			</form>
-		</section>
-	{/if}
+		</div>
+		{#if data.isOwner}
+			<Toggle
+				on={data.safeToSpendAlertsEnabled}
+				flag="safeToSpendAlertsEnabled"
+				label="Toggle Safe-to-Spend alerts"
+			/>
+		{/if}
+	</section>
 </div>

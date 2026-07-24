@@ -39,6 +39,7 @@
 	] as const;
 
 	const testResult = $derived(form && 'test' in form ? form.test : null);
+	const availableModels = $derived(testResult?.models ?? []);
 </script>
 
 <div class="mx-auto max-w-lg space-y-4">
@@ -51,31 +52,26 @@
 	</a>
 	<h1 class="px-1 text-[28px]">Harmony</h1>
 
-	<!-- The deterministic suite: master switch + the features it powers. -->
-	<div class="card flex items-start justify-between gap-4 p-4">
-		<div>
-			<p class="flex items-center gap-1.5 text-[15px] font-medium" style="color: var(--ink)">
-				<Sparkles class="h-4 w-4 shrink-0" style="color: var(--ws-accent)" />
-				Harmony
-				<span
-					class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
-					style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
-					>Alpha</span
-				>
-			</p>
-			<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
-				Works out what's genuinely safe to spend this month, and answers questions about your money
-				in plain language.
-			</p>
-			<a
-				href="/w/{slug}/settings/help?s=safe-to-spend"
-				class="press mt-1 inline-block text-[13px] font-medium"
-				style="color: var(--ws-accent)">How it works</a
+	<!-- The deterministic suite: always on. -->
+	<div class="card p-4">
+		<p class="flex items-center gap-1.5 text-[15px] font-medium" style="color: var(--ink)">
+			<Sparkles class="h-4 w-4 shrink-0" style="color: var(--ws-accent)" />
+			Harmony Intelligence
+			<span
+				class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
+				style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
+				>Alpha</span
 			>
-		</div>
-		{#if owner}
-			<Toggle on={data.intelligenceEnabled} flag="intelligenceEnabled" label="Toggle Harmony" />
-		{/if}
+		</p>
+		<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
+			Works out what's genuinely safe to spend this month, and answers questions about your money in
+			plain language.
+		</p>
+		<a
+			href="/w/{slug}/settings/help?s=safe-to-spend"
+			class="press mt-1 inline-block text-[13px] font-medium"
+			style="color: var(--ws-accent)">How it works</a
+		>
 	</div>
 
 	<div class="card flex items-center justify-between gap-4 p-4">
@@ -162,7 +158,11 @@
 		</p>
 	</section>
 
-	<form method="POST" action="?/save" use:submit={{ success: 'Intelligence settings saved' }}>
+	<form
+		method="POST"
+		action="?/save"
+		use:submit={{ success: 'Intelligence settings saved', reset: false }}
+	>
 		<section class="card space-y-4 p-5">
 			<!-- Mode -->
 			<div>
@@ -171,7 +171,7 @@
 					class="grid grid-cols-3 gap-1 rounded-xl p-1"
 					style="background: color-mix(in oklab, var(--ink) 5%, transparent)"
 				>
-					{#each MODES as m}
+					{#each MODES as m (m.value)}
 						<label
 							class="press cursor-pointer rounded-lg py-2 text-center text-[14px] font-medium"
 							style="background: {mode === m.value
@@ -220,14 +220,29 @@
 				</div>
 				<div>
 					<label class="section-label" for="model">Model</label>
-					<input
-						id="model"
-						name="model"
-						bind:value={model}
-						disabled={!owner}
-						placeholder={mode === 'local' ? 'llama3.2' : 'gpt-4o-mini'}
-						class="field mt-1 font-mono text-[15px]"
-					/>
+					{#if mode === 'local' && availableModels.length > 0}
+						<select
+							id="model"
+							name="model"
+							bind:value={model}
+							disabled={!owner}
+							class="field mt-1 font-mono text-[15px]"
+						>
+							<option value="" disabled selected={!model}>Select a model</option>
+							{#each availableModels as m (m)}
+								<option value={m} selected={m === model}>{m}</option>
+							{/each}
+						</select>
+					{:else}
+						<input
+							id="model"
+							name="model"
+							bind:value={model}
+							disabled={!owner}
+							placeholder={mode === 'local' ? 'Connect to list models' : 'gpt-4o-mini'}
+							class="field mt-1 font-mono text-[15px]"
+						/>
+					{/if}
 				</div>
 				{#if mode === 'external'}
 					<div>
@@ -266,9 +281,9 @@
 				<div class="flex items-center gap-2 pt-1">
 					<button class="btn btn-accent px-4 py-2 text-[14px]">Save</button>
 					{#if mode !== 'off'}
-						<button formaction="?/test" class="btn btn-ghost px-4 py-2 text-[14px]"
-							>Test connection</button
-						>
+						<button formaction="?/test" class="btn btn-ghost px-4 py-2 text-[14px]">
+							{mode === 'local' ? 'Connect' : 'Test connection'}
+						</button>
 					{/if}
 				</div>
 			{:else}

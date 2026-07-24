@@ -13,7 +13,9 @@
 		submit,
 		pickExample,
 		fillExample,
-		handleKeydown
+		handleKeydown,
+		executeProposal,
+		type Proposal
 	} from '$lib/command-palette-state.svelte';
 
 	let { currency = 'USD' }: { currency?: string } = $props();
@@ -25,6 +27,22 @@
 	// Completing a half-typed command, versus offering cold-start examples.
 	const completing = $derived(reading.suggestions.length > 0 && paletteQuery.value.length > 0);
 	const prompts = $derived(completing ? reading.suggestions : EXAMPLE_PROMPTS);
+
+	function proposalSummary(p: Proposal): string {
+		if (p.intent === 'create_bucket') {
+			return `Create bucket “${p.name}” — ${formatMinor(BigInt(p.amountMinor), currency)}/mo on day ${p.dayOfMonth}`;
+		}
+		if (p.intent === 'create_income') {
+			return `Add income “${p.source}” — ${formatMinor(BigInt(p.amountMinor), currency)}${p.monthly ? ` monthly on day ${p.dayOfMonth}` : ' once'}`;
+		}
+		return `Open ${p.label}`;
+	}
+
+	function proposalButton(p: Proposal): string {
+		if (p.intent === 'create_bucket') return 'Create bucket';
+		if (p.intent === 'create_income') return 'Add income';
+		return 'Open';
+	}
 </script>
 
 <div class="fixed inset-0 z-50" style="background: var(--scrim)" use:dismiss={close}></div>
@@ -122,32 +140,67 @@
 		<div class="max-h-[50vh] overflow-y-auto">
 			{#if paletteResponse.value}
 				<div class="p-4">
-					<p class="text-[16px] leading-relaxed" style="color: var(--ink)">
-						{paletteResponse.value.answer}
-					</p>
-					{#if paletteResponse.value.detail && paletteResponse.value.detail.length > 0}
-						<div class="mt-3 space-y-2">
-							{#each paletteResponse.value.detail as d (d.label)}
-								<div class="flex items-center justify-between text-[14px]">
-									<span style="color: var(--ink-2)">{d.label}</span>
-									<span class="num font-medium" style="color: var(--ink)"
-										>{formatMinor(d.amountMinor, currency)}</span
-									>
-								</div>
-							{/each}
+					{#if paletteResponse.value.propose}
+						<p
+							class="text-[13px] font-medium tracking-[0.06em] uppercase"
+							style="color: var(--ink-3)"
+						>
+							Ready to confirm
+						</p>
+						<p class="mt-1 text-[16px] leading-relaxed" style="color: var(--ink)">
+							{proposalSummary(paletteResponse.value.propose)}
+						</p>
+						<p class="mt-1 text-[13px] leading-relaxed" style="color: var(--ink-3)">
+							{paletteResponse.value.answer}
+						</p>
+						<div class="mt-3 flex items-center gap-2">
+							<button
+								onclick={() =>
+									paletteResponse.value?.propose && executeProposal(paletteResponse.value.propose)}
+								disabled={paletteLoading.value}
+								class="btn btn-accent px-4 py-2 text-[14px]"
+							>
+								{paletteLoading.value ? '…' : proposalButton(paletteResponse.value.propose)}
+							</button>
+							<button
+								onclick={() => {
+									paletteQuery.value = '';
+									paletteResponse.value = null;
+									paletteInputEl.value?.focus();
+								}}
+								class="btn btn-ghost px-4 py-2 text-[14px]"
+							>
+								Cancel
+							</button>
 						</div>
+					{:else}
+						<p class="text-[16px] leading-relaxed" style="color: var(--ink)">
+							{paletteResponse.value.answer}
+						</p>
+						{#if paletteResponse.value.detail && paletteResponse.value.detail.length > 0}
+							<div class="mt-3 space-y-2">
+								{#each paletteResponse.value.detail as d (d.label)}
+									<div class="flex items-center justify-between text-[14px]">
+										<span style="color: var(--ink-2)">{d.label}</span>
+										<span class="num font-medium" style="color: var(--ink)"
+											>{formatMinor(BigInt(d.amountMinor), currency)}</span
+										>
+									</div>
+								{/each}
+							</div>
+						{/if}
+						<button
+							onclick={() => {
+								paletteQuery.value = '';
+								paletteResponse.value = null;
+								paletteInputEl.value?.focus();
+							}}
+							class="mt-3 text-[13px] font-medium"
+							style="color: var(--ws-accent)"
+						>
+							Ask something else
+						</button>
 					{/if}
-					<button
-						onclick={() => {
-							paletteQuery.value = '';
-							paletteResponse.value = null;
-							paletteInputEl.value?.focus();
-						}}
-						class="mt-3 text-[13px] font-medium"
-						style="color: var(--ws-accent)"
-					>
-						Ask something else
-					</button>
 				</div>
 			{:else if !reading.ready}
 				<div class="p-4">

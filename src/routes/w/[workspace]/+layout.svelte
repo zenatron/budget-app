@@ -198,9 +198,7 @@
 					/>
 				</button>
 				<div class="flex items-center gap-2">
-					{#if data.workspace.intelligenceEnabled}
-						<CommandPalette />
-					{/if}
+					<CommandPalette />
 					<a
 						href="/w/{slug}"
 						class="press flex h-8 w-8 items-center justify-center rounded-full"

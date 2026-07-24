@@ -13,6 +13,12 @@ export interface SubmitOptions {
 	success?: string;
 	/** Runs after a successful submit; use for page-local state resets. */
 	onSuccess?: () => void;
+	/**
+	 * Reset the form to its initial values after the action completes. Defaults
+	 * to true; set to false for settings-style forms where the user should keep
+	 * what they typed even after a validation error or successful save.
+	 */
+	reset?: boolean;
 }
 
 /**
@@ -69,16 +75,17 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 				return;
 			}
 			setPending(false);
+			const reset = opts.reset ?? true;
 			if (result.type === 'success') {
 				if (opts.success) toastSuccess(opts.success);
 				opts.onSuccess?.();
-				await update();
+				await update({ reset });
 			} else if (result.type === 'failure') {
 				// The page renders `form.error` inline; only speak up when it can't.
 				if (!(result.data as { error?: string } | undefined)?.error) {
 					toastError('Something went wrong. Try again.');
 				}
-				await update();
+				await update({ reset });
 			} else {
 				// result.type === 'error': let SvelteKit render its error page.
 				toastError(result.error?.message ?? 'Something went wrong. Try again.');

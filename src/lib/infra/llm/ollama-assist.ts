@@ -1,6 +1,13 @@
 import type { LlmAssist } from '$lib/ports/llm-assist';
 import { constrainToChoice, sanitizeLabel } from '$lib/domain/intelligence/constrain';
-import { baseUrl, choiceMessages, fetchWithTimeout, labelMessages } from './prompt';
+import {
+	baseUrl,
+	choiceMessages,
+	fetchWithTimeout,
+	labelMessages,
+	parseCommandMessages
+} from './prompt';
+import { parseActionJson } from './parse-action';
 
 /**
  * Local assist over the Ollama HTTP API. Everything stays on the box the
@@ -12,17 +19,22 @@ import { baseUrl, choiceMessages, fetchWithTimeout, labelMessages } from './prom
 export function ollamaAssist(cfg: { endpoint: string; model: string }): LlmAssist {
 	const base = baseUrl(cfg.endpoint);
 
-	async function complete(messages: { role: string; content: string }[]): Promise<string | null> {
+	async function complete(
+		messages: { role: string; content: string }[],
+		formatJson = false
+	): Promise<string | null> {
 		try {
+			const body: Record<string, unknown> = {
+				model: cfg.model,
+				messages,
+				stream: false,
+				options: { temperature: 0 }
+			};
+			if (formatJson) body.format = 'json';
 			const res = await fetchWithTimeout(`${base}/api/chat`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					model: cfg.model,
-					messages,
-					stream: false,
-					options: { temperature: 0 }
-				})
+				body: JSON.stringify(body)
 			});
 			if (!res.ok) return null;
 			const data = await res.json();
@@ -58,6 +70,10 @@ export function ollamaAssist(cfg: { endpoint: string; model: string }): LlmAssis
 		async cleanLabel(req) {
 			const raw = await complete(labelMessages(req));
 			return raw === null ? null : sanitizeLabel(raw, req.maxLen);
+		},
+		async parseCommand({ query }) {
+			const raw = await complete(parseCommandMessages(query), true);
+			return raw === null ? null : parseActionJson(raw);
 		}
 	};
 }

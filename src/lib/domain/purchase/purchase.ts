@@ -365,7 +365,7 @@ export function extendHold(
 	}
 	return {
 		purchase: { ...p, heldUntil: until },
-		event: event(p, 'held', actorMemberId, now, 'a few more days', null)
+		event: event(p, 'held', actorMemberId, now, 'wait more', null)
 	};
 }
 
