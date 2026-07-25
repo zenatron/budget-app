@@ -85,11 +85,12 @@ export async function processUpload(input: Uint8Array): Promise<ProcessedImage> 
 		throw new ImageValidationError('Could not decode this image');
 	}
 }
-
-/** Max bytes for a user-uploaded avatar (2 MB). */
-export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+/** Max bytes for a user-uploaded avatar (10 MB). */
+export const MAX_AVATAR_BYTES = 10 * 1024 * 1024;
 const AVATAR_EDGE = 256;
 const AVATAR_QUALITY = 72;
+/** Decode cap: a 10 MB file can easily be a 20 MP phone photo. */
+const AVATAR_MAX_INPUT_PIXELS = 20_000_000;
 
 /**
  * Process a profile-picture upload into a single small WebP derivative.  Bounds
@@ -98,14 +99,13 @@ const AVATAR_QUALITY = 72;
  */
 export async function processAvatar(input: Uint8Array): Promise<Derivative> {
 	if (input.byteLength > MAX_AVATAR_BYTES) {
-		throw new ImageValidationError('Photo is too large (2 MB max)');
+		throw new ImageValidationError('Photo is too large (10 MB max)');
 	}
 	if (sniffFormat(input) === null) {
 		throw new ImageValidationError('Not a supported image (JPEG, PNG, or WebP)');
 	}
-	const limit = AVATAR_EDGE * AVATAR_EDGE * 8; // generous decode cap for a small resize target
 	try {
-		const out = await sharp(input, { limitInputPixels: limit })
+		const out = await sharp(input, { limitInputPixels: AVATAR_MAX_INPUT_PIXELS })
 			.rotate()
 			.resize(AVATAR_EDGE, AVATAR_EDGE, { fit: 'inside', withoutEnlargement: true })
 			.webp({ quality: AVATAR_QUALITY })

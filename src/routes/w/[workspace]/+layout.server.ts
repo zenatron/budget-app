@@ -7,7 +7,12 @@ export const load: LayoutServerLoad = async ({ locals, params }) => {
 	const { user, workspace, member } = locals;
 	const memberships = await listWorkspacesForUser(getDb(), user!.id);
 	return {
-		user: { id: user!.id, displayName: user!.displayName, avatarBlobId: user!.avatarBlobId },
+		user: {
+			id: user!.id,
+			displayName: user!.displayName,
+			avatarBlobId: user!.avatarBlobId,
+			avatarSource: user!.avatarSource
+		},
 		workspace: {
 			id: workspace!.id,
 			// From params, not locals: reading the route param is what tells

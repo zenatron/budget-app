@@ -72,7 +72,14 @@
 		<form method="POST" action="?/avatar" enctype="multipart/form-data" use:submit>
 			<label class="press relative block cursor-pointer">
 				{#if data.user.avatarBlobId}
-					<img src="/w/{slug}/avatar" alt="" class="h-12 w-12 rounded-full object-cover" />
+					<!-- ?v= is the blob id, and blobs are content-addressed: replacing
+					     the photo changes the URL, so no stale cached photo can stick. -->
+					<img
+						src="/w/{slug}/avatar?v={data.user.avatarBlobId}"
+						alt=""
+						class="h-12 w-12 rounded-full object-cover"
+						style="box-shadow: inset 0 0 0 0.5px var(--hairline)"
+					/>
 				{:else}
 					<div
 						class="flex h-12 w-12 items-center justify-center rounded-full font-[family-name:var(--font-display)] text-[22px] font-semibold text-white"
@@ -108,6 +115,9 @@
 			<p class="text-[13px] capitalize" style="color: var(--ink-3)">
 				{data.member.role} · {data.workspace.name}
 			</p>
+			{#if form?.section === 'avatar' && form.error}
+				<p class="mt-0.5 text-[13px]" style="color: var(--deny)">{form.error}</p>
+			{/if}
 		</div>
 		<form method="POST" action="/auth/logout">
 			<button class="btn btn-ghost px-4 py-2 text-[14px]">Sign out</button>
@@ -245,7 +255,7 @@
 		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
 	</a>
 
-	{#if form?.error}
+	{#if form?.error && form?.section !== 'avatar'}
 		<div
 			class="card p-4 text-[15px]"
 			style="color: var(--deny); background: color-mix(in oklab, var(--deny) 12%, var(--surface))"

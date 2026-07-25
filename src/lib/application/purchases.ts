@@ -43,6 +43,7 @@ import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 import type { Notifier } from '$lib/ports/notifier';
 import { announcePurchaseChange } from '$lib/application/notify-dispatch';
+import { checkBudgetsForPurchase } from '$lib/application/budget-alerts';
 
 export class PurchaseNotFoundError extends Error {
 	constructor() {
@@ -264,6 +265,13 @@ export async function submitPurchase(
 	});
 	// After commit only — a rolled-back purchase must never notify anyone.
 	await announcePurchaseChange(db, deps.notifier, result.purchase, result.event);
+	if (result.purchase.state === 'completed' && result.purchase.completedAt) {
+		await checkBudgetsForPurchase(db, deps, {
+			workspaceId: result.purchase.workspaceId,
+			categoryId: result.purchase.categoryId,
+			completedAt: result.purchase.completedAt
+		});
+	}
 	return { purchaseId: result.purchase.id };
 }
 
@@ -646,6 +654,13 @@ async function withPurchase(
 		return r;
 	});
 	await announcePurchaseChange(db, deps.notifier, result.purchase, result.event);
+	if (result.purchase.state === 'completed' && result.purchase.completedAt) {
+		await checkBudgetsForPurchase(db, deps, {
+			workspaceId: result.purchase.workspaceId,
+			categoryId: result.purchase.categoryId,
+			completedAt: result.purchase.completedAt
+		});
+	}
 }
 
 export async function approvePurchase(db: Db, deps: Deps, scope: Scope, purchaseId: string) {

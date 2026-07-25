@@ -5,6 +5,7 @@ import { getDb } from '$lib/server/db';
 import { upsertUserFromOidc } from '$lib/server/repo/users';
 import { processAvatar } from '$lib/infra/images/process';
 import { getBlobStore } from '$lib/server/blobs';
+import { getEnv } from '$lib/server/env';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { user } from '$lib/server/db/schema';
@@ -22,31 +23,59 @@ export const GET: RequestHandler = async ({ url, cookies, request, getClientAddr
 		error(400, 'Login flow expired — please try again');
 	}
 
-	let identity;
+	let tokens;
 	try {
-		identity = await finishLogin(url, { state, nonce, codeVerifier });
+		tokens = await finishLogin(url, { state, nonce, codeVerifier });
 	} catch (e) {
 		console.log(
 			JSON.stringify({ level: 'warn', msg: 'oidc: callback rejected', err: (e as Error).message })
 		);
 		error(400, 'Login failed — please try again');
 	}
+	const { identity, accessToken } = tokens;
 
 	const db = getDb();
 	const stored = await upsertUserFromOidc(db, { clock: systemClock, ids: uuidv7 }, identity);
 
-	// On first login (no avatar set yet), pull the profile picture from the IdP.
-	if (identity.picture && !stored.avatarBlobId) {
+	// Sync the profile picture from the IdP — but never over a photo the user
+	// uploaded themselves. PocketID's picture endpoint requires the access
+	// token; a bare fetch just 401s, which is why nothing ever landed. The
+	// outcome is logged: a silent catch makes "the picture never shows up"
+	// impossible to diagnose.
+	if (identity.picture && stored.avatarSource !== 'custom') {
 		try {
-			const res = await fetch(identity.picture);
-			if (res.ok) {
+			// The claim can be a relative path on some IdPs — anchor it to the issuer.
+			const picUrl = new URL(identity.picture, getEnv().POCKET_ID_ISSUER);
+			const res = await fetch(picUrl, {
+				headers: { authorization: `Bearer ${accessToken}` }
+			});
+			if (!res.ok) {
+				console.log(
+					JSON.stringify({
+						level: 'warn',
+						msg: 'oidc: profile picture fetch rejected',
+						status: res.status,
+						url: picUrl.origin + picUrl.pathname
+					})
+				);
+			} else {
 				const buf = new Uint8Array(await res.arrayBuffer());
 				const derivative = await processAvatar(buf);
-				const blob = await getBlobStore().put(derivative.data, '.webp');
-				await db.update(user).set({ avatarBlobId: blob.id }).where(eq(user.id, stored.id));
+				const blob = await getBlobStore().put(derivative.data, 'webp');
+				await db
+					.update(user)
+					.set({ avatarBlobId: blob.id, avatarSource: 'oidc' })
+					.where(eq(user.id, stored.id));
+				console.log(JSON.stringify({ level: 'info', msg: 'oidc: profile picture synced' }));
 			}
-		} catch {
-			// Picture couldn't be fetched — the user can upload one later.
+		} catch (e) {
+			console.log(
+				JSON.stringify({
+					level: 'warn',
+					msg: 'oidc: profile picture sync failed',
+					err: (e as Error).message
+				})
+			);
 		}
 	}
 

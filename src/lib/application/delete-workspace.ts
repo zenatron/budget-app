@@ -3,6 +3,7 @@ import type { Db } from '$lib/server/db';
 import {
 	approvalEvent,
 	budget,
+	budgetAlertLog,
 	bucket,
 	bucketTransaction,
 	category,
@@ -63,6 +64,7 @@ export async function deleteWorkspace(db: Db, workspaceId: string): Promise<void
 		await tx.delete(recurringRule).where(eq(recurringRule.workspaceId, workspaceId));
 		await tx.delete(income).where(eq(income.workspaceId, workspaceId));
 		await tx.delete(budget).where(eq(budget.workspaceId, workspaceId));
+		await tx.delete(budgetAlertLog).where(eq(budgetAlertLog.workspaceId, workspaceId));
 		await tx.delete(bucket).where(eq(bucket.workspaceId, workspaceId));
 		await tx.delete(category).where(eq(category.workspaceId, workspaceId));
 		await tx.delete(merchant).where(eq(merchant.workspaceId, workspaceId));

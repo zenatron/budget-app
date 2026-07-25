@@ -20,6 +20,7 @@ import postgres from 'postgres';
 import * as schema from '../src/lib/server/db/schema';
 import { parseRRule, nextOccurrence } from '../src/lib/domain/recurrence/rrule';
 import { deleteWorkspace } from '../src/lib/application/delete-workspace';
+import { EVENT_TYPES, CHANNELS } from '../src/lib/notification-events';
 import type { Db } from '../src/lib/server/db';
 
 // ── CLI args ──────────────────────────────────────────────────────────────
@@ -1418,24 +1419,15 @@ for (let m = 0; m < 24; m++) {
 }
 
 // ── Notification prefs (all enabled for each member) ──────────────────────
-const EVENT_TYPES = [
-	'purchase_pending',
-	'purchase_approved',
-	'purchase_denied',
-	'purchase_cancelled',
-	'purchase_completed',
-	'budget_alert',
-	'safe_to_spend',
-	'summary'
-];
-const CHANNELS = ['in_app', 'email'];
+// The app treats "no pref row" as enabled, so these rows are inert — but they
+// mirror the real catalogue from src/lib/notification-events.ts.
 for (const memberId of [charlieMem, danaMem, elliotMem]) {
 	for (const event of EVENT_TYPES) {
 		for (const channel of CHANNELS) {
 			await db.insert(schema.notificationPref).values({
 				workspaceMemberId: memberId,
-				eventType: event,
-				channel,
+				eventType: event.id,
+				channel: channel.id,
 				enabled: true
 			});
 		}

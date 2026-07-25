@@ -77,10 +77,17 @@ export interface OidcIdentity {
 	picture?: string;
 }
 
+export interface OidcTokens {
+	identity: OidcIdentity;
+	/** Bearer token for IdP API calls made during the login (e.g. the profile
+	 *  picture endpoint, which PocketID protects). Never stored. */
+	accessToken: string;
+}
+
 export async function finishLogin(
 	callbackUrl: URL,
 	checks: { state: string; nonce: string; codeVerifier: string }
-): Promise<OidcIdentity> {
+): Promise<OidcTokens> {
 	const config = await getOidcConfig();
 	const tokens = await oidc.authorizationCodeGrant(config, callbackUrl, {
 		pkceCodeVerifier: checks.codeVerifier,
@@ -100,5 +107,8 @@ export async function finishLogin(
 		typeof claims.picture === 'string' && claims.picture.length <= 2048
 			? claims.picture
 			: undefined;
-	return { subject: claims.sub, email, displayName, picture };
+	return {
+		identity: { subject: claims.sub, email, displayName, picture },
+		accessToken: tokens.access_token
+	};
 }

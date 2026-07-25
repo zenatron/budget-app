@@ -60,6 +60,9 @@ export const user = pgTable('app_user', {
 	email: text('email').notNull(),
 	displayName: text('display_name').notNull(),
 	avatarBlobId: text('avatar_blob_id'),
+	/** Where the avatar came from: 'oidc' (fetched from the IdP, refreshed on
+	 *  login) or 'custom' (user-uploaded — never overwritten by the IdP). */
+	avatarSource: text('avatar_source'),
 	isDeploymentAdmin: boolean('is_deployment_admin').notNull().default(false),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
 	lastLoginAt: timestamp('last_login_at', { withTimezone: true })
@@ -372,10 +375,35 @@ export const budget = pgTable(
 		period: budgetPeriod('period').notNull(),
 		amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
 		effectiveFrom: date('effective_from').notNull(),
-		effectiveTo: date('effective_to'),
-		lastAlertedAt: timestamp('last_alerted_at', { withTimezone: true })
+		effectiveTo: date('effective_to')
 	},
 	(t) => [index('budget_workspace_idx').on(t.workspaceId)]
+);
+
+/**
+ * One row per budget line per month: what the last alert said and when.
+ * Keyed by category, not budget row id — replacing a budget (setBudget
+ * deletes and reinserts the row) must not reset the cooldown or the alert
+ * would repeat after every edit.
+ */
+export const budgetAlertLog = pgTable(
+	'budget_alert_log',
+	{
+		id: uuid('id').primaryKey(),
+		workspaceId: uuid('workspace_id')
+			.notNull()
+			.references(() => workspace.id),
+		/** Category id, or 'overall' for the all-category budget. */
+		categoryKey: text('category_key').notNull(),
+		/** The month this alert state belongs to, 'YYYY-MM'. */
+		month: text('month').notNull(),
+		/** 'nearing' | 'exceeded'. */
+		level: text('level').notNull(),
+		/** Spend reported in the last alert; re-alerts measure growth from here. */
+		actualMinor: bigint('actual_minor', { mode: 'bigint' }).notNull(),
+		lastAlertedAt: timestamp('last_alerted_at', { withTimezone: true }).notNull()
+	},
+	(t) => [uniqueIndex('budget_alert_log_scope_idx').on(t.workspaceId, t.categoryKey, t.month)]
 );
 
 export const bucket = pgTable(

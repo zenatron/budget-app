@@ -76,30 +76,36 @@ export const actions: Actions = {
 
 	/**
 	 * Upload a profile picture. Replaces the current avatar blob with a
-	 * processed WebP derivative (256 px, lossy).
+	 * processed WebP derivative (256 px, lossy). Marked 'custom' so the IdP's
+	 * picture never silently overwrites it on a later login.
 	 */
 	avatar: async ({ locals, request }) => {
 		const form = await request.formData();
 		const file = form.get('photo');
 		if (!(file instanceof File) || file.size === 0) {
-			return fail(400, { error: 'Pick a photo first' });
+			return fail(400, { section: 'avatar', error: 'Pick a photo first' });
 		}
 		if (file.size > MAX_AVATAR_BYTES) {
 			return fail(400, {
+				section: 'avatar',
 				error: `Photo is too large (${(MAX_AVATAR_BYTES / 1024 / 1024).toFixed(0)} MB max)`
 			});
 		}
 		try {
 			const buf = new Uint8Array(await file.arrayBuffer());
 			const derivative = await processAvatar(buf);
-			const blob = await getBlobStore().put(derivative.data, '.webp');
-			await getDb().update(user).set({ avatarBlobId: blob.id }).where(eq(user.id, locals.user!.id));
-			return { ok: true, avatarBlobId: blob.id };
+			const blob = await getBlobStore().put(derivative.data, 'webp');
+			await getDb()
+				.update(user)
+				.set({ avatarBlobId: blob.id, avatarSource: 'custom' })
+				.where(eq(user.id, locals.user!.id));
+			return { ok: true };
 		} catch (e) {
-			if (e instanceof ImageValidationError) return fail(400, { error: e.message });
+			if (e instanceof ImageValidationError) {
+				return fail(400, { section: 'avatar', error: e.message });
+			}
 			throw e;
 		}
-		return { ok: true, avatarBlobId: locals.user!.avatarBlobId };
 	},
 
 	/**
