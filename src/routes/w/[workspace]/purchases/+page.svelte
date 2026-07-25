@@ -281,10 +281,12 @@
 		return days <= 1 ? 'tomorrow' : `${days} days left`;
 	}
 
-	// Harmony's Safe to Spend — the hero. Only on the unfiltered view: under a
-	// search it'd be noise, and the number is a whole-month figure regardless.
+	// Harmony's Safe to Spend — the hero. Always visible, even under search and
+	// filters: the number is a whole-month figure regardless, and hiding it made
+	// the whole page jump — on PWA the focused search field could be pulled out
+	// from under the user mid-typing.
 	const f = $derived(data.forecast);
-	const showForecast = $derived(!hasFilters && !activeQuery);
+	const showForecast = true;
 	// The runway waterfall unfolds in place: income minus everything already
 	// spent, promised, and set aside, arriving at the free number above.
 	let showRunway = $state(false);
@@ -539,7 +541,7 @@
 	{#if showForecast}
 		<!-- Harmony's headline: the money that's actually free this month. Live —
 		     pending reserves it, sleeping releases it, approving commits it. -->
-		<div class="card mb-5 p-5">
+		<div class="card mb-5 p-4">
 			<button
 				type="button"
 				onclick={() => (showRunway = !showRunway)}
@@ -550,7 +552,7 @@
 				<div class="min-w-0">
 					<p class="section-label">Safe to spend · through {monthEndLabel()}</p>
 					<div
-						class="mt-1.5 font-[family-name:var(--font-display)] text-[42px] leading-[0.95] font-semibold"
+						class="mt-1 font-[family-name:var(--font-display)] text-[32px] leading-[0.95] font-semibold"
 						style="color: {f.freeMinor < 0n ? 'var(--deny)' : 'var(--ink)'}"
 					>
 						<Money minor={f.freeMinor} currency={data.currency} />
@@ -565,7 +567,7 @@
 			</button>
 			<!-- Harmony's read: always present, the story above the numbers. -->
 			<p
-				class="mt-2 flex items-start gap-1.5 text-[13px] leading-snug"
+				class="mt-1.5 flex items-start gap-1.5 text-[13px] leading-snug"
 				style="color: {narrationColor}"
 			>
 				<Sparkles class="mt-[3px] h-3.5 w-3.5 shrink-0" />
@@ -623,7 +625,7 @@
 				</div>
 			{/if}
 			{#if !showRunway}
-				<p class="mt-2 text-[13px]" style="color: var(--ink-3)">
+				<p class="mt-1.5 text-[13px]" style="color: var(--ink-3)">
 					<span class="num">{formatMinor(f.breakdown.upcomingBillsMinor, data.currency)}</span>
 					bills ·
 					<span class="num">{formatMinor(f.breakdown.savingsMinor, data.currency)}</span> saved{f

@@ -356,8 +356,12 @@
 				No completed purchases in this period.
 			</p>
 		{:else}
+			<!-- The register renders two ways from the same data. Wide screens get a
+		     real table; narrow ones (PWA) get stacked rows — a five-column table
+		     at phone width read as cramped and cluttered. Same information in
+		     both: item, refund flag, merchant, date, category, member, amount. -->
 			<div
-				class="statement-table overflow-hidden rounded-2xl"
+				class="statement-table hidden overflow-hidden rounded-2xl md:block"
 				style="box-shadow: inset 0 0 0 1px var(--hairline)"
 			>
 				<table class="w-full text-left">
@@ -446,6 +450,55 @@
 						{/each}
 					</tbody>
 				</table>
+			</div>
+			<!-- Narrow (PWA): the same register as stacked rows. -->
+			<div
+				class="statement-table overflow-hidden rounded-2xl md:hidden"
+				style="box-shadow: inset 0 0 0 1px var(--hairline)"
+			>
+				{#each weekGroups as group (group.label)}
+					{@const groupTotal = group.tx.reduce((sum, tx) => sum + tx.amountMinor, 0n)}
+					<div
+						class="week-header flex items-baseline justify-between gap-2 px-4 py-2"
+						style="border-top: 1px solid var(--hairline); background: var(--surface)"
+					>
+						<p class="text-[12px] font-semibold tracking-wide" style="color: var(--ink-2)">
+							{group.label}
+							<span class="font-normal" style="color: var(--ink-3)">
+								({formatCalDate(group.from)} &ndash; {formatCalDate(group.to)})
+							</span>
+						</p>
+						<p class="num shrink-0 text-[12px] font-semibold" style="color: var(--ink)">
+							<Money minor={groupTotal} {currency} />
+						</p>
+					</div>
+					{#each group.tx as tx (tx.id)}
+						<div class="tx-row px-4 py-2.5" style="border-top: 1px solid var(--hairline)">
+							<div class="flex items-baseline justify-between gap-3">
+								<p class="min-w-0 text-[14px] font-medium" style="color: var(--ink)">
+									{tx.itemName}
+									{#if tx.isRefund}
+										<span
+											class="ml-1.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase"
+											style="background: var(--surface-2); color: var(--ink-3)">Refund</span
+										>
+									{/if}
+								</p>
+								<p class="num shrink-0 text-[14px] font-medium" style="color: var(--ink)">
+									<Money minor={tx.amountMinor} {currency} />
+								</p>
+							</div>
+							<p class="mt-0.5 text-[12px]" style="color: var(--ink-3)">
+								{formatDate(tx.completedAt ?? tx.requestedAt)} ·
+								{#if tx.categoryIcon}{tx.categoryIcon}
+								{/if}{tx.categoryName ?? 'Uncategorized'} · {tx.requesterName}
+							</p>
+							{#if tx.merchantName}
+								<p class="mt-0.5 text-[12px]" style="color: var(--ink-3)">{tx.merchantName}</p>
+							{/if}
+						</div>
+					{/each}
+				{/each}
 			</div>
 		{/if}
 	</section>

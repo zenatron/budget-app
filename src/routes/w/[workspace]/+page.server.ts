@@ -1,11 +1,13 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { and, eq, sql } from 'drizzle-orm';
 import { getDb } from '$lib/server/db';
-import { purchase, workspace } from '$lib/server/db/schema';
+import { purchase, user, workspace } from '$lib/server/db/schema';
 import { listMembers } from '$lib/server/repo/workspaces';
 import { visibleTo } from '$lib/server/repo/purchases';
 import { deleteWorkspace } from '$lib/application/delete-workspace';
 import { ACCENTS } from '$lib/accent';
+import { processAvatar, ImageValidationError, MAX_AVATAR_BYTES } from '$lib/infra/images/process';
+import { getBlobStore } from '$lib/server/blobs';
 import { systemClock } from '$lib/infra/time/system-clock';
 import pkg from '../../../../package.json';
 import type { Actions, PageServerLoad } from './$types';
@@ -70,6 +72,34 @@ export const actions: Actions = {
 			.set({ accentColor: raw })
 			.where(eq(workspace.id, locals.workspace!.id));
 		return { ok: true };
+	},
+
+	/**
+	 * Upload a profile picture. Replaces the current avatar blob with a
+	 * processed WebP derivative (256 px, lossy).
+	 */
+	avatar: async ({ locals, request }) => {
+		const form = await request.formData();
+		const file = form.get('photo');
+		if (!(file instanceof File) || file.size === 0) {
+			return fail(400, { error: 'Pick a photo first' });
+		}
+		if (file.size > MAX_AVATAR_BYTES) {
+			return fail(400, {
+				error: `Photo is too large (${(MAX_AVATAR_BYTES / 1024 / 1024).toFixed(0)} MB max)`
+			});
+		}
+		try {
+			const buf = new Uint8Array(await file.arrayBuffer());
+			const derivative = await processAvatar(buf);
+			const blob = await getBlobStore().put(derivative.data, '.webp');
+			await getDb().update(user).set({ avatarBlobId: blob.id }).where(eq(user.id, locals.user!.id));
+			return { ok: true, avatarBlobId: blob.id };
+		} catch (e) {
+			if (e instanceof ImageValidationError) return fail(400, { error: e.message });
+			throw e;
+		}
+		return { ok: true, avatarBlobId: locals.user!.avatarBlobId };
 	},
 
 	/**

@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import {
 		Bell,
+		Camera,
 		ChevronRight,
 		CircleHelp,
 		Monitor,
@@ -68,12 +69,38 @@
 
 	<!-- Profile -->
 	<div class="card flex items-center gap-3.5 p-4">
-		<div
-			class="flex h-12 w-12 items-center justify-center rounded-full font-[family-name:var(--font-display)] text-[22px] font-semibold text-white"
-			style="background: color-mix(in oklab, var(--ws-accent) 80%, black)"
-		>
-			{data.user.displayName.charAt(0)}
-		</div>
+		<form method="POST" action="?/avatar" enctype="multipart/form-data" use:submit>
+			<label class="press relative block cursor-pointer">
+				{#if data.user.avatarBlobId}
+					<img src="/w/{slug}/avatar" alt="" class="h-12 w-12 rounded-full object-cover" />
+				{:else}
+					<div
+						class="flex h-12 w-12 items-center justify-center rounded-full font-[family-name:var(--font-display)] text-[22px] font-semibold text-white"
+						style="background: color-mix(in oklab, var(--ws-accent) 80%, black)"
+					>
+						{data.user.displayName.charAt(0)}
+					</div>
+				{/if}
+				<span
+					class="absolute -right-0.5 -bottom-0.5 flex h-6 w-6 items-center justify-center rounded-full text-white"
+					style="background: color-mix(in oklab, var(--ink) 50%, transparent); box-shadow: 0 0 0 2px var(--paper)"
+					aria-label="Change photo"
+				>
+					<Camera class="h-3.5 w-3.5" />
+				</span>
+				<input
+					type="file"
+					name="photo"
+					accept="image/jpeg,image/png,image/webp"
+					onchange={(e) => {
+						const f = (e.target as HTMLInputElement).files?.[0];
+						if (f) (e.target as HTMLInputElement).form?.requestSubmit();
+					}}
+					class="sr-only"
+				/>
+			</label>
+			<button type="submit" class="sr-only">Upload</button>
+		</form>
 		<div class="min-w-0 flex-1">
 			<p class="truncate text-[17px] font-semibold" style="color: var(--ink)">
 				{data.user.displayName}

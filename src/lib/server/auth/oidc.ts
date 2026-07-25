@@ -73,6 +73,8 @@ export interface OidcIdentity {
 	subject: string;
 	email: string;
 	displayName: string;
+	/** Profile picture URL from the IdP, if any. */
+	picture?: string;
 }
 
 export async function finishLogin(
@@ -94,5 +96,9 @@ export async function finishLogin(
 		(typeof claims.preferred_username === 'string' && claims.preferred_username) ||
 		email ||
 		claims.sub;
-	return { subject: claims.sub, email, displayName };
+	const picture =
+		typeof claims.picture === 'string' && claims.picture.length <= 2048
+			? claims.picture
+			: undefined;
+	return { subject: claims.sub, email, displayName, picture };
 }

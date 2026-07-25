@@ -115,18 +115,53 @@
 	 * above the keyboard. You don't need the tab nav while typing anyway, so we
 	 * detect the keyboard via visualViewport (the gap between it and the layout
 	 * viewport) and translate the bar out of view until the keyboard closes.
+	 *
+	 * The measurement alone is not enough: iOS standalone PWAs intermittently
+	 * swallow the resize event that reports the keyboard *closing*, which left
+	 * keyboardOpen stuck true — the bar stayed hidden until the app was
+	 * restarted. So focus acts as ground truth: the keyboard can only be up
+	 * while a text field holds it, and any focus change, app return, or resize
+	 * re-evaluates from that. Missed events then self-heal instead of wedging.
 	 */
 	let keyboardOpen = $state(false);
 	$effect(() => {
 		const vv = window.visualViewport;
 		if (!vv) return;
+
+		const textFieldFocused = () => {
+			const el = document.activeElement;
+			return (
+				el instanceof HTMLElement &&
+				(el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+			);
+		};
+
 		const onChange = () => {
+			// No text field focused → the keyboard cannot be open, whatever a
+			// stale viewport measurement might still claim.
+			if (!textFieldFocused()) {
+				keyboardOpen = false;
+				return;
+			}
 			// A gap this large is a keyboard, not browser chrome (which is < ~100px).
 			keyboardOpen = window.innerHeight - vv.height > 140;
 		};
+
+		// activeElement can still point at the blurred field during focusout;
+		// wait a frame so the new target (or none) is reflected.
+		const onFocusOut = () => requestAnimationFrame(onChange);
+
 		vv.addEventListener('resize', onChange);
+		document.addEventListener('focusin', onChange);
+		document.addEventListener('focusout', onFocusOut);
+		document.addEventListener('visibilitychange', onChange);
 		onChange();
-		return () => vv.removeEventListener('resize', onChange);
+		return () => {
+			vv.removeEventListener('resize', onChange);
+			document.removeEventListener('focusin', onChange);
+			document.removeEventListener('focusout', onFocusOut);
+			document.removeEventListener('visibilitychange', onChange);
+		};
 	});
 
 	// Resolved from the workspaces list by URL slug, for the same reason as
