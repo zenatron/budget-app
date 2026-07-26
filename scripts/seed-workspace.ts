@@ -18,7 +18,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq, sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import * as schema from '../src/lib/server/db/schema';
-import { parseRRule, nextOccurrence } from '../src/lib/domain/recurrence/rrule';
+import { parseRRule, nextOccurrence, formatRRule } from '../src/lib/domain/recurrence/rrule';
 import { deleteWorkspace } from '../src/lib/application/delete-workspace';
 import { EVENT_TYPES, CHANNELS } from '../src/lib/notification-events';
 import type { Db } from '../src/lib/server/db';
@@ -1177,24 +1177,25 @@ const bucketSeeds: BucketSeed[] = [
 ];
 for (const b of bucketSeeds) {
 	const status = b.status ?? 'active';
-	let nextAccrualAt: Date | null = null;
-	if (status === 'active') {
-		const clamped = Math.min(b.day, 28);
-		nextAccrualAt = new Date(Date.UTC(todayCal.y, todayCal.m - 1, clamped, 12, 0, 0));
-	}
+	const rrule = formatRRule({
+		start: todayCal,
+		freq: 'monthly',
+		interval: 1,
+		byMonthDay: b.day
+	});
 	await db.insert(schema.bucket).values({
 		id: b.id,
 		workspaceId: wsId,
 		memberId: b.member,
 		name: b.name,
-		monthlyAmountMinor: b.monthly,
+		amountMinor: b.monthly,
 		currency: 'USD',
 		goalCapMinor: b.goal ?? null,
 		color: b.color ?? null,
 		icon: null,
 		status: status as any,
-		dayOfMonth: b.day,
-		nextAccrualAt,
+		rrule,
+		nextAccrualAt: status === 'active' ? nextOccurrenceOf(rrule) : null,
 		createdAt: now
 	});
 }

@@ -35,7 +35,8 @@ PostgreSQL 17 + Drizzle, auth via an external [Pocket ID](https://pocket-id.org)
   intervals, BYDAY, last-day-of-month) anchored by DTSTART, timezone-correct
   occurrence times, materialization sweep with capped catch-up after downtime,
   pause/resume/end, price changes (future occurrences only), auto-complete vs
-  confirm-at-actual-price. Recurring purchases bypass approval; sealing them is
+  confirm-at-actual-price, optional charging to a bucket (drawn down on
+  completion). Recurring purchases bypass approval; sealing them is
   impossible by construction.
 - ✅ **Phase 7 — Analytics**: computed on the fly, every query seal-filtered
   (`visibleTo`). Month vs last-month comparison, daily trend (hand-built SVG),
@@ -47,9 +48,10 @@ PostgreSQL 17 + Drizzle, auth via an external [Pocket ID](https://pocket-id.org)
 - ✅ **Phase 9 — Export & ops**: seal-aware CSV export (formula-injection safe),
   CSP with split `style-src-elem`/`style-src-attr`, per-IP rate limiting on auth
   and per-session on uploads, seed script, backup docs.
-- ✅ **Phase 10 — Buckets**: per-member sinking funds with a monthly accrual on a
-  chosen day-of-month, materialized by the sweep under a row lock (one accrual per
-  bucket per month, ever). Withdrawals and manual adjustments are owner-only.
+- ✅ **Phase 10 — Buckets**: per-member sinking funds accruing on the same RRULE
+  subset as recurring purchases (daily/weekly/monthly/yearly, intervals, BYDAY,
+  start dates, optional backfill), materialized by the sweep under a row lock
+  with capped catch-up. Withdrawals and manual adjustments are owner-only.
   Purchases can be charged to a bucket, optionally skipping approval per workspace.
 - ✅ **Phase 11 — Intelligence & command palette**: a local intent parser (no LLM)
   over spending questions, net-position questions, bucket creation, and navigation,

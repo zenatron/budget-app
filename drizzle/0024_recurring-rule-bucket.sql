@@ -1,0 +1,2 @@
+ALTER TABLE "recurring_rule" ADD COLUMN "bucket_id" uuid;--> statement-breakpoint
+ALTER TABLE "recurring_rule" ADD CONSTRAINT "recurring_rule_bucket_fk" FOREIGN KEY ("bucket_id") REFERENCES "public"."bucket"("id") ON DELETE no action ON UPDATE no action;

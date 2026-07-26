@@ -13,9 +13,9 @@ export interface CreateBucketCmd {
 	workspaceId: string;
 	memberId: string;
 	name: string;
-	monthlyAmountMinor: bigint;
+	amountMinor: bigint;
 	currency: string;
-	dayOfMonth: number;
+	rrule: string;
 	goalCapMinor?: bigint | null;
 	color?: string | null;
 	icon?: string | null;
@@ -34,6 +34,9 @@ export interface AddTransactionCmd {
 	currency: string;
 	type: BucketTransactionRow['type'];
 	note?: string | null;
+	/** When the transaction belongs — sweep accruals are dated at their
+	 *  occurrence, not at the moment the sweep happened to run. */
+	at?: Date;
 }
 
 export async function createBucket(
@@ -48,9 +51,9 @@ export async function createBucket(
 		workspaceId: cmd.workspaceId,
 		memberId: cmd.memberId,
 		name: cmd.name,
-		monthlyAmountMinor: cmd.monthlyAmountMinor,
+		amountMinor: cmd.amountMinor,
 		currency: cmd.currency,
-		dayOfMonth: cmd.dayOfMonth,
+		rrule: cmd.rrule,
 		goalCapMinor: cmd.goalCapMinor ?? null,
 		color: cmd.color ?? null,
 		icon: cmd.icon ?? null,
@@ -99,8 +102,9 @@ export async function loadBucket(
 
 export interface UpdateBucketCmd {
 	name?: string;
-	monthlyAmountMinor?: bigint;
-	dayOfMonth?: number;
+	amountMinor?: bigint;
+	rrule?: string;
+	nextAccrualAt?: Date | null;
 	goalCapMinor?: bigint | null;
 	color?: string | null;
 	icon?: string | null;
@@ -131,9 +135,9 @@ export async function updateBucket(
 
 	const updates: Record<string, unknown> = {};
 	if (changes.name !== undefined) updates.name = changes.name;
-	if (changes.monthlyAmountMinor !== undefined)
-		updates.monthlyAmountMinor = changes.monthlyAmountMinor;
-	if (changes.dayOfMonth !== undefined) updates.dayOfMonth = changes.dayOfMonth;
+	if (changes.amountMinor !== undefined) updates.amountMinor = changes.amountMinor;
+	if (changes.rrule !== undefined) updates.rrule = changes.rrule;
+	if (changes.nextAccrualAt !== undefined) updates.nextAccrualAt = changes.nextAccrualAt;
 	if (changes.goalCapMinor !== undefined) updates.goalCapMinor = changes.goalCapMinor;
 	if (changes.color !== undefined) updates.color = changes.color;
 	if (changes.icon !== undefined) updates.icon = changes.icon;
@@ -156,15 +160,20 @@ export async function pauseBucket(
 	await db.update(bucket).set({ status: 'paused' }).where(eq(bucket.id, bucketId));
 }
 
+/**
+ * Resuming skips anything missed while paused — the caller passes the next
+ * future occurrence so the sweep doesn't catch up the paused gap.
+ */
 export async function resumeBucket(
 	db: Db,
 	scope: { workspaceId: string; memberId: string },
-	bucketId: string
+	bucketId: string,
+	nextAccrualAt: Date
 ) {
 	const b = await loadOwnBucket(db, scope, bucketId);
 	if (!b) throw new Error('Bucket not found');
 	if (b.status !== 'paused') throw new Error('Only paused buckets can be resumed');
-	await db.update(bucket).set({ status: 'active' }).where(eq(bucket.id, bucketId));
+	await db.update(bucket).set({ status: 'active', nextAccrualAt }).where(eq(bucket.id, bucketId));
 }
 
 export async function archiveBucket(
@@ -184,7 +193,6 @@ export async function addTransaction(
 	cmd: AddTransactionCmd
 ): Promise<BucketTransactionRow> {
 	const id = deps.ids.newId();
-	const now = deps.clock.now();
 	await db.insert(bucketTransaction).values({
 		id,
 		bucketId: cmd.bucketId,
@@ -192,7 +200,7 @@ export async function addTransaction(
 		currency: cmd.currency,
 		type: cmd.type,
 		note: cmd.note ?? null,
-		createdAt: now
+		createdAt: cmd.at ?? deps.clock.now()
 	});
 	const [row] = await db
 		.select()
@@ -200,25 +208,6 @@ export async function addTransaction(
 		.where(eq(bucketTransaction.id, id))
 		.limit(1);
 	return row!;
-}
-
-export async function hasAccrualForMonth(
-	db: Db,
-	bucketId: string,
-	year: number,
-	month: number
-): Promise<boolean> {
-	const rows = await db
-		.select({ count: sql<number>`count(*)::int` })
-		.from(bucketTransaction)
-		.where(
-			and(
-				eq(bucketTransaction.bucketId, bucketId),
-				eq(bucketTransaction.type, 'accrual'),
-				sql`extract(year from ${bucketTransaction.createdAt}) = ${year} and extract(month from ${bucketTransaction.createdAt}) = ${month}`
-			)
-		);
-	return (rows[0]?.count ?? 0) > 0;
 }
 
 /** Net balance across every bucket — what's actually on hand right now. */
@@ -271,32 +260,4 @@ export async function savingsInPeriod(
 			)
 		);
 	return BigInt(rows[0]?.total ?? '0');
-}
-
-/**
- * Which of these buckets have already taken their accrual for the given month.
- * One query rather than `hasAccrualForMonth` per bucket — the list needs this
- * for every row at once.
- *
- * Matches the sweep's own definition of "this month" (extract on created_at) so
- * the date shown can't disagree with the date the sweep acts on.
- */
-export async function bucketsAccruedInMonth(
-	db: Db,
-	workspaceId: string,
-	year: number,
-	month: number
-): Promise<Set<string>> {
-	const rows = await db
-		.selectDistinct({ bucketId: bucketTransaction.bucketId })
-		.from(bucketTransaction)
-		.innerJoin(bucket, eq(bucketTransaction.bucketId, bucket.id))
-		.where(
-			and(
-				eq(bucket.workspaceId, workspaceId),
-				eq(bucketTransaction.type, 'accrual'),
-				sql`extract(year from ${bucketTransaction.createdAt}) = ${year} and extract(month from ${bucketTransaction.createdAt}) = ${month}`
-			)
-		);
-	return new Set(rows.map((r) => r.bucketId));
 }

@@ -64,6 +64,31 @@ interface Scope {
 	memberId: string;
 }
 
+/** Find-or-create by normalized name — merchants are per-workspace, case-insensitive. */
+async function findOrCreateMerchant(
+	tx: Db,
+	deps: Deps,
+	workspaceId: string,
+	name: string
+): Promise<string | null> {
+	const normalized = name.trim().toLowerCase().replace(/\s+/g, ' ');
+	if (normalized.length === 0) return null;
+	const [existing] = await tx
+		.select({ id: merchant.id })
+		.from(merchant)
+		.where(and(eq(merchant.workspaceId, workspaceId), eq(merchant.normalizedName, normalized)))
+		.limit(1);
+	if (existing) return existing.id;
+	const id = deps.ids.newId();
+	await tx.insert(merchant).values({
+		id,
+		workspaceId,
+		name: name.trim(),
+		normalizedName: normalized
+	});
+	return id;
+}
+
 export interface SubmitPurchaseCmd {
 	itemName: string;
 	amount: Money;
@@ -110,33 +135,9 @@ export async function submitPurchase(
 			throw new PurchaseStateError('Amount must be positive');
 		}
 
-		let merchantId: string | null = null;
-		if (cmd.merchantName) {
-			const normalized = cmd.merchantName.trim().toLowerCase().replace(/\s+/g, ' ');
-			if (normalized.length > 0) {
-				const [existing] = await tx
-					.select({ id: merchant.id })
-					.from(merchant)
-					.where(
-						and(
-							eq(merchant.workspaceId, scope.workspaceId),
-							eq(merchant.normalizedName, normalized)
-						)
-					)
-					.limit(1);
-				if (existing) {
-					merchantId = existing.id;
-				} else {
-					merchantId = deps.ids.newId();
-					await tx.insert(merchant).values({
-						id: merchantId,
-						workspaceId: scope.workspaceId,
-						name: cmd.merchantName.trim(),
-						normalizedName: normalized
-					});
-				}
-			}
-		}
+		const merchantId = cmd.merchantName
+			? await findOrCreateMerchant(tx, deps, scope.workspaceId, cmd.merchantName)
+			: null;
 
 		const members = await tx
 			.select({ id: workspaceMember.id, policy: workspaceMember.approvalPolicy })
@@ -545,6 +546,95 @@ export async function deletePurchase(
 }
 
 /**
+ * Change the merchant, requester-only. The merchant is a label — it plays no
+ * part in approval policy — so unlike the full edit this is allowed in any
+ * state, including completed and refunded. The change is audited either way.
+ */
+export async function setPurchaseMerchant(
+	db: Db,
+	deps: Deps,
+	scope: Scope,
+	purchaseId: string,
+	merchantName: string | null
+) {
+	const now = deps.clock.now();
+	await db.transaction(async (tx) => {
+		const p = await loadPurchase(
+			tx,
+			{ workspaceId: scope.workspaceId, viewerId: scope.memberId },
+			purchaseId,
+			{ forUpdate: true, now }
+		);
+		if (!p) throw new PurchaseNotFoundError();
+		if (p.memberId !== scope.memberId) {
+			throw new PurchaseStateError('Only the requester can change the merchant');
+		}
+		const merchantId = merchantName
+			? await findOrCreateMerchant(tx, deps, scope.workspaceId, merchantName)
+			: null;
+		if (merchantId === p.merchantId) return;
+		await tx.update(purchaseTable).set({ merchantId }).where(eq(purchaseTable.id, p.id));
+		await appendEvent(tx, deps.ids, p.id, {
+			fromState: p.state,
+			toState: p.state,
+			actorMemberId: scope.memberId,
+			reason: merchantId ? 'merchant updated' : 'merchant cleared',
+			amountSnapshot: null,
+			at: now
+		});
+	});
+}
+
+/**
+ * Recategorize, requester-only. Before completion the category is substance —
+ * per-category policy may depend on it — so the change goes through the state
+ * machine and an approved purchase goes back for approval. Once the amount is
+ * settled (completed/refunded) the category is pure annotation, like the note:
+ * a direct update, audited, never a re-approval.
+ */
+export async function recategorizePurchase(
+	db: Db,
+	deps: Deps,
+	scope: Scope,
+	purchaseId: string,
+	categoryId: string | null
+) {
+	const now = deps.clock.now();
+	const result = await db.transaction(async (tx) => {
+		const p = await loadPurchase(
+			tx,
+			{ workspaceId: scope.workspaceId, viewerId: scope.memberId },
+			purchaseId,
+			{ forUpdate: true, now }
+		);
+		if (!p) throw new PurchaseNotFoundError();
+		if (p.memberId !== scope.memberId) {
+			throw new PurchaseStateError('Only the requester can recategorize a purchase');
+		}
+		if (p.categoryId === categoryId) return null;
+		if (p.state === 'draft' || p.state === 'pending_approval' || p.state === 'approved') {
+			const r = edit(p, scope.memberId, { categoryId }, now);
+			await applyTransition(tx, deps.ids, r.purchase, r.event);
+			return r;
+		}
+		if (p.state !== 'completed' && p.state !== 'refunded') {
+			throw new PurchaseStateError('This purchase can no longer be recategorized');
+		}
+		await tx.update(purchaseTable).set({ categoryId }).where(eq(purchaseTable.id, p.id));
+		await appendEvent(tx, deps.ids, p.id, {
+			fromState: p.state,
+			toState: p.state,
+			actorMemberId: scope.memberId,
+			reason: categoryId ? 'recategorized' : 'category cleared',
+			amountSnapshot: null,
+			at: now
+		});
+		return null;
+	});
+	if (result) await announcePurchaseChange(db, deps.notifier, result.purchase, result.event);
+}
+
+/**
  * Edit just the note, allowed in any state the purchase is yours — including
  * completed and refunded, where the full edit is closed because the amount is
  * settled. The note is annotation, not ledger data, so changing it never moves
@@ -728,7 +818,7 @@ export async function editPurchase(
 	);
 }
 
-async function withdrawFromBucket(tx: Db, deps: Deps, p: Purchase): Promise<void> {
+export async function withdrawFromBucket(tx: Db, deps: Deps, p: Purchase): Promise<void> {
 	if (!p.bucketId || !p.finalAmount) return;
 	const amountMinor = -p.finalAmount.minor;
 	if (amountMinor >= 0n) return;

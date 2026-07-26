@@ -24,13 +24,16 @@
 		interval = $bindable(1),
 		weekDays = $bindable<number[]>([]),
 		monthDay = $bindable('1'),
-		startDate = $bindable('')
+		startDate = $bindable(''),
+		noun = 'charge'
 	}: {
 		freq?: string;
 		interval?: number;
 		weekDays?: number[];
 		monthDay?: string;
 		startDate?: string;
+		/** What an occurrence is called in the preview line ("charge", "accrual"). */
+		noun?: string;
 	} = $props();
 
 	const unit = $derived(
@@ -121,7 +124,8 @@
 			aria-live="polite"
 		>
 			<span class="font-semibold" style="color: var(--ink)">{preview.text}</span><br />
-			First charge {preview.first}
+			First {noun}
+			{preview.first}
 		</p>
 	{/if}
 </div>

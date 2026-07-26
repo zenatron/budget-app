@@ -5,7 +5,7 @@ import { getEnv } from '$lib/server/env';
 import { createBucket } from '$lib/server/repo/buckets';
 import { addIncome } from '$lib/server/repo/income';
 import { Money, InvalidMoneyError } from '$lib/domain/money/money';
-import { nextAccrualDate } from '$lib/application/buckets';
+import { firstAccrualAt, monthlyAccrualRule } from '$lib/application/buckets';
 import { formatRRule } from '$lib/domain/recurrence/rrule';
 import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
 import { systemClock } from '$lib/infra/time/system-clock';
@@ -114,15 +114,15 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			if (!name) {
 				return json({ intent: 'create_bucket', answer: 'Bucket needs a name.' });
 			}
-			const nextAccrualAt = nextAccrualDate(today, day, timezone);
+			const rrule = monthlyAccrualRule(day, today);
 			await createBucket(getDb(), deps, {
 				workspaceId: ws.id,
 				memberId: locals.member!.id,
 				name,
-				monthlyAmountMinor: amount.minor,
+				amountMinor: amount.minor,
 				currency,
-				dayOfMonth: day,
-				nextAccrualAt
+				rrule,
+				nextAccrualAt: firstAccrualAt(rrule, today, timezone)
 			});
 			return json({
 				intent: 'create_bucket',

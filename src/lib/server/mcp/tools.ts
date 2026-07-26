@@ -44,6 +44,7 @@ import {
 	letGoPurchase
 } from '$lib/application/hold';
 import { addDays } from '$lib/domain/recurrence/rrule';
+import { firstAccrualAt, monthlyAccrualRule } from '$lib/application/buckets';
 import {
 	createBucket,
 	updateBucket,
@@ -712,15 +713,24 @@ export const TOOLS: McpTool[] = [
 		inputSchema: { type: 'object', properties: {}, additionalProperties: false },
 		async handler(ctx) {
 			const buckets = await listBuckets(ctx.db, ctx.authed.workspace.id);
-			const data = buckets.map((b) => ({
-				id: b.bucket.id,
-				name: b.bucket.name,
-				owner: b.memberName,
-				balance: fmt(b.balanceMinor, ctx),
-				monthly: fmt(b.bucket.monthlyAmountMinor, ctx),
-				goal: b.bucket.goalCapMinor === null ? null : fmt(b.bucket.goalCapMinor, ctx),
-				status: b.bucket.status
-			}));
+			const data = buckets.map((b) => {
+				let cadence: string | null = null;
+				try {
+					cadence = describeRecurrence(parseRRule(b.bucket.rrule));
+				} catch {
+					/* malformed rule — leave the cadence out rather than guess */
+				}
+				return {
+					id: b.bucket.id,
+					name: b.bucket.name,
+					owner: b.memberName,
+					balance: fmt(b.balanceMinor, ctx),
+					amount: fmt(b.bucket.amountMinor, ctx),
+					cadence,
+					goal: b.bucket.goalCapMinor === null ? null : fmt(b.bucket.goalCapMinor, ctx),
+					status: b.bucket.status
+				};
+			});
 			const text = data.length
 				? data
 						.map((b) => `- ${b.name}: ${b.balance}${b.goal ? ` / ${b.goal}` : ''} (${b.id})`)
@@ -802,6 +812,10 @@ export const TOOLS: McpTool[] = [
 						'Monthly/yearly only: day 1–31, or -1 for the last day of the month. A day longer than a given month (e.g. 30 in February) lands on that month’s last day.'
 				},
 				category_id: { type: 'string' },
+				bucket_id: {
+					type: 'string',
+					description: 'Charge generated purchases to this bucket (withdrawn on completion).'
+				},
 				auto_complete: {
 					type: 'boolean',
 					description:
@@ -821,6 +835,7 @@ export const TOOLS: McpTool[] = [
 				itemName: required(args, 'item'),
 				amount: money(ctx, required(args, 'amount')),
 				categoryId: str(args, 'category_id') ?? null,
+				bucketId: str(args, 'bucket_id') ?? null,
 				rrule: formatRRule(rec),
 				autoComplete: args.auto_complete === true,
 				backfill: args.backfill === true
@@ -847,6 +862,7 @@ export const TOOLS: McpTool[] = [
 				item: { type: 'string' },
 				amount: { type: 'string' },
 				category_id: { type: 'string', description: 'Category id, or "none" to clear it.' },
+				bucket_id: { type: 'string', description: 'Bucket id to charge to, or "none" to detach.' },
 				auto_complete: { type: 'boolean' },
 				freq: { type: 'string', enum: ['daily', 'weekly', 'monthly', 'yearly'] },
 				start_date: { type: 'string' },
@@ -866,6 +882,7 @@ export const TOOLS: McpTool[] = [
 				itemName?: string;
 				amount?: Money;
 				categoryId?: string | null;
+				bucketId?: string | null;
 				rrule?: string;
 				autoComplete?: boolean;
 			} = {};
@@ -874,6 +891,10 @@ export const TOOLS: McpTool[] = [
 			if (args.category_id !== undefined) {
 				const c = str(args, 'category_id');
 				cmd.categoryId = !c || c.toLowerCase() === 'none' ? null : c;
+			}
+			if (args.bucket_id !== undefined) {
+				const b = str(args, 'bucket_id');
+				cmd.bucketId = !b || b.toLowerCase() === 'none' ? null : b;
 			}
 			if (typeof args.auto_complete === 'boolean') cmd.autoComplete = args.auto_complete;
 
@@ -1320,13 +1341,18 @@ export const TOOLS: McpTool[] = [
 		},
 		async handler(ctx, args) {
 			try {
+				const tz = ctx.authed.workspace.timezone;
+				const today = calDateInZone(ctx.deps.clock.now(), tz);
+				const day = Math.min(Math.max(Math.trunc(Number(args.day_of_month) || 1), 1), 28);
+				const rrule = monthlyAccrualRule(day, today);
 				const b = await createBucket(ctx.db, ctx.deps, {
 					workspaceId: ctx.authed.workspace.id,
 					memberId: ctx.authed.member.id,
 					name: required(args, 'name'),
-					monthlyAmountMinor: money(ctx, required(args, 'monthly_amount')).minor,
+					amountMinor: money(ctx, required(args, 'monthly_amount')).minor,
 					currency: ctx.authed.workspace.currency,
-					dayOfMonth: Math.min(Math.max(Math.trunc(Number(args.day_of_month) || 1), 1), 28),
+					rrule,
+					nextAccrualAt: firstAccrualAt(rrule, today, tz),
 					goalCapMinor: str(args, 'goal') ? money(ctx, str(args, 'goal')!).minor : null
 				});
 				return {
@@ -1359,15 +1385,23 @@ export const TOOLS: McpTool[] = [
 			try {
 				const changes: {
 					name?: string;
-					monthlyAmountMinor?: bigint;
-					dayOfMonth?: number;
+					amountMinor?: bigint;
+					rrule?: string;
+					nextAccrualAt?: Date | null;
 					goalCapMinor?: bigint | null;
 				} = {};
 				if (str(args, 'name')) changes.name = str(args, 'name');
 				if (str(args, 'monthly_amount'))
-					changes.monthlyAmountMinor = money(ctx, str(args, 'monthly_amount')!).minor;
-				if (args.day_of_month !== undefined)
-					changes.dayOfMonth = Math.min(Math.max(Math.trunc(Number(args.day_of_month)), 1), 28);
+					changes.amountMinor = money(ctx, str(args, 'monthly_amount')!).minor;
+				if (args.day_of_month !== undefined) {
+					// The API speaks day-of-month; the bucket stores an rrule. A day
+					// change reschedules future-only, anchored at today.
+					const day = Math.min(Math.max(Math.trunc(Number(args.day_of_month)), 1), 28);
+					const tz = ctx.authed.workspace.timezone;
+					const today = calDateInZone(ctx.deps.clock.now(), tz);
+					changes.rrule = monthlyAccrualRule(day, today);
+					changes.nextAccrualAt = firstAccrualAt(changes.rrule, today, tz);
+				}
 				if (args.goal !== undefined) {
 					const g = str(args, 'goal');
 					changes.goalCapMinor = !g || g.toLowerCase() === 'none' ? null : money(ctx, g).minor;
@@ -1425,7 +1459,7 @@ export const TOOLS: McpTool[] = [
 	},
 	{
 		name: 'pause_bucket',
-		description: 'Pause a bucket — it stops setting aside its monthly amount until resumed.',
+		description: 'Pause a bucket — it stops accruing until resumed.',
 		scope: 'write',
 		inputSchema: {
 			type: 'object',
@@ -1445,7 +1479,7 @@ export const TOOLS: McpTool[] = [
 	},
 	{
 		name: 'resume_bucket',
-		description: 'Resume a paused bucket so it sets aside its monthly amount again.',
+		description: 'Resume a paused bucket so it starts accruing again (skipping the paused gap).',
 		scope: 'write',
 		inputSchema: {
 			type: 'object',
@@ -1456,7 +1490,12 @@ export const TOOLS: McpTool[] = [
 		async handler(ctx, args) {
 			const id = required(args, 'bucket_id');
 			try {
-				await resumeBucket(ctx.db, scopeOf(ctx), id);
+				const b = await loadOwnBucket(ctx.db, scopeOf(ctx), id);
+				if (!b) return { text: `No bucket ${id} that you own.`, isError: true };
+				// Resuming skips what was missed while paused — next accrual is future-only.
+				const tz = ctx.authed.workspace.timezone;
+				const today = calDateInZone(ctx.deps.clock.now(), tz);
+				await resumeBucket(ctx.db, scopeOf(ctx), id, firstAccrualAt(b.rrule, today, tz));
 				return { text: `Resumed bucket ${id}.`, data: { bucket_id: id, status: 'active' } };
 			} catch (e) {
 				return { text: domainErrText(e), isError: true };

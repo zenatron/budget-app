@@ -158,7 +158,7 @@
 					icon: 'repeat',
 					title: 'Recurring charges',
 					body: [
-						'Rent, subscriptions, bills. Each rule generates purchases on its own schedule.',
+						'Rent, subscriptions, bills. Each rule generates purchases on its own schedule. A rule can be charged to a bucket, drawing it down as each charge lands.',
 						'**Record automatically** posts them as already-paid at the set amount. Leave it off — for a bill that changes each month — and each one lands under **Confirm what you paid** at the top of the Ledger, waiting for you to enter the real figure.',
 						'Recurring purchases do not go through approval — the decision was made when you created the rule.',
 						'If the app is offline for a while, missed occurrences are generated when it comes back.'
@@ -169,7 +169,7 @@
 					icon: 'bank',
 					title: 'Buckets',
 					body: [
-						'A bucket sets money aside each month — a travel fund, a new laptop, an emergency float. It adds its monthly amount on the day you choose.',
+						'A bucket sets money aside on a schedule — a travel fund, a new laptop, an emergency float. Choose the amount and the cadence: every week, every month on a chosen day, whatever fits. A start date in the past can fill in the accruals you already missed.',
 						'Buckets belong to the person who made them. Only that person can withdraw or adjust one.',
 						'You can charge a purchase to a bucket, which draws it down. The workspace has a default for whether bucket charges skip approval, and each person’s policy can override it — always skip, or always require — for their own charges.'
 					]

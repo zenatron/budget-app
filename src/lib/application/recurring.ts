@@ -1,12 +1,13 @@
 import { and, eq, lte } from 'drizzle-orm';
 import type { Db } from '$lib/server/db';
-import { recurringRule, user, workspace, workspaceMember } from '$lib/server/db/schema';
+import { bucket, recurringRule, user, workspace, workspaceMember } from '$lib/server/db/schema';
 import { Money } from '$lib/domain/money/money';
 import type { Purchase, TransitionEvent } from '$lib/domain/purchase/purchase';
 import { addDays, nextOccurrence, parseRRule } from '$lib/domain/recurrence/rrule';
 import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
 import { insertPurchase } from '$lib/server/repo/purchases';
 import { announcePurchaseChange } from '$lib/application/notify-dispatch';
+import { withdrawFromBucket } from '$lib/application/purchases';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 import type { Notifier } from '$lib/ports/notifier';
@@ -39,8 +40,23 @@ export interface CreateRuleCmd {
 	categoryId: string | null;
 	rrule: string;
 	autoComplete: boolean;
+	/** Charge generated purchases against this bucket (withdrawn on completion). */
+	bucketId?: string | null;
 	/** Also generate the occurrences between the start date and today. */
 	backfill?: boolean;
+}
+
+/** The bucket a rule may charge: real, in this workspace, and active. */
+async function assertChargableBucket(db: Db, workspaceId: string, bucketId: string) {
+	const [bkt] = await db
+		.select({ id: bucket.id, status: bucket.status })
+		.from(bucket)
+		.where(and(eq(bucket.id, bucketId), eq(bucket.workspaceId, workspaceId)))
+		.limit(1);
+	if (!bkt) throw new RecurringRuleError('Bucket not found');
+	if (bkt.status !== 'active') {
+		throw new RecurringRuleError('Cannot charge to a paused or archived bucket');
+	}
 }
 
 export async function createRule(
@@ -60,6 +76,7 @@ export async function createRule(
 		throw new RecurringRuleError(`Amount must be positive ${ws.currency}`);
 	}
 	const rec = parseRRule(cmd.rrule); // throws RecurrenceError on bad input
+	if (cmd.bucketId) await assertChargableBucket(db, scope.workspaceId, cmd.bucketId);
 
 	// Normally the first occurrence is today at the earliest — nothing in the
 	// past. Backfilling instead anchors to the rule's own start date, and the
@@ -79,6 +96,7 @@ export async function createRule(
 		merchantId: null,
 		amountMinor: cmd.amount.minor,
 		currency: cmd.amount.currency,
+		bucketId: cmd.bucketId ?? null,
 		rrule: cmd.rrule,
 		nextOccurrenceAt: zonedTimeToUtc(next, MATERIALIZE_HOUR, 0, ws.timezone),
 		lastGeneratedAt: null,
@@ -161,6 +179,7 @@ export interface UpdateRuleCmd {
 	itemName?: string;
 	amount?: Money;
 	categoryId?: string | null;
+	bucketId?: string | null;
 	rrule?: string;
 	autoComplete?: boolean;
 }
@@ -192,6 +211,10 @@ export async function updateRule(
 		updates.amountMinor = cmd.amount.minor;
 	}
 	if (cmd.categoryId !== undefined) updates.categoryId = cmd.categoryId;
+	if (cmd.bucketId !== undefined) {
+		if (cmd.bucketId) await assertChargableBucket(db, scope.workspaceId, cmd.bucketId);
+		updates.bucketId = cmd.bucketId;
+	}
 	if (cmd.autoComplete !== undefined) updates.autoComplete = cmd.autoComplete;
 	if (cmd.rrule !== undefined) {
 		const rec = parseRRule(cmd.rrule);
@@ -265,7 +288,7 @@ export async function materializeDueRules(db: Db, deps: Deps): Promise<number> {
 					recurringRuleId: r.id,
 					parentPurchaseId: null,
 					approverMemberIds: [],
-					bucketId: null,
+					bucketId: r.bucketId,
 					merchantId: null,
 					heldUntil: null,
 					heldBy: null
@@ -279,6 +302,11 @@ export async function materializeDueRules(db: Db, deps: Deps): Promise<number> {
 					at: occurrenceAt
 				};
 				await insertPurchase(tx, deps, p, event);
+				// A rule charged to a bucket that completes itself draws the bucket
+				// down right away; confirm-at-price rules withdraw when confirmed.
+				if (p.state === 'completed' && p.bucketId) {
+					await withdrawFromBucket(tx, deps, p);
+				}
 
 				const next = nextOccurrence(rec, calDateInZone(occurrenceAt, tz));
 				await tx

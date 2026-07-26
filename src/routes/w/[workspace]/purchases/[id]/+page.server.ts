@@ -1,6 +1,5 @@
 import { eq } from 'drizzle-orm';
 import { error, fail, redirect } from '@sveltejs/kit';
-import * as v from 'valibot';
 import { Money, InvalidMoneyError } from '$lib/domain/money/money';
 import { PurchaseStateError } from '$lib/domain/purchase/purchase';
 import { isStale, waitingDays } from '$lib/domain/approval/staleness';
@@ -17,7 +16,9 @@ import {
 	denyPurchase,
 	editPurchase,
 	editPurchaseNote,
+	recategorizePurchase,
 	refundPurchase,
+	setPurchaseMerchant,
 	unsealPurchase
 } from '$lib/application/purchases';
 import {
@@ -55,11 +56,17 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const p = await loadPurchase(db, scope, params.id, { now });
 	if (!p) error(404, 'Not found');
 
-	const [events, names, categories, images, createdRows] = await Promise.all([
+	const [events, names, categories, images, merchants, createdRows] = await Promise.all([
 		listEvents(db, p.id),
 		memberNames(db, [p.memberId, ...p.approverMemberIds, ...p.sealedFromMemberIds]),
 		listCategories(db, locals.workspace!.id),
 		listImages(db, scope, p.id, now),
+		// Merchant names for the edit field's autocomplete.
+		db
+			.select({ name: merchant.name })
+			.from(merchant)
+			.where(eq(merchant.workspaceId, locals.workspace!.id))
+			.orderBy(merchant.name),
 		// createdAt for the recency gate on the delete affordance.
 		db
 			.select({ createdAt: purchaseTable.createdAt })
@@ -68,6 +75,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			.limit(1)
 	]);
 	const createdRow = createdRows[0];
+	const category = categories.find((c) => c.id === p.categoryId) ?? null;
 
 	// A refund owns no photo; borrow the original's. listImages applies the seal
 	// predicate to the parent, so an unreadable parent yields nothing rather than
@@ -97,6 +105,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			itemName: p.itemName,
 			note: p.note,
 			categoryId: p.categoryId,
+			categoryName: category ? `${category.icon} ${category.name}` : null,
 			merchantName,
 			requestedAmountMinor: p.requestedAmount.minor,
 			approvedAmountMinor: p.approvedAmount?.minor ?? null,
@@ -124,12 +133,15 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			decide: pending && p.approverMemberIds.includes(locals.member!.id),
 			complete: p.state === 'approved' && mine,
 			cancel: mine && ['draft', 'pending_approval', 'approved'].includes(p.state),
+			// Item + amount are substance — editable only before completion.
 			edit: mine && ['draft', 'pending_approval', 'approved'].includes(p.state),
 			// Photos (receipts) can be attached in any state the requester owns.
 			addPhoto: mine && p.state !== 'cancelled',
 			unseal: mine && sealed,
-			// Note stays editable after the amount is settled; the full edit doesn't.
-			editNote: mine && ['completed', 'refunded'].includes(p.state),
+			// Category, merchant, and note are annotation — editable in any state
+			// that isn't dead. Category pre-completion still routes through the
+			// state machine (may send back for re-approval); the rest never do.
+			annotate: mine && !['denied', 'cancelled'].includes(p.state),
 			refund: mine && p.state === 'completed' && !sealed && p.parentPurchaseId === null,
 			// Remove-a-mistake: own recent entries, or anything for the owner. Refunds
 			// and purchases with refunds against them are removable too (the server
@@ -165,7 +177,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			amountMinor: e.amountMinor,
 			at: e.at.toISOString()
 		})),
-		categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon }))
+		categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
+		merchants: merchants.map((m) => m.name)
 	};
 };
 
@@ -317,22 +330,49 @@ export const actions: Actions = {
 
 	edit: async ({ locals, params, request }) => {
 		const form = await request.formData();
-		const EditSchema = v.object({
-			itemName: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(120)),
-			amount: v.pipe(v.string(), v.trim(), v.minLength(1)),
-			categoryId: v.optional(v.string()),
-			note: v.optional(v.pipe(v.string(), v.maxLength(2000)))
+		const itemName = String(form.get('itemName') ?? '').trim();
+		const amountRaw = String(form.get('amount') ?? '').trim();
+		if (!itemName) return fail(400, { error: 'Item needs a name' });
+		if (!amountRaw) return fail(400, { error: 'How much?' });
+		// Optional fields — only updated if the form carries them, so the
+		// masthead edit (item + amount only) leaves category/note/merchant alone.
+		const categoryIdRaw = form.get('categoryId');
+		const noteRaw = form.get('note');
+		const merchantRaw = form.get('merchantName');
+		return run(async () => {
+			const changes: {
+				itemName: string;
+				requestedAmount: Money;
+				categoryId?: string | null;
+				note?: string | null;
+			} = {
+				itemName,
+				requestedAmount: Money.fromDecimal(amountRaw, locals.workspace!.currency)
+			};
+			if (categoryIdRaw !== null) changes.categoryId = String(categoryIdRaw) || null;
+			if (noteRaw !== null) changes.note = String(noteRaw).trim() || null;
+			await editPurchase(getDb(), deps, scopeOf(locals), params.id, changes);
+			if (merchantRaw !== null) {
+				await setPurchaseMerchant(
+					getDb(),
+					deps,
+					scopeOf(locals),
+					params.id,
+					String(merchantRaw).trim() || null
+				);
+			}
 		});
-		const parsed = v.safeParse(EditSchema, Object.fromEntries(form));
-		if (!parsed.success) return fail(400, { error: parsed.issues[0].message });
-		const f = parsed.output;
-		return run(() =>
-			editPurchase(getDb(), deps, scopeOf(locals), params.id, {
-				itemName: f.itemName,
-				requestedAmount: Money.fromDecimal(f.amount, locals.workspace!.currency),
-				categoryId: f.categoryId || null,
-				note: f.note?.trim() || null
-			})
-		);
+	},
+
+	// Inline annotation edits — each posts its own tiny form from a Details row.
+	merchant: async ({ locals, params, request }) => {
+		const merchantName =
+			String((await request.formData()).get('merchantName') ?? '').trim() || null;
+		return run(() => setPurchaseMerchant(getDb(), deps, scopeOf(locals), params.id, merchantName));
+	},
+
+	category: async ({ locals, params, request }) => {
+		const categoryId = String((await request.formData()).get('categoryId') ?? '') || null;
+		return run(() => recategorizePurchase(getDb(), deps, scopeOf(locals), params.id, categoryId));
 	}
 };

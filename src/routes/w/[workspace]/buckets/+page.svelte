@@ -7,7 +7,9 @@
 	import { formatPct } from '$lib/format';
 	import { CircleHelp, Pause, Pencil, Play, Plus, Wallet } from '@lucide/svelte';
 	import Money from '$lib/components/Money.svelte';
-	import DayOfMonthPicker from '$lib/components/DayOfMonthPicker.svelte';
+	import RecurrencePicker from '$lib/components/RecurrencePicker.svelte';
+	import CheckField from '$lib/components/CheckField.svelte';
+	import { calDateInZone } from '$lib/domain/time/zoned';
 
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
@@ -25,25 +27,57 @@
 
 	let showNew = $state(false);
 	let createColor = $state<string | null>(null);
-	let createDay = $state('1');
 	let editing: string | null = $state(null);
 	let editColor: Record<string, string | null> = $state({});
-	let editDay = $state('1');
 	let adjusting: string | null = $state(null);
+
+	// Bound straight into RecurrencePicker, which emits the same field names the
+	// server already parses. Only one bucket is open for editing at a time, so
+	// the edit fields are single slots rather than a map keyed by bucket id.
+	let freq = $state('monthly');
+	let interval = $state(1);
+	let weekDays = $state<number[]>([]);
+	let monthDay = $state('1');
+	let editFreq = $state('monthly');
+	let editInterval = $state(1);
+	let editWeekDays = $state<number[]>([]);
+	let editMonthDay = $state('1');
+	let editStart = $state('');
+
+	// Today in the *workspace* timezone. toISOString() is UTC, so after ~8pm in
+	// the Americas these forms defaulted to tomorrow's date.
+	const today = $derived.by(() => {
+		const t = calDateInZone(new Date(), data.workspace.timezone);
+		return `${t.y}-${String(t.m).padStart(2, '0')}-${String(t.d).padStart(2, '0')}`;
+	});
+	// Intentionally a snapshot: this seeds the field's default, and the user
+	// edits it from there. The page remounts per workspace, so it can't go stale.
+	// svelte-ignore state_referenced_locally
+	let startDate = $state(today);
+	let backfill = $state(false);
 
 	function colorFor(b: (typeof data.buckets)[number]): string {
 		return b.color ?? 'var(--ws-accent)';
 	}
 
+	function fmtStart(d: string): string {
+		const [y, m, day] = d.split('-').map(Number);
+		return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString(undefined, {
+			month: 'long',
+			day: 'numeric',
+			year: 'numeric',
+			timeZone: 'UTC'
+		});
+	}
+
 	/**
-	 * "+$400.00/mo on the 1st · next Aug 1" — assembled here rather than inline,
-	 * where the separator's whitespace kept collapsing against the date.
-	 * Recurring has always said "next Jul 28"; buckets now say the same thing,
-	 * reading the actual next_accrual_at timestamp so the sweep and the display
-	 * agree exactly.
+	 * "+$400.00 · every month on the 1st · next Aug 1" — the cadence comes from
+	 * describeRecurrence on the stored rule, and the date is the actual
+	 * next_accrual_at timestamp, so the sweep and the display agree exactly.
 	 */
 	function cadenceLine(b: (typeof data.buckets)[number]): string {
-		const base = formatMonthly(b.monthlyAmountMinor, b.currency, b.dayOfMonth);
+		const cadence = b.cadence ? b.cadence.charAt(0).toLowerCase() + b.cadence.slice(1) : '';
+		const base = `+${formatMinor(b.amountMinor, b.currency)}${cadence ? ` · ${cadence}` : ''}`;
 		const a = b.nextAccrualAt;
 		if (!a) return base;
 		const dueNow = new Date(a).getTime() <= Date.now();
@@ -63,16 +97,26 @@
 		return Math.max(0, Math.min(100, pct));
 	}
 
-	function formatMonthly(amountMinor: bigint, currency: string, dayOfMonth: number): string {
-		const suffix =
-			dayOfMonth === 1 || dayOfMonth === 21 || dayOfMonth === 31
-				? 'st'
-				: dayOfMonth === 2 || dayOfMonth === 22
-					? 'nd'
-					: dayOfMonth === 3 || dayOfMonth === 23
-						? 'rd'
-						: 'th';
-		return `+${formatMinor(amountMinor, currency)}/mo on the ${dayOfMonth}${suffix}`;
+	function startEdit(b: (typeof data.buckets)[number]) {
+		editing = editing === b.id ? null : b.id;
+		if (editing === null) return;
+		editColor = { ...editColor, [b.id]: b.color };
+		editFreq = b.freq;
+		editInterval = b.interval;
+		editWeekDays = [...b.byDay];
+		editMonthDay = String(b.monthDay ?? 1);
+		editStart = b.startDate ?? today;
+	}
+
+	function resetNewForm() {
+		showNew = false;
+		createColor = null;
+		freq = 'monthly';
+		interval = 1;
+		weekDays = [];
+		monthDay = '1';
+		startDate = today;
+		backfill = false;
 	}
 </script>
 
@@ -127,14 +171,7 @@
 		<form
 			method="POST"
 			action="?/create"
-			use:submit={{
-				success: 'Bucket created',
-				onSuccess: () => {
-					showNew = false;
-					createColor = null;
-					createDay = '1';
-				}
-			}}
+			use:submit={{ success: 'Bucket created', onSuccess: resetNewForm }}
 			class="card space-y-3.5 p-5"
 		>
 			<div class="grid grid-cols-[1fr_auto] gap-3">
@@ -148,15 +185,35 @@
 					class="field w-28 text-[16px] tabular-nums"
 				/>
 			</div>
-			<div>
-				<DayOfMonthPicker bind:value={createDay} name="dayOfMonth" label="Accrues on" />
-			</div>
+			<RecurrencePicker
+				bind:freq
+				bind:interval
+				bind:weekDays
+				bind:monthDay
+				bind:startDate
+				noun="accrual"
+			/>
 			<input
 				name="goalCap"
 				use:money
 				inputmode="decimal"
 				placeholder="Save up to…"
 				class="field text-[16px]"
+			/>
+			<!--
+				Only *does* anything when the start date is behind us, but it stays on
+				screen either way — same as the recurring form. Disabled, it doubles as
+				the instruction for enabling it, and a disabled input isn't submitted,
+				so a stale tick can't leak through.
+			-->
+			<CheckField
+				name="backfill"
+				bind:checked={backfill}
+				disabled={startDate >= today}
+				label="Add the accruals I've already missed"
+				hint={startDate < today
+					? `Fills in every accrual since ${fmtStart(startDate)}.`
+					: 'Set the start date in the past to fill in accruals you already missed.'}
 			/>
 			<p class="text-[11px] font-medium tracking-[0.14em] uppercase" style="color: var(--ink-3)">
 				Color
@@ -249,11 +306,7 @@
 					{#if b.mine}
 						<div class="mt-2.5 flex items-center gap-4 text-[13px]">
 							<button
-								onclick={() => {
-									editing = editing === b.id ? null : b.id;
-									editColor = { ...editColor, [b.id]: b.color };
-									editDay = String(b.dayOfMonth);
-								}}
+								onclick={() => startEdit(b)}
 								class="press inline-flex items-center gap-1"
 								style="color: var(--ink-2)"
 							>
@@ -318,13 +371,18 @@
 										required
 										use:money
 										inputmode="decimal"
-										value={(Number(b.monthlyAmountMinor) / 100).toFixed(2)}
+										value={(Number(b.amountMinor) / 100).toFixed(2)}
 										class="field w-28 text-[16px] tabular-nums"
 									/>
 								</div>
-								<div>
-									<DayOfMonthPicker bind:value={editDay} name="dayOfMonth" label="Accrues on" />
-								</div>
+								<RecurrencePicker
+									bind:freq={editFreq}
+									bind:interval={editInterval}
+									bind:weekDays={editWeekDays}
+									bind:monthDay={editMonthDay}
+									bind:startDate={editStart}
+									noun="accrual"
+								/>
 								<input
 									name="goalCap"
 									use:money

@@ -376,6 +376,12 @@
 				<option value="">No category</option>
 				{#each data.categories as c (c.id)}<option value={c.id}>{c.icon} {c.name}</option>{/each}
 			</select>
+			{#if data.buckets.length > 0}
+				<select name="bucketId" class="field text-[16px]">
+					<option value="">Charge to bucket…</option>
+					{#each data.buckets as b (b.id)}<option value={b.id}>{b.name}</option>{/each}
+				</select>
+			{/if}
 			<!--
 				Only *does* anything when the start date is behind us, but it stays on
 				screen either way: hiding it meant you couldn't discover backfilling
@@ -444,7 +450,7 @@
 									<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
 										{r.cadence} · next {fmtNext(r.nextAt)}{r.autoComplete
 											? ''
-											: ' · needs confirming'}
+											: ' · needs confirming'}{r.bucketName ? ` · ${r.bucketName}` : ''}
 									</p>
 								</div>
 								<div class="shrink-0 text-right">
@@ -544,6 +550,21 @@
 												>
 											{/each}
 										</select>
+										{#if data.buckets.length > 0 || r.bucketId}
+											<select name="bucketId" class="field text-[16px]">
+												<option value="">Not charged to a bucket</option>
+												{#each data.buckets as b (b.id)}
+													<option value={b.id} selected={b.id === r.bucketId}>{b.name}</option>
+												{/each}
+												<!-- The rule's bucket is paused/archived: keep it attached
+												     unless the owner picks something else. -->
+												{#if r.bucketId && !data.buckets.some((b) => b.id === r.bucketId)}
+													<option value={r.bucketId} selected
+														>{r.bucketName ?? 'Current bucket'}</option
+													>
+												{/if}
+											</select>
+										{/if}
 										<CheckField
 											name="autoComplete"
 											bind:checked={editAutoComplete}

@@ -36,7 +36,7 @@ export async function safeToSpend(db: Db, scope: ForecastScope, now: Date): Prom
 		await Promise.all([
 			monthIncome(db, scope.workspaceId, period, scope.timezone),
 			upcomingBills(db, scope.workspaceId, period, scope.timezone),
-			plannedSavings(db, scope.workspaceId),
+			plannedSavings(db, scope.workspaceId, period, scope.timezone),
 			purchaseFlows(db, scope, from, to, now),
 			budgetRemaining(db, scope, period, now)
 		]);
@@ -126,11 +126,23 @@ async function upcomingBills(
 	return total;
 }
 
-/** This month's bucket accruals — the cash you've chosen to set aside, capped at each goal. */
-async function plannedSavings(db: Db, workspaceId: string): Promise<bigint> {
+/**
+ * This month's bucket accruals — the cash you've chosen to set aside, capped at
+ * each goal. Projected from each bucket's recurrence the same way upcomingBills
+ * projects recurring charges: only occurrences still to materialize this month
+ * count, starting at the bucket's next scheduled accrual.
+ */
+async function plannedSavings(
+	db: Db,
+	workspaceId: string,
+	period: ReturnType<typeof monthPeriod>,
+	tz: string
+): Promise<bigint> {
 	const rows = await db
 		.select({
-			monthly: bucket.monthlyAmountMinor,
+			amountMinor: bucket.amountMinor,
+			rrule: bucket.rrule,
+			nextAccrualAt: bucket.nextAccrualAt,
 			goalCap: bucket.goalCapMinor,
 			balance: sql<string>`coalesce((
 				select sum(bt.amount_minor) from bucket_transaction bt where bt.bucket_id = ${bucket.id}
@@ -141,12 +153,21 @@ async function plannedSavings(db: Db, workspaceId: string): Promise<bigint> {
 
 	let total = 0n;
 	for (const r of rows) {
+		if (!r.nextAccrualAt) continue;
+		let due = 0n;
+		try {
+			const nextCal = calDateInZone(r.nextAccrualAt, tz);
+			const fromCal = compareDates(nextCal, period.from) < 0 ? period.from : nextCal;
+			due = sumRecurringInWindow(parseRRule(r.rrule), r.amountMinor, fromCal, period.toExclusive);
+		} catch {
+			/* malformed rule — skip it, the same way the sweep does */
+		}
 		if (r.goalCap === null) {
-			total += r.monthly;
+			total += due;
 		} else {
-			// Won't accrue past the goal: only the room left, at most this month's amount.
+			// Won't accrue past the goal: only the room left, at most what's due.
 			const room = r.goalCap - BigInt(r.balance);
-			total += room <= 0n ? 0n : room < r.monthly ? room : r.monthly;
+			total += room <= 0n ? 0n : room < due ? room : due;
 		}
 	}
 	return total;

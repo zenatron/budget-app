@@ -6,11 +6,11 @@
 	import {
 		Camera,
 		Check,
-		ChevronDown,
 		ChevronLeft,
 		CircleAlert,
 		Lock,
 		Moon,
+		Pencil,
 		RotateCcw,
 		Trash2,
 		X
@@ -25,14 +25,25 @@
 	let { data, form } = $props();
 	let viewing = $state(false);
 	let slug = $derived(page.params.workspace);
-	let editing = $state(false);
-	let editingNote = $state(false);
+	let editingMasthead = $state(false);
+	// One Details row editable at a time — same single-slot pattern the recurring
+	// and bucket pages use for their inline edit forms.
+	let editingField = $state<'merchant' | 'category' | 'note' | null>(null);
 	let deciding = $state<'approve' | 'deny' | null>(null);
 	let showDeny = $state(false);
 	// Sleep-on-it picker sheet: 'hold' for a fresh pause, 'extend' for more days.
 	let holdSheet = $state<'hold' | 'extend' | null>(null);
 	let holdDays = $state(3);
 	const p = $derived(data.purchase);
+
+	/** Submit the enclosing form — used by Enter on a borderless input or a select change. */
+	function save(el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
+		el.form?.requestSubmit();
+	}
+	/** Escape closes the edit without saving. */
+	function cancelEdit(e: KeyboardEvent) {
+		if (e.key === 'Escape') editingField = null;
+	}
 
 	/** "3 days left" · "tomorrow" · "ready" — coarse, never a ticking clock. */
 	function heldLeft(iso: string): string {
@@ -95,6 +106,9 @@
 </script>
 
 <div class="mx-auto max-w-lg">
+	<datalist id="merchant-names">
+		{#each data.merchants as m (m)}<option value={m}></option>{/each}
+	</datalist>
 	<a
 		href="/w/{slug}/purchases"
 		class="press mb-4 -ml-1 inline-flex items-center gap-0.5 text-[14px] font-medium"
@@ -115,15 +129,71 @@
 				? ` · ${p.waitingDays}d`
 				: ''}
 		</span>
-		<Money
-			minor={displayAmount}
-			currency={p.currency}
-			block
-			class="mt-3 font-[family-name:var(--font-display)] text-[length:var(--fs-mega)] leading-[0.92] font-semibold"
-		/>
-		<p class="mt-4 text-[18px] leading-tight font-medium" style="color: var(--ink-2)">
-			{p.itemName}
-		</p>
+		{#if editingMasthead}
+			<form
+				method="POST"
+				action="?/edit"
+				use:submit={{ success: 'Changes saved', onSuccess: () => (editingMasthead = false) }}
+				class="mt-3 space-y-2"
+			>
+				{#if p.state === 'approved' && p.approverNames.length > 0}
+					<p class="text-[13px]" style="color: var(--pending)">
+						Changing the item or amount sends this back to {p.approverNames.join(' or ')}
+						for approval.
+					</p>
+				{:else if p.state === 'approved'}
+					<p class="text-[13px]" style="color: var(--ink-3)">
+						This didn't need approval, so changes apply straight away.
+					</p>
+				{/if}
+				<input
+					name="amount"
+					aria-label="Amount"
+					use:money
+					required
+					inputmode="decimal"
+					value={formatMinor(p.requestedAmountMinor, p.currency).replace(/[^0-9.]/g, '')}
+					class="ledger-input num w-full font-[family-name:var(--font-display)] text-[length:var(--fs-mega)] leading-[0.92] font-semibold"
+					style="color: var(--ink)"
+				/>
+				<input
+					name="itemName"
+					aria-label="Item"
+					required
+					value={p.itemName}
+					class="ledger-input w-full text-[18px] font-medium"
+					style="color: var(--ink-2)"
+				/>
+				<div class="flex gap-4 pt-1 text-[16px]">
+					<button class="press font-semibold" style="color: var(--ink)">Save</button>
+					<button
+						type="button"
+						onclick={() => (editingMasthead = false)}
+						class="press"
+						style="color: var(--ink-3)">Cancel</button
+					>
+				</div>
+			</form>
+		{:else}
+			<Money
+				minor={displayAmount}
+				currency={p.currency}
+				block
+				class="mt-3 font-[family-name:var(--font-display)] text-[length:var(--fs-mega)] leading-[0.92] font-semibold"
+			/>
+			<button
+				type="button"
+				onclick={() => data.can.edit && (editingMasthead = true)}
+				class="edit-row press mt-4 flex w-full items-center gap-2 text-left text-[18px] leading-tight font-medium"
+				style="color: var(--ink-2)"
+				disabled={!data.can.edit}
+			>
+				{p.itemName}
+				{#if data.can.edit}
+					<Pencil class="edit-pencil h-4 w-4 shrink-0" style="color: var(--ink-4)" />
+				{/if}
+			</button>
+		{/if}
 		<p class="mt-2 text-[14px]" style="color: var(--ink-3)">
 			Requested by {p.requesterName}{p.completedAt ? ` · ${fmtDateLong(p.completedAt)}` : ''}
 		</p>
@@ -384,75 +454,106 @@
 			</div>
 		{/if}
 
-		<!-- The centerpiece: decide. -->
-		{#if data.can.decide}
-			<div class="space-y-2.5">
-				<form
-					method="POST"
-					action="?/approve"
-					use:enhance={() => {
-						deciding = 'approve';
-						return async ({ update }) => {
-							await update();
-							deciding = null;
-						};
-					}}
-				>
-					<button class="btn btn-accent w-full py-4 text-[18px]" disabled={deciding !== null}>
-						{#if deciding === 'approve'}
-							<span class="spin h-5 w-5"></span>
-						{:else}
-							<Check class="h-5 w-5" /> Approve {formatMinor(displayAmount, p.currency)}
-						{/if}
-					</button>
-				</form>
-
-				{#if showDeny}
+		<!-- The centerpiece: decide. Three actions on one row — Approve dominant,
+		     Deny and Sleep as secondary — so the whole decision fits a glance. -->
+		{#if data.can.decide || data.can.hold}
+			{#if data.can.decide}
+				<div class="flex items-stretch gap-2">
 					<form
 						method="POST"
-						action="?/deny"
+						action="?/approve"
 						use:enhance={() => {
-							deciding = 'deny';
+							deciding = 'approve';
 							return async ({ update }) => {
 								await update();
 								deciding = null;
 							};
 						}}
-						class="space-y-2.5"
+						class="flex-1"
 					>
-						<input name="reason" placeholder="Reason (optional)" class="field text-[16px]" />
-						<button
-							class="btn w-full py-3.5 text-[16px]"
-							style="color: var(--deny); background: color-mix(in oklab, var(--deny) 12%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--deny) 30%, transparent)"
-							disabled={deciding !== null}
-						>
-							{#if deciding === 'deny'}<span class="spin h-4 w-4"></span>{:else}Deny request{/if}
+						<button class="btn btn-accent w-full py-3.5 text-[17px]" disabled={deciding !== null}>
+							{#if deciding === 'approve'}
+								<span class="spin h-5 w-5"></span>
+							{:else}
+								<Check class="h-5 w-5" /> Approve
+							{/if}
 						</button>
 					</form>
-				{:else}
-					<button
-						onclick={() => (showDeny = true)}
-						class="btn btn-plain w-full"
-						style="color: var(--deny)">Deny…</button
-					>
-				{/if}
-			</div>
+					{#if !showDeny}
+						<button
+							onclick={() => (showDeny = true)}
+							class="btn btn-ghost shrink-0 px-4 py-3.5 text-[15px]"
+							style="color: var(--deny)">Deny</button
+						>
+					{:else}
+						<form
+							method="POST"
+							action="?/deny"
+							use:enhance={() => {
+								deciding = 'deny';
+								return async ({ update }) => {
+									await update();
+									deciding = null;
+								};
+							}}
+							class="shrink-0"
+						>
+							<button
+								class="btn btn-ghost px-4 py-3.5 text-[15px]"
+								style="color: var(--deny); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--deny) 30%, transparent)"
+								disabled={deciding !== null}
+							>
+								{#if deciding === 'deny'}<span class="spin h-4 w-4"></span>{:else}Deny{/if}
+							</button>
+						</form>
+					{/if}
+					{#if data.can.hold}
+						<button
+							onclick={() => {
+								holdDays = 3;
+								holdSheet = 'hold';
+							}}
+							class="btn btn-ghost shrink-0 text-[15px]"
+							style="color: var(--seal); width: 52px; height: 52px; padding: 0"
+						>
+							<Moon class="h-5 w-5" />
+						</button>
+					{/if}
+				</div>
+			{:else}
+				<button
+					onclick={() => {
+						holdDays = 3;
+						holdSheet = 'hold';
+					}}
+					class="btn w-full py-3 text-[15px]"
+					style="color: color-mix(in oklab, var(--seal) 84%, var(--ink)); background: color-mix(in oklab, var(--seal) 10%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--seal) 26%, transparent)"
+				>
+					<Moon class="h-4 w-4" /> Sleep on it
+				</button>
+			{/if}
+
+			{#if showDeny}
+				<form
+					method="POST"
+					action="?/deny"
+					use:enhance={() => {
+						deciding = 'deny';
+						return async ({ update }) => {
+							await update();
+							deciding = null;
+						};
+					}}
+					class="mt-2.5"
+				>
+					<input name="reason" placeholder="Reason (optional)" class="field text-[16px]" />
+				</form>
+			{/if}
 		{/if}
 
-		{#if data.can.hold}
-			<button
-				onclick={() => {
-					holdDays = 3;
-					holdSheet = 'hold';
-				}}
-				class="btn w-full py-3 text-[15px]"
-				style="color: color-mix(in oklab, var(--seal) 84%, var(--ink)); background: color-mix(in oklab, var(--seal) 10%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--seal) 26%, transparent)"
-			>
-				<Moon class="h-4 w-4" /> Sleep on it
-			</button>
-		{/if}
-
-		<!-- Details as a printed ledger -->
+		<!-- Details as a printed ledger. Editable rows show a pencil on hover
+		     (desktop) or faintly at rest (touch); tapping swaps the value for a
+		     borderless input on the same line — writing on the ledger, not a form. -->
 		<div>
 			<p class="section-label mb-1">Details</p>
 			<div class="rule">
@@ -460,12 +561,110 @@
 					<span class="text-[15px]" style="color: var(--ink-3)">Requested by</span>
 					<span class="text-[15px] font-medium" style="color: var(--ink)">{p.requesterName}</span>
 				</div>
-				{#if p.merchantName}
-					<div class="hairline flex items-center justify-between py-3.5">
-						<span class="text-[15px]" style="color: var(--ink-3)">Where</span>
-						<span class="text-[15px] font-medium" style="color: var(--ink)">{p.merchantName}</span>
-					</div>
+
+				{#if editingField === 'merchant'}
+					<form
+						method="POST"
+						action="?/merchant"
+						use:submit={{ success: 'Saved', onSuccess: () => (editingField = null) }}
+						class="hairline flex items-center justify-between py-3.5"
+					>
+						<span class="shrink-0 text-[16px]" style="color: var(--ink-3)">Where</span>
+						<span class="flex items-center gap-2">
+							<input
+								name="merchantName"
+								list="merchant-names"
+								maxlength="200"
+								placeholder="Merchant"
+								value={p.merchantName ?? ''}
+								class="ledger-input text-right text-[16px] font-medium"
+								style="color: var(--ink)"
+								onkeydown={(e) => {
+									if (e.key === 'Enter') save(e.currentTarget);
+									cancelEdit(e);
+								}}
+							/>
+							<button
+								class="press flex h-[18px] w-[18px] shrink-0 items-center justify-center"
+								style="color: var(--ink-3)"
+								aria-label="Save"
+							>
+								<Check class="h-4 w-4" />
+							</button>
+						</span>
+					</form>
+				{:else}
+					<button
+						type="button"
+						onclick={() => data.can.annotate && (editingField = 'merchant')}
+						class="edit-row hairline flex w-full items-center justify-between py-3.5"
+						disabled={!data.can.annotate}
+					>
+						<span class="text-[16px]" style="color: var(--ink-3)">Where</span>
+						<span class="flex items-center gap-2">
+							<span class="text-[16px] font-medium" style="color: var(--ink)"
+								>{p.merchantName ?? 'Add'}</span
+							>
+							{#if data.can.annotate}
+								<span class="flex h-[18px] w-[18px] shrink-0 items-center justify-center">
+									<Pencil class="edit-pencil h-3.5 w-3.5" style="color: var(--ink-4)" />
+								</span>
+							{/if}
+						</span>
+					</button>
 				{/if}
+
+				{#if editingField === 'category'}
+					<form
+						method="POST"
+						action="?/category"
+						use:submit={{ success: 'Saved', onSuccess: () => (editingField = null) }}
+						class="hairline flex items-center justify-between py-3.5"
+					>
+						<span class="shrink-0 text-[16px]" style="color: var(--ink-3)">Category</span>
+						<span class="flex items-center gap-2">
+							<select
+								name="categoryId"
+								aria-label="Category"
+								class="ledger-input text-right text-[16px] font-medium"
+								style="color: var(--ink)"
+								onchange={(e) => save(e.currentTarget)}
+							>
+								<option value="">None</option>
+								{#each data.categories as c (c.id)}
+									<option value={c.id} selected={c.id === p.categoryId}>{c.icon} {c.name}</option>
+								{/each}
+							</select>
+							<button
+								class="press flex h-[18px] w-[18px] shrink-0 items-center justify-center"
+								style="color: var(--ink-3)"
+								aria-label="Save"
+							>
+								<Check class="h-4 w-4" />
+							</button>
+						</span>
+					</form>
+				{:else}
+					<button
+						type="button"
+						onclick={() => data.can.annotate && (editingField = 'category')}
+						class="edit-row hairline flex w-full items-center justify-between py-3.5"
+						disabled={!data.can.annotate}
+					>
+						<span class="text-[16px]" style="color: var(--ink-3)">Category</span>
+						<span class="flex items-center gap-2">
+							<span class="text-[16px] font-medium" style="color: var(--ink)"
+								>{p.categoryName ?? 'Uncategorized'}</span
+							>
+							{#if data.can.annotate}
+								<span class="flex h-[18px] w-[18px] shrink-0 items-center justify-center">
+									<Pencil class="edit-pencil h-3.5 w-3.5" style="color: var(--ink-4)" />
+								</span>
+							{/if}
+						</span>
+					</button>
+				{/if}
+
 				{#if isPending}
 					<div class="hairline flex items-center justify-between py-3.5">
 						<span class="text-[15px]" style="color: var(--ink-3)">Waiting on</span>
@@ -490,10 +689,58 @@
 						>
 					</div>
 				{/if}
-				{#if p.note}
-					<p class="hairline py-3.5 text-[15px] leading-relaxed" style="color: var(--ink-2)">
-						{p.note}
-					</p>
+
+				<!-- Note — the bottom line of the details -->
+				{#if editingField === 'note'}
+					<form
+						method="POST"
+						action="?/editNote"
+						use:submit={{ success: 'Note saved', onSuccess: () => (editingField = null) }}
+						class="hairline space-y-3 py-3.5"
+					>
+						<textarea
+							name="note"
+							aria-label="Note"
+							rows="3"
+							placeholder="Add a note…"
+							class="ledger-input w-full text-[16px] leading-relaxed"
+							style="color: var(--ink-2)"
+							onkeydown={(e) => {
+								if (e.key === 'Enter' && !e.shiftKey) save(e.currentTarget);
+								cancelEdit(e);
+							}}>{p.note ?? ''}</textarea
+						>
+						<div class="flex gap-4 text-[16px]">
+							<button class="press font-semibold" style="color: var(--ink)">Save</button>
+							<button
+								type="button"
+								onclick={() => (editingField = null)}
+								class="press"
+								style="color: var(--ink-3)">Cancel</button
+							>
+						</div>
+					</form>
+				{:else if p.note}
+					<button
+						type="button"
+						onclick={() => data.can.annotate && (editingField = 'note')}
+						class="edit-row hairline flex w-full items-start justify-between gap-2 py-3.5 text-left"
+						disabled={!data.can.annotate}
+					>
+						<p class="text-[16px] leading-relaxed" style="color: var(--ink-2)">{p.note}</p>
+						{#if data.can.annotate}
+							<Pencil class="edit-pencil mt-0.5 h-3.5 w-3.5 shrink-0" style="color: var(--ink-4)" />
+						{/if}
+					</button>
+				{:else if data.can.annotate}
+					<button
+						type="button"
+						onclick={() => (editingField = 'note')}
+						class="edit-row press hairline flex w-full items-center gap-2 py-3.5 text-[16px]"
+						style="color: var(--ink-4)"
+					>
+						<Pencil class="edit-pencil h-3.5 w-3.5" /> Add a note
+					</button>
 				{/if}
 			</div>
 		</div>
@@ -581,116 +828,6 @@
 					</div>
 					<button class="btn btn-accent w-full">Complete purchase</button>
 				</form>
-			</div>
-		{/if}
-
-		{#if data.can.edit}
-			<div class="card p-5">
-				<button
-					onclick={() => (editing = !editing)}
-					class="press flex w-full items-center justify-between text-[15px]"
-					style="color: var(--ink)"
-				>
-					<span class="font-medium">Edit details</span>
-					<ChevronDown
-						class="h-4 w-4 transition-transform duration-200 {editing ? 'rotate-180' : ''}"
-						style="color: var(--ink-3)"
-					/>
-				</button>
-				{#if editing}
-					{#if p.state === 'approved' && p.approverNames.length > 0}
-						<p class="mt-3 text-[13px]" style="color: var(--pending)">
-							Changing item, amount, or category sends this back to {p.approverNames.join(' or ')}
-							for approval.
-						</p>
-					{:else if p.state === 'approved'}
-						<p class="mt-3 text-[13px]" style="color: var(--ink-3)">
-							This didn't need approval, so changes apply straight away.
-						</p>
-					{/if}
-					<form
-						method="POST"
-						action="?/edit"
-						use:submit={{ success: 'Changes saved' }}
-						class="mt-3 space-y-3"
-					>
-						<label class="block">
-							<span class="section-label mb-1.5 block">Item</span>
-							<input
-								name="itemName"
-								aria-label="Item"
-								required
-								value={p.itemName}
-								class="field text-[16px]"
-							/>
-						</label>
-						<div class="grid grid-cols-2 gap-3">
-							<label class="block">
-								<span class="section-label mb-1.5 block">Asking for</span>
-								<input
-									name="amount"
-									aria-label="Amount requested"
-									use:money
-									required
-									inputmode="decimal"
-									value={formatMinor(p.requestedAmountMinor, p.currency).replace(/[^0-9.]/g, '')}
-									class="field num text-[16px]"
-								/>
-							</label>
-							<label class="block">
-								<span class="section-label mb-1.5 block">Category</span>
-								<select name="categoryId" aria-label="Category" class="field text-[16px]">
-									<option value="">None</option>
-									{#each data.categories as c (c.id)}
-										<option value={c.id} selected={c.id === p.categoryId}>{c.icon} {c.name}</option>
-									{/each}
-								</select>
-							</label>
-						</div>
-						<label class="block">
-							<span class="section-label mb-1.5 block">Note</span>
-							<textarea name="note" aria-label="Note" rows="2" class="field text-[16px]"
-								>{p.note ?? ''}</textarea
-							>
-						</label>
-						<button class="btn btn-ghost w-full">Save changes</button>
-					</form>
-				{/if}
-			</div>
-		{/if}
-
-		{#if data.can.editNote}
-			<!-- The amount is settled, but the note is annotation — still editable, and
-			     the change is written to the history. -->
-			<div class="card p-5">
-				<button
-					onclick={() => (editingNote = !editingNote)}
-					class="press flex w-full items-center justify-between text-[15px]"
-					style="color: var(--ink)"
-				>
-					<span class="font-medium">{p.note ? 'Edit note' : 'Add a note'}</span>
-					<ChevronDown
-						class="h-4 w-4 transition-transform duration-200 {editingNote ? 'rotate-180' : ''}"
-						style="color: var(--ink-3)"
-					/>
-				</button>
-				{#if editingNote}
-					<form
-						method="POST"
-						action="?/editNote"
-						use:submit={{ success: 'Note saved', onSuccess: () => (editingNote = false) }}
-						class="mt-3 space-y-3"
-					>
-						<textarea
-							name="note"
-							aria-label="Note"
-							rows="3"
-							placeholder="Add a note…"
-							class="field text-[16px]">{p.note ?? ''}</textarea
-						>
-						<button class="btn btn-ghost w-full">Save note</button>
-					</form>
-				{/if}
 			</div>
 		{/if}
 
@@ -843,6 +980,32 @@
 {/if}
 
 <style>
+	.ledger-input {
+		border: none;
+		background: transparent;
+		outline: none;
+		padding: 0;
+		font-size: 16px;
+	}
+	.ledger-input::placeholder {
+		color: var(--ink-4);
+	}
+	/* The value itself is the affordance — the pencil only hints. On desktop
+	   it appears on hover; on touch it's always visible (there's no hover to
+	   discover it). The row that owns it gets .edit-row. */
+	@media (hover: hover) {
+		.edit-pencil {
+			opacity: 0;
+			transition: opacity var(--dur-fast) var(--ease-out);
+		}
+		.edit-row:hover .edit-pencil,
+		.edit-row:focus-within .edit-pencil {
+			opacity: 1;
+		}
+	}
+	.edit-row:disabled {
+		cursor: default;
+	}
 	.spin {
 		border-radius: 999px;
 		border: 2.5px solid color-mix(in oklab, var(--paper) 40%, transparent);

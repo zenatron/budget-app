@@ -332,6 +332,8 @@ export const recurringRule = pgTable(
 		itemName: text('item_name').notNull(),
 		categoryId: uuid('category_id').references(() => category.id),
 		merchantId: uuid('merchant_id').references(() => merchant.id),
+		/** Generated purchases are charged against this bucket (withdrawn on completion). */
+		bucketId: uuid('bucket_id'),
 		amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
 		currency: text('currency').notNull(),
 		rrule: text('rrule').notNull(),
@@ -341,7 +343,15 @@ export const recurringRule = pgTable(
 		autoComplete: boolean('auto_complete').notNull().default(false),
 		endedAt: timestamp('ended_at', { withTimezone: true })
 	},
-	(t) => [index('recurring_rule_workspace_idx').on(t.workspaceId)]
+	(t) => [
+		index('recurring_rule_workspace_idx').on(t.workspaceId),
+		// bucket is declared below; declare the FK here to keep types happy.
+		foreignKey({
+			name: 'recurring_rule_bucket_fk',
+			columns: [t.bucketId],
+			foreignColumns: [bucket.id]
+		})
+	]
 );
 
 export const income = pgTable(
@@ -417,15 +427,17 @@ export const bucket = pgTable(
 			.notNull()
 			.references(() => workspaceMember.id),
 		name: text('name').notNull(),
-		monthlyAmountMinor: bigint('monthly_amount_minor', { mode: 'bigint' }).notNull(),
+		/** Amount added per accrual (per occurrence of the rrule). */
+		amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
 		currency: text('currency').notNull(),
 		goalCapMinor: bigint('goal_cap_minor', { mode: 'bigint' }),
 		color: text('color'),
 		icon: text('icon'),
 		status: bucketStatus('status').notNull().default('active'),
-		dayOfMonth: integer('day_of_month').notNull().default(1),
-		/** When the next monthly accrual is due. Null = next closest occurrence of
-		 *  day_of_month. The sweep advances it to the following month after accruing. */
+		/** Accrual schedule — the same RRULE subset recurring purchases use. */
+		rrule: text('rrule').notNull(),
+		/** When the next accrual is due. Null = not scheduled yet; the sweep
+		 *  initializes it from the rrule and advances it after each accrual. */
 		nextAccrualAt: timestamp('next_accrual_at', { withTimezone: true }),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull()
 	},

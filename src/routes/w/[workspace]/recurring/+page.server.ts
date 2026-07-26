@@ -21,6 +21,7 @@ import {
 	updateRule
 } from '$lib/application/recurring';
 import { listCategories } from '$lib/server/repo/workspaces';
+import { listBuckets } from '$lib/server/repo/buckets';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { getNotifier } from '$lib/server/notify';
@@ -59,9 +60,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	// a locals-only load declares no such dependency. See +layout.server.ts.
 	void params.workspace;
 	const db = getDb();
-	const [rules, categories, confirmRow] = await Promise.all([
+	const [rules, categories, buckets, confirmRow] = await Promise.all([
 		db.select().from(recurringRule).where(eq(recurringRule.workspaceId, locals.workspace!.id)),
 		listCategories(db, locals.workspace!.id),
+		listBuckets(db, locals.workspace!.id),
 		// My recurring charges that landed but still need the real amount recorded —
 		// the ledger's "Confirm what you paid" section is where you clear them.
 		db
@@ -88,6 +90,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		}
 	}
 
+	const bucketNames = new Map(buckets.map((b) => [b.bucket.id, b.bucket.name]));
 	const view = rules
 		.filter((r) => r.status !== 'ended')
 		.map((r) => {
@@ -114,6 +117,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 				status: r.status,
 				autoComplete: r.autoComplete,
 				categoryId: r.categoryId,
+				bucketId: r.bucketId,
+				bucketName: r.bucketId ? (bucketNames.get(r.bucketId) ?? null) : null,
 				mine: r.memberId === locals.member!.id,
 				freq: parsed?.freq ?? 'monthly',
 				interval: parsed?.interval ?? 1,
@@ -146,7 +151,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		yearlyTotalMinor: BigInt(Math.round(annual)),
 		needsConfirmingCount: confirmRow[0].count,
 		rules: view,
-		categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon }))
+		categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
+		// Only active buckets can take a charge — same list the new-purchase form offers.
+		buckets: buckets
+			.filter((b) => b.bucket.status === 'active')
+			.map((b) => ({ id: b.bucket.id, name: b.bucket.name }))
 	};
 };
 
@@ -175,6 +184,7 @@ const CreateSchema = v.object({
 	itemName: v.pipe(v.string(), v.trim(), v.minLength(1, 'What is it?'), v.maxLength(120)),
 	amount: v.pipe(v.string(), v.trim(), v.minLength(1, 'How much?')),
 	categoryId: v.optional(v.string()),
+	bucketId: v.optional(v.string()),
 	freq: v.picklist(['daily', 'weekly', 'monthly', 'yearly']),
 	interval: v.pipe(
 		v.string(),
@@ -215,6 +225,7 @@ export const actions: Actions = {
 					itemName: f.itemName,
 					amount: Money.fromDecimal(f.amount, locals.workspace!.currency),
 					categoryId: f.categoryId || null,
+					bucketId: f.bucketId || null,
 					rrule: formatRRule(rec),
 					autoComplete: form.get('autoComplete') === 'on',
 					backfill
@@ -252,6 +263,7 @@ export const actions: Actions = {
 		const itemName = String(raw.itemName ?? '').trim();
 		const amountRaw = String(raw.amount ?? '').trim();
 		const categoryId = raw.categoryId as string | undefined;
+		const bucketId = raw.bucketId as string | undefined;
 		const freq = raw.freq as string | undefined;
 		const intervalRaw = raw.interval as string | undefined;
 		const startDate = raw.startDate as string | undefined;
@@ -265,6 +277,7 @@ export const actions: Actions = {
 				itemName?: string;
 				amount?: Money;
 				categoryId?: string | null;
+				bucketId?: string | null;
 				rrule?: string;
 				autoComplete?: boolean;
 			} = {};
@@ -272,6 +285,7 @@ export const actions: Actions = {
 			if (itemName) updates.itemName = itemName;
 			updates.amount = Money.fromDecimal(amountRaw, locals.workspace!.currency);
 			if (categoryId !== undefined) updates.categoryId = categoryId || null;
+			if (bucketId !== undefined) updates.bucketId = bucketId || null;
 			updates.autoComplete = autoComplete;
 
 			if (freq && startDate) {
