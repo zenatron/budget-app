@@ -29,6 +29,9 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	};
 	return jsonSafe({
 		entries: feed.entries.map((e) => toLedgerView(e, ctx)),
-		hasMore: feed.hasMore
+		hasMore: feed.hasMore,
+		// Returned so a page fetched after a filter change can correct the header,
+		// even though the total shouldn't move between pages of one query.
+		total: feed.total
 	});
 };

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
+	import { slide } from 'svelte/transition';
 	import { page, navigating } from '$app/state';
 	import {
 		Check,
@@ -99,6 +100,31 @@
 	// Measured, not guessed: the header's height varies with the safe-area inset,
 	// and anything docking beneath it needs the real number.
 	let headerH = $state(0);
+
+	/*
+	 * Offline notice.
+	 *
+	 * The service worker serves navigations network-first with the last good copy
+	 * as a fallback, so going offline doesn't break the app — it quietly freezes
+	 * it. Without a word on screen that's worse than an error: the numbers still
+	 * look authoritative, they're just not current, and this app's whole claim is
+	 * that its numbers are honest. So say so, once, quietly.
+	 *
+	 * Seeded from navigator.onLine rather than assumed online: the app is often
+	 * launched from the home screen with no connection, and the events only fire
+	 * on a *change*.
+	 */
+	let offline = $state(false);
+	$effect(() => {
+		const sync = () => (offline = !navigator.onLine);
+		sync();
+		window.addEventListener('online', sync);
+		window.addEventListener('offline', sync);
+		return () => {
+			window.removeEventListener('online', sync);
+			window.removeEventListener('offline', sync);
+		};
+	});
 
 	/*
 	 * Hide the bottom bar while the on-screen keyboard is up.
@@ -300,6 +326,22 @@
 					</div>
 				{/if}
 			</div>
+			{#if offline}
+				<!--
+					Docked inside the header so it inherits the frosted material and moves
+					with it, rather than pushing the page down and reflowing the ledger
+					underneath. A statement, not an alarm: no icon, no colour beyond the
+					muted pending tone, and it disappears the moment the connection returns.
+				-->
+				<div
+					class="px-5 pb-2 text-center text-[12px]"
+					style="color: var(--pending)"
+					role="status"
+					transition:slide={{ duration: 180 }}
+				>
+					Offline — showing what was last loaded
+				</div>
+			{/if}
 		</header>
 
 		<!--

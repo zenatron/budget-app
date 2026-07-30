@@ -213,6 +213,17 @@
 					]
 				},
 				{
+					id: 'reconcile',
+					icon: 'checkmark',
+					title: 'Reconciling a statement',
+					body: [
+						'Export a CSV from your bank and import it under Settings → Reconcile. Ledger reads the date, amount and description columns — naming them yourself if the headers are unfamiliar — and lines each transaction up against what is recorded here.',
+						'A match is only ever a **suggestion**. Importing never creates, edits or deletes a purchase, and never changes an amount; confirming a match writes one thing, a mark saying this purchase appeared on a statement. Undo is always available, and removing an import releases every mark it made.',
+						'Where two purchases fit a line equally well, Ledger will not guess — it shows both and lets you choose. Lines that were never purchases (fees, transfers) can be set aside, and a line with nothing behind it can be logged as a purchase in one tap.',
+						'Reconciling is seal-aware. A line that belongs to a purchase hidden from you reads *accounted for — hidden from you*: enough that you do not log a duplicate of a gift you are not meant to know about, and nothing more than that.'
+					]
+				},
+				{
 					id: 'palette',
 					icon: 'message',
 					title: 'Asking questions',

@@ -12,6 +12,8 @@ import {
 	workspaceMember
 } from '$lib/server/db/schema';
 import { Money } from '$lib/domain/money/money';
+import { eligibleApprovers } from '$lib/domain/approval/evaluate';
+import type { ApprovalPolicy } from '$lib/domain/approval/policy';
 import type { Purchase, TransitionEvent } from '$lib/domain/purchase/purchase';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
@@ -107,14 +109,60 @@ export async function loadPurchase(
 	if (opts.forUpdate) q = q.for('update');
 	const rows = await q;
 	if (!rows[0]) return null;
-	const approvers = await db
-		.select({ memberId: purchaseApprover.memberId })
-		.from(purchaseApprover)
-		.where(eq(purchaseApprover.purchaseId, purchaseId));
-	return toDomain(
-		rows[0],
-		approvers.map((a) => a.memberId)
-	);
+
+	/*
+	 * Who may decide: the snapshot taken when this was requested, UNION whoever
+	 * the requester's policy names today.
+	 *
+	 * The snapshot alone used to be the whole answer, which meant an approval
+	 * routing change never reached a request already waiting — add a member and
+	 * make them an approver, and they still couldn't act on the queue in front
+	 * of them. Worse, disabling the only snapshotted approver left a pending
+	 * request nobody at all could decide.
+	 *
+	 * It is a union, not a replacement, for two reasons. The snapshot is the
+	 * audit record of who was originally asked, and `approval_event` is written
+	 * against it — rewriting that would make history a moving target. And
+	 * widening only means a policy edit can never *remove* someone's ability to
+	 * answer a question already put to them.
+	 *
+	 * Self-approval is not guarded here. Policy is owner-only (a 403 in
+	 * settings/members), and an owner can already exempt themselves outright or
+	 * delete any entry, so a guard at this layer would defend a door that is
+	 * already open while blocking the ordinary case this fixes.
+	 */
+	const [snapshot, live] = await Promise.all([
+		db
+			.select({ memberId: purchaseApprover.memberId })
+			.from(purchaseApprover)
+			.where(eq(purchaseApprover.purchaseId, purchaseId)),
+		db
+			.select({
+				id: workspaceMember.id,
+				policy: workspaceMember.approvalPolicy,
+				status: workspaceMember.status
+			})
+			.from(workspaceMember)
+			.where(eq(workspaceMember.workspaceId, scope.workspaceId))
+	]);
+
+	const activeIds = live.filter((m) => m.status === 'active').map((m) => m.id);
+	const requesterPolicy = live.find((m) => m.id === rows[0].memberId)?.policy as
+		ApprovalPolicy | undefined;
+	const eligible = requesterPolicy ? eligibleApprovers(requesterPolicy, activeIds) : [];
+
+	/*
+	 * Both halves are filtered to active members. A disabled member cannot reach
+	 * the app at all — membership is resolved through a query that requires
+	 * `status = 'active'` — so carrying them here changes no permission, it only
+	 * makes "Waiting on Charlie" say someone is considering a request when they
+	 * have in fact left. The snapshot *row* is untouched; this is the live answer
+	 * to "who can decide now", and the audit record stays whole in the table.
+	 */
+	const snapshotActive = snapshot.map((a) => a.memberId).filter((id) => activeIds.includes(id));
+
+	const approverIds = [...new Set([...snapshotActive, ...eligible])];
+	return toDomain(rows[0], approverIds);
 }
 
 /**
@@ -295,10 +343,39 @@ export async function listPurchases(
 			thumbBlobId: sql<
 				string | null
 			>`coalesce(${purchaseImage.thumbBlobId}, ${parentImage.thumbBlobId})`,
-			canDecide: sql<boolean>`exists (
-				select 1 from ${purchaseApprover}
-				where ${purchaseApprover.purchaseId} = ${purchase.id}
-				and ${purchaseApprover.memberId} = ${scope.viewerId}
+			/*
+			 * Snapshot OR current policy — the same union `loadPurchase` builds, in
+			 * SQL because this runs over a whole page of rows. The two must agree:
+			 * this one decides whether the ledger offers a swipe action, and that
+			 * one decides whether the action is allowed. If this were the wider of
+			 * the two, the row would show Approve and the submit would 403.
+			 *
+			 * `workspaceMember` is already joined on `purchase.memberId`, so
+			 * `approvalPolicy` here is the *requester's* policy — the one whose
+			 * routing names who decides their spending.
+			 *
+			 * No active check on the viewer here, in either half: membership is
+			 * resolved in hooks.server.ts through a query that filters
+			 * `status = 'active'` (repo/workspaces.ts), so a viewer who reaches this
+			 * is active already. That is also why `loadPurchase` can filter its
+			 * snapshot half to active members without the two disagreeing — the only
+			 * id this predicate ever tests is the viewer's own.
+			 *
+			 * coalesce because `->` yields NULL on a policy with no routing key,
+			 * and `false OR NULL` is NULL, which would surface as a null canDecide
+			 * rather than a plain no.
+			 */
+			canDecide: sql<boolean>`(
+				exists (
+					select 1 from ${purchaseApprover}
+					where ${purchaseApprover.purchaseId} = ${purchase.id}
+					and ${purchaseApprover.memberId} = ${scope.viewerId}
+				)
+				or coalesce(
+					${workspaceMember.approvalPolicy} -> 'routing' -> 'approver_ids'
+						@> to_jsonb(${scope.viewerId}::text),
+					false
+				)
 			)`
 		})
 		.from(purchase)

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { Money } from '../money/money';
-import { ApprovalRoutingError, approvalRequired, resolveApprovers } from './evaluate';
+import {
+	ApprovalRoutingError,
+	approvalRequired,
+	eligibleApprovers,
+	resolveApprovers
+} from './evaluate';
 import { strandedByRemoving, type ApprovalPolicy } from './policy';
 import { isStale, nextNudgeAt, waitingDays } from './staleness';
 
@@ -132,6 +137,46 @@ describe('resolveApprovers', () => {
 	it('self-approval is not special: requester may be the approver', () => {
 		const p = policy({ routing: { mode: 'any_of', approver_ids: ['me'] } });
 		expect(resolveApprovers(p, ['me'])).toEqual(['me']);
+	});
+});
+
+describe('eligibleApprovers', () => {
+	it('returns the currently active approvers named by routing', () => {
+		const p = policy({ routing: { mode: 'any_of', approver_ids: ['a1', 'a2', 'gone'] } });
+		expect(eligibleApprovers(p, ['a1', 'a2', 'other'])).toEqual(['a1', 'a2']);
+	});
+
+	it('never throws where resolveApprovers would — it is a read path', () => {
+		// Each of these is a hard error when creating a purchase. Answering "who
+		// may decide this existing request?" must not take out the page.
+		const none = policy({ routing: { mode: 'any_of', approver_ids: ['gone'] } });
+		expect(eligibleApprovers(none, ['a1'])).toEqual([]);
+
+		const empty = policy({ routing: { mode: 'any_of', approver_ids: [] } });
+		expect(eligibleApprovers(empty, ['a1'])).toEqual([]);
+
+		const twoSpecific = policy({ routing: { mode: 'specific', approver_ids: ['a1', 'a2'] } });
+		expect(eligibleApprovers(twoSpecific, ['a1', 'a2'])).toEqual(['a1', 'a2']);
+	});
+
+	it('ignores mode: a pending request needs deciding whatever the mode became', () => {
+		// The owner switched this member to "no approval needed" after the request
+		// was made. The request is still pending, so routing still says who answers.
+		const p = policy({ mode: 'none', routing: { mode: 'any_of', approver_ids: ['a1'] } });
+		expect(eligibleApprovers(p, ['a1'])).toEqual(['a1']);
+	});
+
+	it('survives a malformed or legacy policy', () => {
+		expect(eligibleApprovers({ mode: 'none' } as unknown as ApprovalPolicy, ['a1'])).toEqual([]);
+		expect(
+			eligibleApprovers({ mode: 'none', routing: {} } as unknown as ApprovalPolicy, ['a1'])
+		).toEqual([]);
+		expect(eligibleApprovers(null as unknown as ApprovalPolicy, ['a1'])).toEqual([]);
+	});
+
+	it('does not exclude the requester — self-approval is a policy question', () => {
+		const p = policy({ routing: { mode: 'any_of', approver_ids: ['me'] } });
+		expect(eligibleApprovers(p, ['me'])).toEqual(['me']);
 	});
 });
 

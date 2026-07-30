@@ -86,6 +86,9 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 			.filter((m) => m.member.status === 'active')
 			.map((m) => ({ id: m.member.id, name: m.user.displayName })),
 		hasMore: feed.hasMore,
+		// The true number of rows matching the current filters, not the number
+		// loaded — the header reports this so the count doesn't grow as you page.
+		total: feed.total,
 		includeMovements: opts.includeMovements ?? locals.member!.includeLedgerMovements,
 		awaitingConfirmation,
 		sleeping,

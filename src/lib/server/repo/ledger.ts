@@ -1,4 +1,17 @@
-import { and, desc, eq, gte, ilike, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import {
+	and,
+	count,
+	desc,
+	eq,
+	gte,
+	ilike,
+	inArray,
+	isNull,
+	lt,
+	or,
+	sql,
+	type SQL
+} from 'drizzle-orm';
 import { unionAll } from 'drizzle-orm/pg-core';
 import type { Db } from '$lib/server/db';
 import { bucket, bucketTransaction, merchant, purchase } from '$lib/server/db/schema';
@@ -71,7 +84,7 @@ export async function listLedger(
 	scope: { workspaceId: string; viewerId: string },
 	now: Date,
 	opts: LedgerOpts = {}
-): Promise<{ entries: LedgerEntry[]; hasMore: boolean }> {
+): Promise<{ entries: LedgerEntry[]; hasMore: boolean; total: number }> {
 	const limit = opts.limit ?? 20;
 	const offset = opts.offset ?? 0;
 
@@ -137,7 +150,28 @@ export async function listLedger(
 		!opts.memberId &&
 		basis !== 'spend';
 
+	/*
+	 * How many rows match, ignoring the page window.
+	 *
+	 * The ledger header used to render the *loaded* row count as though it were a
+	 * total: it under-reported whenever there was another page, and grew as you
+	 * tapped "Show more". A count that moves when you scroll isn't a count, and
+	 * this app's whole claim is that its numbers are honest — so the header gets
+	 * the real one.
+	 *
+	 * Counted with the same predicates as the key queries above, not a subquery
+	 * over them: the two kinds are unioned, so summing two counts is exactly the
+	 * union's cardinality, and each count runs against the same indexes the key
+	 * query uses.
+	 */
+	const countPurchases = db
+		.select({ n: count() })
+		.from(purchase)
+		.leftJoin(merchant, eq(purchase.merchantId, merchant.id))
+		.where(and(...purchaseWhere));
+
 	let keys: { kind: string; id: string; at: string }[];
+	let total: number;
 	if (wantMovements) {
 		const movementWhere: SQL[] = [eq(bucket.workspaceId, scope.workspaceId)];
 		if (opts.from) movementWhere.push(gte(bucketTransaction.createdAt, opts.from));
@@ -160,15 +194,30 @@ export async function listLedger(
 			.innerJoin(bucket, eq(bucketTransaction.bucketId, bucket.id))
 			.where(and(...movementWhere));
 
-		keys = await unionAll(purchaseKeys, movementKeys)
-			.orderBy(sql`at desc`)
-			.limit(limit + 1)
-			.offset(offset);
+		const [rows, pc, mc] = await Promise.all([
+			unionAll(purchaseKeys, movementKeys)
+				.orderBy(sql`at desc`)
+				.limit(limit + 1)
+				.offset(offset),
+			countPurchases,
+			db
+				.select({ n: count() })
+				.from(bucketTransaction)
+				.innerJoin(bucket, eq(bucketTransaction.bucketId, bucket.id))
+				.where(and(...movementWhere))
+		]);
+		keys = rows;
+		total = (pc[0]?.n ?? 0) + (mc[0]?.n ?? 0);
 	} else {
-		keys = await purchaseKeys
-			.orderBy(desc(sql`at`))
-			.limit(limit + 1)
-			.offset(offset);
+		const [rows, pc] = await Promise.all([
+			purchaseKeys
+				.orderBy(desc(sql`at`))
+				.limit(limit + 1)
+				.offset(offset),
+			countPurchases
+		]);
+		keys = rows;
+		total = pc[0]?.n ?? 0;
 	}
 
 	const hasMore = keys.length > limit;
@@ -187,7 +236,11 @@ export async function listLedger(
 	for (const m of movements) byId.set(m.id, { kind: 'movement', ...m });
 
 	// The union decided the order; hydration only filled in the detail.
-	return { entries: page.map((k) => byId.get(k.id)).filter((e): e is LedgerEntry => !!e), hasMore };
+	return {
+		entries: page.map((k) => byId.get(k.id)).filter((e): e is LedgerEntry => !!e),
+		hasMore,
+		total
+	};
 }
 
 async function listBucketMovements(db: Db, ids: string[]): Promise<BucketMovementItem[]> {

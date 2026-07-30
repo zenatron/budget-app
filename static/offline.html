@@ -1,0 +1,139 @@
+<!doctype html>
+<!--
+	The navigation fallback when the network is gone and this page has never been
+	cached. It replaced a bare `<h1>Offline</h1>` string literal in the service
+	worker, which rendered in Times New Roman on white — the one screen in the app
+	that looked like a browser error rather than like Ledger.
+
+	Entirely self-contained: no build assets, no fonts, no script. It has to work
+	when nothing can be fetched, which also means it can't reference the token
+	sheet — so the handful of paper values it needs are inlined here. They mirror
+	`--paper` / `--ink` / `--ink-3` / `--surface` in src/routes/layout.css; if
+	those move, move these.
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+		<meta name="color-scheme" content="light dark" />
+		<title>Offline — Ledger</title>
+		<style>
+			:root {
+				color-scheme: light dark;
+				--paper: light-dark(oklch(0.965 0.013 88), oklch(0.18 0.012 78));
+				--surface: light-dark(oklch(0.995 0.004 90), oklch(0.225 0.014 80));
+				--ink: light-dark(oklch(0.245 0.021 62), oklch(0.95 0.01 84));
+				--ink-3: light-dark(oklch(0.52 0.016 64), oklch(0.67 0.012 84));
+				--hairline: light-dark(oklch(0.28 0.02 65 / 0.16), oklch(0.92 0.02 80 / 0.13));
+			}
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				margin: 0;
+				min-height: 100svh;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 24px calc(24px + env(safe-area-inset-left, 0px));
+				background: var(--paper);
+				color: var(--ink);
+				font-family:
+					'Hanken Grotesk Variable', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial,
+					sans-serif;
+				letter-spacing: -0.006em;
+				-webkit-font-smoothing: antialiased;
+			}
+			main {
+				text-align: center;
+				max-width: 30ch;
+			}
+			.mark {
+				width: 56px;
+				height: 56px;
+				margin: 0 auto 20px;
+				display: grid;
+				place-items: center;
+				border-radius: 16px;
+				background: var(--surface);
+				box-shadow: inset 0 0 0 1px var(--hairline);
+			}
+			.overline {
+				font-size: 11px;
+				font-weight: 700;
+				letter-spacing: 0.14em;
+				text-transform: uppercase;
+				color: var(--ink-3);
+			}
+			h1 {
+				font-family: 'Atkinson Hyperlegible', Georgia, 'Times New Roman', serif;
+				font-size: 28px;
+				font-weight: 600;
+				line-height: 1.05;
+				letter-spacing: -0.01em;
+				margin: 10px 0 0;
+			}
+			p {
+				margin: 8px 0 0;
+				font-size: 15px;
+				line-height: 1.5;
+				color: var(--ink-3);
+			}
+			button {
+				margin-top: 28px;
+				font: inherit;
+				font-size: 17px;
+				font-weight: 600;
+				padding: 14px 24px;
+				border: none;
+				border-radius: 999px;
+				background: var(--ink);
+				color: var(--paper);
+				cursor: pointer;
+				transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
+			}
+			button:active {
+				transform: scale(0.965);
+			}
+			@media (prefers-reduced-motion: reduce) {
+				button {
+					transition: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<div class="mark" aria-hidden="true">
+				<!--
+					Lucide's cloud-off, inlined (the icon package is a JS import the app
+					can't reach from here) and set at the app's lighter 1.6px stroke, the
+					same weight layout.css gives every other icon.
+				-->
+				<svg
+					width="26"
+					height="26"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.6"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					style="color: var(--ink-3)"
+				>
+					<path d="m2 2 20 20" />
+					<path d="M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193" />
+					<path d="M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07" />
+				</svg>
+			</div>
+			<p class="overline">No connection</p>
+			<h1>You're offline</h1>
+			<p>
+				Ledger keeps working as soon as you're back. Nothing you've already saved is affected.
+			</p>
+			<!-- No inline handler: the CSP has no unsafe-inline. A plain form reloads
+			     the current URL on submit, which is exactly "try again" without script. -->
+			<form><button type="submit">Try again</button></form>
+		</main>
+	</body>
+</html>

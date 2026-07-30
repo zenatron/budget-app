@@ -19,6 +19,7 @@
 	import { money } from '$lib/actions/money';
 	import { fade, fly } from 'svelte/transition';
 	import { dismiss } from '$lib/actions/dismiss';
+	import { modal } from '$lib/actions/modal';
 	import HoldPicker from '$lib/components/HoldPicker.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 
@@ -487,6 +488,7 @@
 						>
 					{:else}
 						<form
+							id="deny-form"
 							method="POST"
 							action="?/deny"
 							use:enhance={() => {
@@ -534,20 +536,23 @@
 			{/if}
 
 			{#if showDeny}
-				<form
-					method="POST"
-					action="?/deny"
-					use:enhance={() => {
-						deciding = 'deny';
-						return async ({ update }) => {
-							await update();
-							deciding = null;
-						};
-					}}
-					class="mt-2.5"
-				>
-					<input name="reason" placeholder="Reason (optional)" class="field text-[16px]" />
-				</form>
+				<!--
+					`form="deny-form"` rather than a form of its own. This input used to sit
+					in a SECOND <form action="?/deny"> below the button, which meant the
+					reason you typed was submitted by nothing: the visible Deny button
+					belongs to the form above and posted without it, so the reason was
+					silently dropped on the one action where the requester most wants to
+					know why (the server has always read it). The `form` attribute
+					associates the input across the DOM, so the reason travels with the
+					button and the three-action row above keeps its layout.
+				-->
+				<input
+					form="deny-form"
+					name="reason"
+					placeholder="Reason (optional)"
+					aria-label="Reason for denying"
+					class="field mt-2.5 text-[16px]"
+				/>
 			{/if}
 		{/if}
 
@@ -935,6 +940,7 @@
 		role="dialog"
 		aria-modal="true"
 		aria-label="Sleep on it"
+		use:modal
 		transition:fly={{ y: 24, duration: 200 }}
 	>
 		<div

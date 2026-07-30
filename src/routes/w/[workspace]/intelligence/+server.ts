@@ -18,6 +18,7 @@ import { calDateInZone } from '$lib/domain/time/zoned';
 import { parse, type ParsedIntent, type TimePeriod } from '$lib/intelligence/parser';
 import { formatPct } from '$lib/format';
 import { getLlmAssist } from '$lib/infra/llm';
+import { briefingField } from '$lib/infra/llm/prompt';
 import type { ParsedAction } from '$lib/ports/llm-assist';
 import type { WorkspaceRow } from '$lib/server/repo/workspaces';
 import type { RequestHandler } from './$types';
@@ -194,6 +195,8 @@ function deterministicAction(parsed: ParsedIntent): ParsedAction | null {
  * every figure here is real and seal-scoped to the viewer, so the model narrates
  * truth rather than guessing. Kept short on purpose — a small model reasons more
  * reliably over a tight briefing, and it's cheaper to send.
+ *
+ * Figures are ours; names are the household's. See briefingField.
  */
 async function buildBriefing(
 	db: ReturnType<typeof getDb>,
@@ -220,13 +223,13 @@ async function buildBriefing(
 	const net = income - thisSpent - savings;
 	const topCats = cats
 		.slice(0, 6)
-		.map((c) => `${c.name} ${fmt(c.totalMinor)}`)
+		.map((c) => `${briefingField(c.name)} ${fmt(c.totalMinor)}`)
 		.join(', ');
-	const memberLine = members.map((m) => `${m.name} ${fmt(m.totalMinor)}`).join(', ');
+	const memberLine = members.map((m) => `${briefingField(m.name)} ${fmt(m.totalMinor)}`).join(', ');
 	const isoToday = `${today.y}-${String(today.m).padStart(2, '0')}-${String(today.d).padStart(2, '0')}`;
 
 	const lines = [
-		`Workspace: ${ws.name}. Currency: ${currency}. Today: ${isoToday}.`,
+		`Workspace: ${briefingField(ws.name)}. Currency: ${currency}. Today: ${isoToday}.`,
 		`This month (${monthLabel(today)}): spent ${fmt(thisSpent)}, income ${fmt(income)}, set aside in savings ${fmt(savings)}, net ${fmt(net)}.`,
 		`Safe to Spend right now (free cash left this month): ${fmt(sts.freeMinor)} — status ${sts.status}.`,
 		`Last month (${monthLabel(lastMonth.from)}): spent ${fmt(lastSpent)}.`,

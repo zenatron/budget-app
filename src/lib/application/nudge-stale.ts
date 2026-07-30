@@ -1,4 +1,5 @@
-import { and, eq, lt, sql } from 'drizzle-orm';
+import { and, eq, lt, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { Db } from '$lib/server/db';
 import {
 	purchase,
@@ -65,15 +66,39 @@ export async function nudgeStaleRequests(
 			.returning({ id: purchase.id });
 		if (claimed.length === 0) continue;
 
+		/*
+		 * Who to nudge: the snapshot taken at request time, UNION whoever the
+		 * requester's policy names now — the same set `loadPurchase` authorizes
+		 * against. Nudging the snapshot alone meant chasing people who could no
+		 * longer be the ones to act while staying silent towards those who now
+		 * can, which is the worst of both: noise for some, an unattended queue
+		 * for everyone else.
+		 *
+		 * Still excludes the requester (you don't nudge someone about their own
+		 * request) and still only reaches active members.
+		 */
+		const requester = alias(workspaceMember, 'requester_member');
 		const approvers = await db
-			.select({ memberId: purchaseApprover.memberId, userId: workspaceMember.userId })
-			.from(purchaseApprover)
-			.innerJoin(workspaceMember, eq(purchaseApprover.memberId, workspaceMember.id))
+			.select({ memberId: workspaceMember.id, userId: workspaceMember.userId })
+			.from(workspaceMember)
+			.innerJoin(requester, eq(requester.id, row.p.memberId))
 			.where(
 				and(
-					eq(purchaseApprover.purchaseId, row.p.id),
+					eq(workspaceMember.workspaceId, row.p.workspaceId),
 					eq(workspaceMember.status, 'active'),
-					sql`${purchaseApprover.memberId} <> ${row.p.memberId}`
+					sql`${workspaceMember.id} <> ${row.p.memberId}`,
+					or(
+						sql`exists (
+							select 1 from ${purchaseApprover}
+							where ${purchaseApprover.purchaseId} = ${row.p.id}
+							and ${purchaseApprover.memberId} = ${workspaceMember.id}
+						)`,
+						sql`coalesce(
+							${requester.approvalPolicy} -> 'routing' -> 'approver_ids'
+								@> to_jsonb(${workspaceMember.id}::text),
+							false
+						)`
+					)
 				)
 			);
 		const recipients: Recipient[] = approvers.map((a) => ({

@@ -22,7 +22,8 @@
 		'#BF5AF2',
 		'#FF453A',
 		'#40C8E0',
-		'#FFD60A'
+		'#FFD60A',
+		'#8E8E93'
 	];
 
 	let showNew = $state(false);
@@ -348,9 +349,7 @@
 								class="ml-auto"
 							>
 								<input type="hidden" name="bucketId" value={b.id} />
-								<button class="press" style="color: color-mix(in oklab, var(--deny) 80%, white)"
-									>Archive</button
-								>
+								<button class="press" style="color: var(--deny)">Archive</button>
 							</form>
 						</div>
 

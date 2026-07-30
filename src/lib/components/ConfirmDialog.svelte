@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { fade, scale } from 'svelte/transition';
 	import { dismiss } from '$lib/actions/dismiss';
+	import { modal } from '$lib/actions/modal';
 	import { confirmState, answerConfirm } from '$lib/confirm-state.svelte';
 
 	const spec = $derived(confirmState.current);
@@ -13,11 +14,19 @@
 		use:dismiss={() => answerConfirm(false)}
 		transition:fade={{ duration: 120 }}
 	></div>
+	<!--
+		Destructive confirms open with focus on Cancel, not Confirm. Every dangerous
+		action in the app is reached by a deliberate act — arming the delete, typing
+		the workspace name — and those are done from the keyboard as often as not.
+		Landing focus on Confirm would let the Enter that armed the gate carry
+		straight through it. Safe confirms focus the affirmative, as usual.
+	-->
 	<div
 		class="fixed inset-x-4 top-1/2 z-[60] mx-auto max-w-sm -translate-y-1/2"
 		role="alertdialog"
 		aria-modal="true"
 		aria-label={spec.title}
+		use:modal={{ initial: spec.tone === 'danger' ? '[data-confirm-cancel]' : undefined }}
 		transition:scale={{ start: 0.95, duration: 160 }}
 	>
 		<div
@@ -35,6 +44,7 @@
 			{/if}
 			<div class="mt-5 flex gap-2.5">
 				<button
+					data-confirm-cancel
 					onclick={() => answerConfirm(false)}
 					class="btn btn-ghost flex-1 py-2.5 text-[15px]"
 				>

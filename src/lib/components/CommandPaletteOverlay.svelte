@@ -4,6 +4,7 @@
 	import { EXAMPLE_PROMPTS, understand } from '$lib/intelligence/parser';
 	import { Sparkles, X } from '@lucide/svelte';
 	import { dismiss } from '$lib/actions/dismiss';
+	import { modal } from '$lib/actions/modal';
 	import {
 		paletteQuery,
 		paletteLoading,
@@ -59,24 +60,38 @@
 </script>
 
 <div class="fixed inset-0 z-50" style="background: var(--scrim)" use:dismiss={close}></div>
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="fixed inset-x-4 top-[16vh] z-50 mx-auto max-w-lg" onkeydown={handleKeydown}>
+<!--
+	The a11y_no_static_element_interactions suppression that used to sit here is
+	gone because the reason for it is: this is a real dialog now, with a role, a
+	label and a focus trap, so the keydown handler is on something that can
+	legitimately take one.
+
+	skipInitialFocus: `toggle()` in command-palette-state already focuses the query
+	input on a rAF, and Escape-with-a-response refocuses it too. Letting the action
+	also claim focus would have the two racing for the caret.
+-->
+<div
+	class="fixed inset-x-4 top-[16vh] z-50 mx-auto max-w-lg"
+	role="dialog"
+	aria-modal="true"
+	aria-label="Ask Harmony"
+	tabindex="-1"
+	use:modal={{ skipInitialFocus: true }}
+	onkeydown={handleKeydown}
+>
 	<div
 		class="card-lg overflow-hidden"
 		style="box-shadow: var(--shadow-float); background: var(--surface)"
 	>
 		<!--
 			The input is the hero of this panel, so it gets the full row: no border
-			box of its own, generous height, and the sparkle doubles as the focus
-			indicator by tinting with the workspace accent.
+			box of its own, generous height, and the sparkle marking it as Harmony's.
 		-->
 		<div class="relative">
 			<div class="flex items-center gap-3 px-4 pt-4 pb-3.5">
 				<span
-					class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors"
-					style="background: color-mix(in oklab, var(--ws-accent) {paletteQuery.value
-						? '22'
-						: '14'}%, transparent)"
+					class="harmony-mark flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+					class:thinking={paletteLoading.value}
 				>
 					<Sparkles class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
 				</span>
@@ -239,3 +254,44 @@
 		</div>
 	</div>
 </div>
+
+<style>
+	/*
+	 * The mark's tint used to step 14% → 22% the moment the field held any text,
+	 * which read as the sparkle reacting to *typing* — a state nobody needs
+	 * signalled, since the text itself already shows it. The tint is fixed now,
+	 * and the motion is spent on the one state that isn't otherwise visible:
+	 * waiting on the model.
+	 */
+	.harmony-mark {
+		background: color-mix(in oklab, var(--ws-accent) 14%, transparent);
+	}
+
+	/* Breathing rather than blinking — this panel is calm, and the round-trip is
+	   usually a second or two. The tint carries most of it; the scale is small
+	   enough to feel like the mark is lit from behind, not bouncing. */
+	.harmony-mark.thinking {
+		animation: harmony-think 1.5s ease-in-out infinite;
+	}
+
+	@keyframes harmony-think {
+		0%,
+		100% {
+			transform: scale(1);
+			background: color-mix(in oklab, var(--ws-accent) 14%, transparent);
+		}
+		50% {
+			transform: scale(1.06);
+			background: color-mix(in oklab, var(--ws-accent) 32%, transparent);
+		}
+	}
+
+	/* Reduced motion still needs to say "working", so the mark holds the bright
+	   end of the pulse instead of moving through it. */
+	@media (prefers-reduced-motion: reduce) {
+		.harmony-mark.thinking {
+			animation: none;
+			background: color-mix(in oklab, var(--ws-accent) 32%, transparent);
+		}
+	}
+</style>

@@ -4,7 +4,14 @@
 	import { ledgerLink } from '$lib/ledger-filters';
 	import { calDateInZone } from '$lib/domain/time/zoned';
 	import { addDays, isoWeekday } from '$lib/domain/recurrence/rrule';
-	import { Sparkles, Printer, ChevronLeft, ChevronRight, Download } from '@lucide/svelte';
+	import {
+		Sparkles,
+		Printer,
+		ChevronLeft,
+		ChevronRight,
+		Download,
+		FileCheck
+	} from '@lucide/svelte';
 
 	let { data } = $props();
 	const slug = $derived(page.params.workspace!);
@@ -142,6 +149,14 @@
 		</div>
 		<div class="text-right">
 			<div class="screen-only flex items-center justify-end gap-2">
+				<!-- The adjacent idea: this sheet says what Ledger thinks happened;
+				     reconcile checks it against what the bank says happened. -->
+				<a
+					href="/w/{slug}/reconcile"
+					class="grid h-9 w-9 place-items-center rounded-full"
+					style="color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--hairline)"
+					aria-label="Reconcile against a bank statement"><FileCheck size={16} /></a
+				>
 				<button
 					onclick={printSheet}
 					class="grid h-9 w-9 place-items-center rounded-full"

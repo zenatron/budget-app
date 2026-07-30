@@ -505,9 +505,7 @@
 										class="ml-auto"
 									>
 										<input type="hidden" name="ruleId" value={r.id} />
-										<button class="press" style="color: color-mix(in oklab, var(--deny) 80%, white)"
-											>End</button
-										>
+										<button class="press" style="color: var(--deny)">End</button>
 									</form>
 								</div>
 								{#if editing === r.id}

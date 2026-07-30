@@ -25,7 +25,8 @@ export const ACCENTS = [
 	'#FF453A',
 	'#1795A9',
 	'#A0860C',
-	'#B4472B'
+	'#B4472B',
+	'#6E6A61'
 ] as const;
 
 /**
@@ -41,7 +42,8 @@ export const ACCENT_NAMES: Record<string, string> = {
 	'#FF453A': 'Crimson',
 	'#1795A9': 'Cerulean',
 	'#A0860C': 'Peanut',
-	'#B4472B': 'Cinnamon'
+	'#B4472B': 'Cinnamon',
+	'#6E6A61': 'Graphite'
 };
 
 export function accentName(hex: string): string {

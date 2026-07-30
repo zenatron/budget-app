@@ -108,7 +108,17 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 				}
 				await update({ reset });
 			} else {
-				// result.type === 'error': let SvelteKit render its error page.
+				// result.type === 'error'. A dropped connection surfaces here as a
+				// generic fetch failure, and "Something went wrong" then reads as "the
+				// app is broken" when the real answer is "you're on the tube". Say which
+				// it is, and — importantly — that nothing was saved, so the person knows
+				// to try again rather than assuming it went through. Returning without
+				// applyAction keeps them on the page they filled in, rather than
+				// replacing it with an error screen that discards what they typed.
+				if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+					toastError("You're offline — this didn't save");
+					return;
+				}
 				toastError(result.error?.message ?? 'Something went wrong. Try again.');
 				await applyAction(result);
 			}

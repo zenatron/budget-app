@@ -24,6 +24,7 @@
 	import { fade, fly } from 'svelte/transition';
 	import { calDateInZone } from '$lib/domain/time/zoned';
 	import { dismiss } from '$lib/actions/dismiss';
+	import { modal } from '$lib/actions/modal';
 
 	import BillImport from '$lib/components/BillImport.svelte';
 	import BarcodeScanner from '$lib/components/BarcodeScanner.svelte';
@@ -677,6 +678,7 @@
 				role="dialog"
 				aria-modal="true"
 				aria-label="Sleep on it"
+				use:modal
 				transition:fly={{ y: 24, duration: 200 }}
 			>
 				<div

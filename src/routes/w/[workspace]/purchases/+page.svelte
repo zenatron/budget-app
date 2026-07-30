@@ -18,6 +18,7 @@
 	} from '@lucide/svelte';
 	import Money from '$lib/components/Money.svelte';
 	import { dismiss } from '$lib/actions/dismiss';
+	import { modal } from '$lib/actions/modal';
 	import { swipe } from '$lib/actions/swipe';
 	import { submit } from '$lib/actions/submit';
 	import type { ConfirmSpec } from '$lib/confirm-state.svelte';
@@ -89,6 +90,10 @@
 
 	let items = $state<typeof data.entries>([]);
 	let hasMore = $state(false);
+	// The count of everything matching the current filters, from the server.
+	// Deliberately not items.length: that's the number *loaded*, which grew every
+	// time you tapped "Show more" and under-reported until you did.
+	let total = $state(0);
 
 	// Re-seed from the server list whenever it changes, not just on first paint.
 	// An SSE invalidation refreshes `data` but the paginated `items` array is
@@ -97,6 +102,7 @@
 	$effect(() => {
 		items = [...data.entries];
 		hasMore = data.hasMore;
+		total = data.total;
 	});
 
 	// Keep the box in step when the URL changes underneath it — back button,
@@ -328,6 +334,7 @@
 			const json = await res.json();
 			items = [...items, ...json.entries];
 			hasMore = json.hasMore;
+			if (typeof json.total === 'number') total = json.total;
 		} catch {
 			// Failing silently left "Show more" looking like a no-op button.
 			toastError("Couldn't load more");
@@ -649,8 +656,8 @@
 	<div class="flex items-end justify-between px-1 pt-1 pb-2">
 		<h1>Ledger</h1>
 		<span class="num pb-1 text-[13px]" style="color: var(--ink-3)"
-			>{filtered.length}
-			{filtered.length === 1 ? 'item' : 'items'}</span
+			>{total}
+			{total === 1 ? 'item' : 'items'}</span
 		>
 	</div>
 
@@ -736,6 +743,7 @@
 			aria-modal="true"
 			aria-label="Filter the ledger"
 			tabindex="-1"
+			use:modal
 			onkeydown={(e) => {
 				if (e.key === 'Escape') showFilter = false;
 			}}

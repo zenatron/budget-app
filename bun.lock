@@ -17,7 +17,6 @@
       },
       "devDependencies": {
         "@eslint/js": "^10.0.1",
-        "@fontsource-variable/bodoni-moda": "^5.2.7",
         "@fontsource-variable/hanken-grotesk": "^5.2.8",
         "@fontsource/atkinson-hyperlegible": "^5.2.8",
         "@playwright/test": "^1.61.1",
@@ -139,8 +138,6 @@
     "@eslint/object-schema": ["@eslint/object-schema@3.0.5", "https://registry.npmmirror.com/@eslint/object-schema/-/object-schema-3.0.5.tgz", {}, "sha512-vqTaUEgxzm+YDSdElad6PiRoX4t8VGDjCtt05zn4nU810UIx/uNEV7/lZJ6KwFThKZOzOxzXy48da+No7HZaMw=="],
 
     "@eslint/plugin-kit": ["@eslint/plugin-kit@0.7.2", "https://registry.npmmirror.com/@eslint/plugin-kit/-/plugin-kit-0.7.2.tgz", { "dependencies": { "@eslint/core": "^1.2.1", "levn": "^0.4.1" } }, "sha512-+CNAzxglkrpNf/kKywqQfk74QjtceuOE7Qm+AF8miRvPF/wmmK5+OJOgVh3AVTT3RP2mH3+FOaxlE5v72owk0A=="],
-
-    "@fontsource-variable/bodoni-moda": ["@fontsource-variable/bodoni-moda@5.2.7", "", {}, "sha512-GZo4yqbmS/72On15EcAcKHjYfPbWCPKh4AlkVp8OP2pcGMD+XGoXVuNPEPFgaAfMJpcsa2fsJj/BvQby0gH7Eg=="],
 
     "@fontsource-variable/hanken-grotesk": ["@fontsource-variable/hanken-grotesk@5.2.8", "", {}, "sha512-K7hu09ZKReBc7EifRLeM4K94NZBrxFEg0nGcISmVwlFQOJo4EmYkLXTWEwr5JcNW4z2hr5zy8vLS2sxC8JDmrQ=="],
 

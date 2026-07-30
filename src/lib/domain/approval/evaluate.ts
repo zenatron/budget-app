@@ -66,6 +66,29 @@ export class ApprovalRoutingError extends Error {
  * ids. Returns the snapshot to persist on the request. Self-approval is not a
  * special case — the requester may legitimately be in the returned set.
  */
+/**
+ * Who may decide a purchase *right now*, under the requester's current policy.
+ *
+ * The lenient sibling of `resolveApprovers`. That one is for the write path —
+ * it throws, deliberately, so a purchase can never be created with nobody able
+ * to approve it. This one answers a question about an existing request, on the
+ * read path, where throwing would take out the ledger page instead of the one
+ * row it couldn't resolve. An unresolvable policy here simply yields nobody,
+ * and the caller unions this with the snapshot, so the people originally asked
+ * still stand.
+ *
+ * Routing, not mode, decides this. `mode` governs whether a *new* purchase
+ * needs approving at all; a request that is already pending needs someone to
+ * decide it whatever the mode has since been changed to. And `specific` is not
+ * enforced here — a policy that has drifted to two named approvers is a
+ * misconfiguration to fix, not a reason to strand a pending request.
+ */
+export function eligibleApprovers(policy: ApprovalPolicy, activeMemberIds: string[]): string[] {
+	const ids = policy?.routing?.approver_ids;
+	if (!Array.isArray(ids)) return [];
+	return ids.filter((id) => activeMemberIds.includes(id));
+}
+
 export function resolveApprovers(policy: ApprovalPolicy, activeMemberIds: string[]): string[] {
 	const { mode, approver_ids } = policy.routing;
 	const active = approver_ids.filter((id) => activeMemberIds.includes(id));

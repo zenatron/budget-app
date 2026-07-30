@@ -8,6 +8,14 @@ const sw = self as unknown as ServiceWorkerGlobalScope;
 const CACHE = `assets-${version}`;
 const ASSETS = new Set([...build, ...files]);
 
+/*
+ * The styled offline shell. It lives in static/ so it ships as an ordinary
+ * file (and so it's already in `files` above), but it's named explicitly here
+ * because it's the one asset the fetch handler reaches for by path rather than
+ * by request.
+ */
+const OFFLINE_URL = '/offline.html';
+
 sw.addEventListener('install', (event) => {
 	event.waitUntil(
 		caches
@@ -60,8 +68,14 @@ sw.addEventListener('fetch', (event) => {
 					return fresh;
 				} catch {
 					const cached = await cache.match(event.request);
+					if (cached) return cached;
+					// Never visited this URL before going offline. Serve the app's own
+					// offline shell rather than a string literal — that fallback rendered
+					// in the UA's default serif on white, the one screen that looked like
+					// a browser error instead of like Ledger.
+					const shell = await caches.match(OFFLINE_URL);
 					return (
-						cached ??
+						shell ??
 						new Response('<h1>Offline</h1><p>Reconnect to see your workspace.</p>', {
 							status: 503,
 							headers: { 'Content-Type': 'text/html' }
