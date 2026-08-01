@@ -52,6 +52,7 @@ import {
 	resumeBucket,
 	archiveBucket,
 	addTransaction,
+	bucketBalance,
 	loadOwnBucket
 } from '$lib/server/repo/buckets';
 import { addIncome, listIncome, updateIncome, deleteIncome } from '$lib/server/repo/income';
@@ -1030,11 +1031,22 @@ export const TOOLS: McpTool[] = [
 			});
 			const p = await loadPurchase(ctx.db, viewScope(ctx), purchaseId, { now: ctx.now });
 			const state = p?.state ?? 'recorded';
+			// A logged purchase withdraws from its bucket straight away, so if that
+			// pushed the bucket under, say so rather than leaving it to be found later.
+			const bucketId = str(args, 'bucket_id');
+			let overdrawn = '';
+			if (bucketId && state === 'completed') {
+				const after = await bucketBalance(ctx.db, bucketId);
+				if (after < 0n) {
+					overdrawn = ` That bucket is now ${Money.of(-after, ctx.authed.workspace.currency).format()} overdrawn — nothing had been set aside to cover it, so the shortfall counts as ordinary spending.`;
+				}
+			}
 			return {
 				text:
-					state === 'pending_approval'
+					(state === 'pending_approval'
 						? `Logged "${required(args, 'item')}" — it needs approval and has been sent to your approver(s). Purchase id ${purchaseId}.`
-						: `Logged "${required(args, 'item')}" as ${state}. Purchase id ${purchaseId}.`,
+						: `Logged "${required(args, 'item')}" as ${state}. Purchase id ${purchaseId}.`) +
+					overdrawn,
 				data: { purchase_id: purchaseId, state }
 			};
 		}
@@ -1448,9 +1460,16 @@ export const TOOLS: McpTool[] = [
 					type: withdraw ? 'withdrawal' : 'adjustment',
 					note: str(args, 'note') ?? null
 				});
+				// No modal to put in front of an API caller, so the overdraft goes in
+				// the answer: the balance after the move, said plainly when it's under.
+				const after = await bucketBalance(ctx.db, id);
 				return {
-					text: `${withdraw ? 'Withdrew' : 'Deposited'} ${m.format()} ${withdraw ? 'from' : 'into'} "${b.name}".`,
-					data: { bucket_id: id }
+					text:
+						`${withdraw ? 'Withdrew' : 'Deposited'} ${m.format()} ${withdraw ? 'from' : 'into'} "${b.name}".` +
+						(after < 0n
+							? ` It is now ${Money.of(-after, b.currency).format()} overdrawn — more has been taken out than was ever set aside, and the shortfall counts as ordinary spending.`
+							: ''),
+					data: { bucket_id: id, balance: Money.of(after, b.currency).format() }
 				};
 			} catch (e) {
 				return { text: domainErrText(e), isError: true };

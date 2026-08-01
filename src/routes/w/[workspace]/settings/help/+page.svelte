@@ -171,7 +171,8 @@
 					body: [
 						'A bucket sets money aside on a schedule — a travel fund, a new laptop, an emergency float. Choose the amount and the cadence: every week, every month on a chosen day, whatever fits. A start date in the past can fill in the accruals you already missed.',
 						'Buckets belong to the person who made them. Only that person can withdraw or adjust one.',
-						'You can charge a purchase to a bucket, which draws it down. The workspace has a default for whether bucket charges skip approval, and each person’s policy can override it — always skip, or always require — for their own charges.'
+						'You can charge a purchase to a bucket, which draws it down. The workspace has a default for whether bucket charges skip approval, and each person’s policy can override it — always skip, or always require — for their own charges.',
+						'A bucket can go **overdrawn**: nothing stops a charge bigger than the balance, because no real money moves either way. You are warned before it happens, the bucket is marked on this page, and the next accrual pays the hole off before it saves anything. Whatever a bucket could not cover counts as ordinary spending rather than savings you had set aside.'
 					]
 				},
 				{
@@ -182,7 +183,7 @@
 						'Add what comes in, either as a one-off or as a monthly amount on a chosen day.',
 						'A monthly entry is a template, not a stack of records — the occurrences are worked out when you look, so editing it corrects every month at once.',
 						'Income is visible to everyone in the workspace. Unlike purchases, it cannot be hidden.',
-						'It drives the net position on Activity: what came in, minus what went out and what you set aside.'
+						'It drives the net position on Activity: what came in, minus what went out and what you set aside, plus whatever you took back out of a bucket — that spending was already paid for in the month you set it aside.'
 					]
 				}
 			]
@@ -197,7 +198,7 @@
 					body: [
 						'The number at the top of the Ledger is how much is genuinely free to spend this month. Tap it to see the whole breakdown.',
 						'It starts from your **Income** for the month, then takes out four things. **Recurring** is the bills still to come before month-end. **Saved** is what you set aside into your buckets this month. **Approved** is purchases that were greenlit but not yet paid. **Spent** is what has already left your account, net of refunds. What is left is **Free to spend**.',
-						'Money charged to a bucket does not count as spending here. That was set aside in an earlier month, so spending it is not this month’s cash.',
+						'Money charged to a bucket does not count as spending here. That was set aside in an earlier month, so spending it is not this month’s cash. The exception is a bucket charged past its balance: nothing had been set aside for that part, so it counts as spending like anything else.',
 						'**Pending** requests and ones you’re **sleeping on** are shown but not taken out, since they might still be denied or let go. If you set a budget, Harmony also marks the point where your budget, rather than your cash, becomes the limit.',
 						'Every figure is plain arithmetic and nothing leaves your server. It is worked out as you see it, so a hidden gift never shows in the total for the person it is for.'
 					]

@@ -33,7 +33,7 @@ import {
 } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
 import { setBudget } from '$lib/server/repo/budgets';
-import { savingsInPeriod, lifetimeSaved } from '$lib/server/repo/buckets';
+import { bucketFlowsInPeriod, lifetimeSaved } from '$lib/server/repo/buckets';
 import { listCategories } from '$lib/server/repo/workspaces';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
@@ -297,7 +297,7 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		allCategories,
 		periodIncome,
 		prevIncome,
-		periodSavings,
+		periodBuckets,
 		barCats
 	] = await Promise.all([
 		periodTotal(db, scope, cfg.queryPeriod, now),
@@ -308,7 +308,7 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		listCategories(db, ws.id),
 		incomeInPeriod(db, ws.id, cfg.queryPeriod, ws.timezone, today),
 		incomeInPeriod(db, ws.id, cfg.prevPeriod, ws.timezone, today),
-		savingsInPeriod(db, ws.id, cfg.queryPeriod, ws.timezone),
+		bucketFlowsInPeriod(db, ws.id, cfg.queryPeriod, ws.timezone),
 		period !== 'day'
 			? bucketCategoryTrend(db, scope, cfg.queryPeriod, now, period === 'year' ? 'month' : 'day')
 			: Promise.resolve(new Map())
@@ -367,7 +367,12 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		prevTotalMinor: prevTotal,
 		incomeMinor: periodIncome,
 		prevIncomeMinor: prevIncome,
-		savingsMinor: periodSavings,
+		// Set aside / released / overdraft rather than one signed "savings" figure.
+		// See domain/bucket/flows: netting them let a charge against an empty
+		// bucket read as negative savings, which then *added* to net position.
+		savingsMinor: periodBuckets.setAsideMinor,
+		releasedMinor: periodBuckets.releasedMinor,
+		overdraftMinor: periodBuckets.overdraftMinor,
 		categories: categories.map((c) => ({ ...c })),
 		members: members.map((m) => ({ ...m })),
 		buckets: cfg.buckets.map((b) => {

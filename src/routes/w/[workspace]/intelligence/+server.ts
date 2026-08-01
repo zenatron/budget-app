@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
 import { getEnv } from '$lib/server/env';
-import { savingsInPeriod } from '$lib/server/repo/buckets';
+import { bucketFlowsInPeriod } from '$lib/server/repo/buckets';
 import { Money } from '$lib/domain/money/money';
 import { periodTotal, categoryBreakdown, memberBreakdown } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
@@ -210,17 +210,20 @@ async function buildBriefing(
 	const thisMonth: Period = monthPeriod(today);
 	const lastMonth: Period = previousMonthPeriod(today);
 
-	const [thisSpent, lastSpent, cats, members, income, savings, sts] = await Promise.all([
+	const [thisSpent, lastSpent, cats, members, income, bucket, sts] = await Promise.all([
 		periodTotal(db, scope, thisMonth, now),
 		periodTotal(db, scope, lastMonth, now),
 		categoryBreakdown(db, scope, thisMonth, now),
 		memberBreakdown(db, scope, thisMonth, now),
 		incomeInPeriod(db, ws.id, thisMonth, scope.timezone, today),
-		savingsInPeriod(db, ws.id, thisMonth, scope.timezone),
+		bucketFlowsInPeriod(db, ws.id, thisMonth, scope.timezone),
 		safeToSpend(db, scope, now)
 	]);
 
-	const net = income - thisSpent - savings;
+	// Money into buckets, and the funded part of what came back out. Never a
+	// single signed figure: see domain/bucket/flows.
+	const savings = bucket.setAsideMinor;
+	const net = income - thisSpent - savings + bucket.releasedMinor;
 	const topCats = cats
 		.slice(0, 6)
 		.map((c) => `${briefingField(c.name)} ${fmt(c.totalMinor)}`)
@@ -348,8 +351,9 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		const period = timeToPeriod(parsed.period);
 		const total = await periodTotal(db, scope, period, now);
 		const income = await incomeInPeriod(db, ws.id, period, scope.timezone, today);
-		const savings = await savingsInPeriod(db, ws.id, period, scope.timezone);
-		const net = income - total - savings;
+		const bucket = await bucketFlowsInPeriod(db, ws.id, period, scope.timezone);
+		const savings = bucket.setAsideMinor;
+		const net = income - total - savings + bucket.releasedMinor;
 		const pct = income > 0n ? Number((net * 1000n) / income) / 10 : 0;
 
 		let answer = `In ${parsed.period.label}: `;

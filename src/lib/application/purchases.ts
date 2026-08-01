@@ -351,12 +351,16 @@ export async function refundPurchase(
 		});
 
 		if (p.bucketId) {
+			// Money going back *into* the bucket, so it's an adjustment, not a
+			// withdrawal — a positive row typed 'withdrawal' read as "Taken from
+			// Travel  +$40" on the ledger and counted the wrong way when a period's
+			// bucket movement is replayed. See domain/bucket/flows.
 			await tx.insert(bucketTransaction).values({
 				id: deps.ids.newId(),
 				bucketId: p.bucketId,
 				amountMinor: amount.minor,
 				currency: amount.currency,
-				type: 'withdrawal',
+				type: 'adjustment',
 				note: `Refund: ${p.itemName}`,
 				createdAt: now
 			});

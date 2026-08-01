@@ -10,6 +10,7 @@ import {
 	type SafeToSpend
 } from '$lib/domain/forecast/safe-to-spend';
 import { budgetVsActual } from './analytics';
+import { bucketFlowsInPeriod } from './buckets';
 import { visibleTo } from './purchases';
 
 interface ForecastScope {
@@ -32,19 +33,23 @@ export async function safeToSpend(db: Db, scope: ForecastScope, now: Date): Prom
 	const period = monthPeriod(today);
 	const { from, to } = periodBoundsUtc(period, scope.timezone);
 
-	const [incomeMinor, upcomingBillsMinor, savingsMinor, flows, budgetRemainingMinor] =
+	const [incomeMinor, upcomingBillsMinor, savingsMinor, flows, bucket, budgetRemainingMinor] =
 		await Promise.all([
 			monthIncome(db, scope.workspaceId, period, scope.timezone),
 			upcomingBills(db, scope.workspaceId, period, scope.timezone),
 			plannedSavings(db, scope.workspaceId, period, scope.timezone),
 			purchaseFlows(db, scope, from, to, now),
+			bucketFlowsInPeriod(db, scope.workspaceId, period, scope.timezone),
 			budgetRemaining(db, scope, period, now)
 		]);
 
 	return computeSafeToSpend(
 		{
 			incomeMinor,
-			cashSpentMinor: flows.cashSpentMinor,
+			// Bucket-charged purchases are excluded from `cashSpentMinor` because the
+			// money was set aside in an earlier month. Where it wasn't, the charge is
+			// plain cash going out, so the overdrafted part comes back in here.
+			cashSpentMinor: flows.cashSpentMinor + bucket.overdraftMinor,
 			cashCommittedMinor: flows.cashCommittedMinor,
 			upcomingBillsMinor,
 			savingsMinor,

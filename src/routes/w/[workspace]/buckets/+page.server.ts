@@ -67,7 +67,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 				memberName: r.memberName,
 				mine: r.bucket.memberId === locals.member!.id,
 				nextAccrualAt: r.bucket.nextAccrualAt,
-				everAccrued: r.balanceMinor !== 0n,
+				// "next" vs "first" accrual. Asked of the transaction count, not the
+				// balance: a bucket that accrued and was then spent flat sits at zero
+				// with a history behind it, and calling that one "first" was wrong.
+				everAccrued: r.txCount > 0,
 				cadence: parsed ? describeRecurrence(parsed) : '',
 				freq: parsed?.freq ?? 'monthly',
 				interval: parsed?.interval ?? 1,

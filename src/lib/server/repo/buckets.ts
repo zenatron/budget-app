@@ -2,6 +2,7 @@ import { and, eq, gte, lt, ne, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db';
 import { bucket, bucketTransaction, user, workspaceMember } from '$lib/server/db/schema';
 import type { Period } from '$lib/domain/analytics/period';
+import { bucketFlows, type BucketFlows } from '$lib/domain/bucket/flows';
 import { zonedTimeToUtc } from '$lib/domain/time/zoned';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
@@ -25,7 +26,11 @@ export interface CreateBucketCmd {
 export interface BucketListItem {
 	bucket: BucketRow;
 	memberName: string;
+	/** Net of everything ever moved. Negative once the bucket's been overdrawn. */
 	balanceMinor: bigint;
+	/** How many movements it has ever had — "has this run yet?", which a balance
+	 *  can't answer: an overdrawn bucket and an untouched one both sit at zero. */
+	txCount: number;
 }
 
 export interface AddTransactionCmd {
@@ -70,7 +75,8 @@ export async function listBuckets(db: Db, workspaceId: string): Promise<BucketLi
 		.select({
 			bucket,
 			memberName: user.displayName,
-			balanceMinor: sql<string>`coalesce(sum(${bucketTransaction.amountMinor}), 0)`
+			balanceMinor: sql<string>`coalesce(sum(${bucketTransaction.amountMinor}), 0)`,
+			txCount: sql<string>`count(${bucketTransaction.id})`
 		})
 		.from(bucket)
 		.innerJoin(workspaceMember, eq(bucket.memberId, workspaceMember.id))
@@ -83,7 +89,8 @@ export async function listBuckets(db: Db, workspaceId: string): Promise<BucketLi
 	return rows.map((r) => ({
 		bucket: r.bucket,
 		memberName: r.memberName,
-		balanceMinor: BigInt(r.balanceMinor)
+		balanceMinor: BigInt(r.balanceMinor),
+		txCount: Number(r.txCount)
 	}));
 }
 
@@ -238,26 +245,62 @@ export async function lifetimeSaved(db: Db, workspaceId: string): Promise<bigint
 	return BigInt(rows[0]?.total ?? '0');
 }
 
-export async function savingsInPeriod(
+/** What a single bucket holds right now. Negative once it's been overdrawn. */
+export async function bucketBalance(db: Db, bucketId: string): Promise<bigint> {
+	const rows = await db
+		.select({ total: sql<string>`coalesce(sum(${bucketTransaction.amountMinor}), 0)` })
+		.from(bucketTransaction)
+		.where(eq(bucketTransaction.bucketId, bucketId));
+	return BigInt(rows[0]?.total ?? '0');
+}
+
+/**
+ * Bucket movement in a period, split into set-aside / released / overdraft.
+ *
+ * Replays the window against each bucket's opening balance rather than summing
+ * the signed amounts, because "was this withdrawal funded?" depends on the
+ * balance at the instant it landed. See domain/bucket/flows for why one signed
+ * total isn't good enough — in short, a charge against an empty bucket would
+ * otherwise read as negative savings and *credit* net position.
+ *
+ * Rows are ordered by (createdAt, id); ids are uuidv7, so same-instant
+ * transactions still replay in the order they were written.
+ */
+export async function bucketFlowsInPeriod(
 	db: Db,
 	workspaceId: string,
 	period: Period,
 	timezone: string
-): Promise<bigint> {
+): Promise<BucketFlows> {
 	const from = zonedTimeToUtc(period.from, 0, 0, timezone);
 	const to = zonedTimeToUtc(period.toExclusive, 0, 0, timezone);
-	const rows = await db
-		.select({
-			total: sql<string>`coalesce(sum(${bucketTransaction.amountMinor}), 0)`
-		})
-		.from(bucketTransaction)
-		.innerJoin(bucket, eq(bucketTransaction.bucketId, bucket.id))
-		.where(
-			and(
-				eq(bucket.workspaceId, workspaceId),
-				gte(bucketTransaction.createdAt, from),
-				lt(bucketTransaction.createdAt, to)
+
+	const [openingRows, txns] = await Promise.all([
+		db
+			.select({
+				bucketId: bucketTransaction.bucketId,
+				total: sql<string>`coalesce(sum(${bucketTransaction.amountMinor}), 0)`
+			})
+			.from(bucketTransaction)
+			.innerJoin(bucket, eq(bucketTransaction.bucketId, bucket.id))
+			.where(and(eq(bucket.workspaceId, workspaceId), lt(bucketTransaction.createdAt, from)))
+			.groupBy(bucketTransaction.bucketId),
+		db
+			.select({
+				bucketId: bucketTransaction.bucketId,
+				amountMinor: bucketTransaction.amountMinor
+			})
+			.from(bucketTransaction)
+			.innerJoin(bucket, eq(bucketTransaction.bucketId, bucket.id))
+			.where(
+				and(
+					eq(bucket.workspaceId, workspaceId),
+					gte(bucketTransaction.createdAt, from),
+					lt(bucketTransaction.createdAt, to)
+				)
 			)
-		);
-	return BigInt(rows[0]?.total ?? '0');
+			.orderBy(bucketTransaction.createdAt, bucketTransaction.id)
+	]);
+
+	return bucketFlows(new Map(openingRows.map((r) => [r.bucketId, BigInt(r.total)])), txns);
 }

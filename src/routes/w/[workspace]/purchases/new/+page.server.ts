@@ -59,9 +59,18 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		 * any date it had to resolve this way so the UI can admit the doubt.
 		 */
 		dayFirst: !locals.workspace!.timezone.startsWith('America/'),
+		// Balances ride along so the picker can show what each bucket holds and
+		// warn before a charge overdraws one. Nothing here gates the submit — the
+		// balance may have moved by the time it lands, and the charge is allowed
+		// either way; it's friction, not a rule.
 		buckets: buckets
 			.filter((b) => b.bucket.status === 'active')
-			.map((b) => ({ id: b.bucket.id, name: b.bucket.name }))
+			.map((b) => ({
+				id: b.bucket.id,
+				name: b.bucket.name,
+				balanceMinor: b.balanceMinor,
+				currency: b.bucket.currency
+			}))
 	};
 };
 

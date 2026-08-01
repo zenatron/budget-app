@@ -16,7 +16,7 @@ import {
 	periodTotal
 } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
-import { savingsInPeriod } from '$lib/server/repo/buckets';
+import { bucketFlowsInPeriod } from '$lib/server/repo/buckets';
 import { listLedger } from '$lib/server/repo/ledger';
 import { formatMinor } from '$lib/money-format';
 import {
@@ -69,7 +69,7 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		spent,
 		prevSpent,
 		income,
-		savings,
+		bucket,
 		categories,
 		members,
 		txCount,
@@ -80,7 +80,7 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		periodTotal(db, scope, period, now),
 		periodTotal(db, scope, prevPeriod, now),
 		incomeInPeriod(db, ws.id, period, ws.timezone, today),
-		savingsInPeriod(db, ws.id, period, ws.timezone),
+		bucketFlowsInPeriod(db, ws.id, period, ws.timezone),
 		categoryBreakdown(db, scope, period, now),
 		memberBreakdown(db, scope, period, now),
 		periodCount(db, scope, period, now),
@@ -115,7 +115,9 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		spentMinor: spent,
 		prevSpentMinor: prevSpent,
 		incomeMinor: income,
-		savingsMinor: savings,
+		savingsMinor: bucket.setAsideMinor,
+		releasedMinor: bucket.releasedMinor,
+		overdraftMinor: bucket.overdraftMinor,
 		txCount,
 		topCategory,
 		biggestDay,

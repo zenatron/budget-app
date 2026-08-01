@@ -11,7 +11,7 @@ import {
 import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
 import { categoryBreakdown, periodTotal, type AnalyticsScope } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
-import { savingsInPeriod } from '$lib/server/repo/buckets';
+import { bucketFlowsInPeriod } from '$lib/server/repo/buckets';
 import { formatMinor } from '$lib/money-format';
 import type { Clock } from '$lib/ports/clock';
 import type { Notifier, NotificationMessage } from '$lib/ports/notifier';
@@ -132,13 +132,16 @@ async function compose(
 	today: { y: number; m: number; d: number },
 	now: Date
 ): Promise<NotificationMessage | null> {
-	const [spent, cats, income, savings] = await Promise.all([
+	const [spent, cats, income, bucket] = await Promise.all([
 		periodTotal(db, scope, period, now),
 		categoryBreakdown(db, scope, period, now),
 		incomeInPeriod(db, scope.workspaceId, period, scope.timezone, today),
-		savingsInPeriod(db, scope.workspaceId, period, scope.timezone)
+		bucketFlowsInPeriod(db, scope.workspaceId, period, scope.timezone)
 	]);
 
+	// Set aside, and the funded part of what came back out. Kept apart so a
+	// bucket charge can't read as negative savings. See domain/bucket/flows.
+	const savings = bucket.setAsideMinor;
 	if (spent === 0n && income === 0n && savings === 0n) return null;
 
 	const money = (m: bigint) => formatMinor(m, r.currency);
@@ -152,7 +155,7 @@ async function compose(
 		body = `You spent ${money(spent)} this ${span}`;
 		body += top && top.name ? `, most on ${top.name} (${money(top.totalMinor)}).` : '.';
 	}
-	const net = income - spent - savings;
+	const net = income - spent - savings + bucket.releasedMinor;
 	if (income > 0n || savings > 0n) {
 		body += ` Net ${net >= 0n ? '+' : ''}${money(net)}.`;
 	}

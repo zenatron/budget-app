@@ -13,6 +13,8 @@ const base: MonthStatementFigures = {
 	prevSpentMinor: 0n,
 	incomeMinor: 0n,
 	savingsMinor: 0n,
+	releasedMinor: 0n,
+	overdraftMinor: 0n,
 	txCount: 0,
 	topCategory: null,
 	biggestDay: null,
@@ -36,6 +38,30 @@ describe('summarizeMonth', () => {
 		const s = summarizeMonth({ ...base, incomeMinor: 100_000n, spentMinor: 150_000n });
 		expect(s.netMinor).toBe(-50_000n);
 		expect(s.status).toBe('over');
+	});
+
+	it('adds funded bucket spending back, since the purchase is already in spent', () => {
+		// $200 came out of a bucket that held it and paid for a $200 purchase: the
+		// cost landed in the month it was set aside, not this one.
+		const s = summarizeMonth({
+			...base,
+			incomeMinor: 500_000n,
+			spentMinor: 20_000n,
+			releasedMinor: 20_000n
+		});
+		expect(s.netMinor).toBe(500_000n);
+	});
+
+	it('leaves an overdraft counted as spending', () => {
+		// Same $200 purchase, but the bucket was empty. Nothing funded it.
+		const s = summarizeMonth({
+			...base,
+			incomeMinor: 500_000n,
+			spentMinor: 20_000n,
+			releasedMinor: 0n,
+			overdraftMinor: 20_000n
+		});
+		expect(s.netMinor).toBe(480_000n);
 	});
 
 	it('is even at exactly zero net', () => {
@@ -154,6 +180,16 @@ describe('narrateMonth', () => {
 		expect(broke.notes.some((x) => x.includes('$500.00 past your'))).toBe(true);
 	});
 
+	it('names an overdraft rather than letting it pass as savings', () => {
+		const n = narrateMonth({ ...base, spentMinor: 30_000n, overdraftMinor: 5_000n }, fmt);
+		expect(n.notes.some((x) => x.includes("didn't have it") && x.includes('$50.00'))).toBe(true);
+	});
+
+	it('stays quiet about overdrafts when every charge was funded', () => {
+		const n = narrateMonth({ ...base, spentMinor: 30_000n, releasedMinor: 30_000n }, fmt);
+		expect(n.notes.some((x) => x.includes("didn't have it"))).toBe(false);
+	});
+
 	it('never emits an em dash in its prose', () => {
 		const n = narrateMonth(
 			{
@@ -163,7 +199,8 @@ describe('narrateMonth', () => {
 				savingsMinor: 50_000n,
 				prevSpentMinor: 200_000n,
 				topCategory: { name: 'Rent', totalMinor: 200_000n },
-				budget: { limitMinor: 320_000n, actualMinor: 300_000n }
+				budget: { limitMinor: 320_000n, actualMinor: 300_000n },
+				overdraftMinor: 4_000n
 			},
 			fmt
 		);

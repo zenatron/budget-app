@@ -3,7 +3,8 @@
 	import { page } from '$app/state';
 	import PlanTabs from '$lib/components/PlanTabs.svelte';
 	import { money } from '$lib/actions/money';
-	import { formatMinor } from '$lib/money-format';
+	import { formatMinor, tryParseMinor } from '$lib/money-format';
+	import { overdraftBy } from '$lib/domain/bucket/flows';
 	import { formatPct } from '$lib/format';
 	import { CircleHelp, Pause, Pencil, Play, Plus, Wallet } from '@lucide/svelte';
 	import Money from '$lib/components/Money.svelte';
@@ -31,6 +32,10 @@
 	let editing: string | null = $state(null);
 	let editColor: Record<string, string | null> = $state({});
 	let adjusting: string | null = $state(null);
+	// The adjust form's two fields, bound so the overdraft warning can see what's
+	// about to happen. Only one bucket adjusts at a time, so single slots.
+	let adjustAmount = $state('');
+	let adjustType = $state('withdrawal');
 
 	// Bound straight into RecurrencePicker, which emits the same field names the
 	// server already parses. Only one bucket is open for editing at a time, so
@@ -56,6 +61,9 @@
 	// svelte-ignore state_referenced_locally
 	let startDate = $state(today);
 	let backfill = $state(false);
+
+	const overdrawn = $derived(data.buckets.filter((b) => b.balanceMinor < 0n));
+	const overdrawnTotal = $derived(overdrawn.reduce((sum, b) => sum - b.balanceMinor, 0n));
 
 	function colorFor(b: (typeof data.buckets)[number]): string {
 		return b.color ?? 'var(--ws-accent)';
@@ -90,6 +98,32 @@
 					timeZone: 'UTC'
 				});
 		return `${base} · ${b.everAccrued ? 'next' : 'first'} ${when}`;
+	}
+
+	/**
+	 * The friction on taking out money that isn't there. Nothing here can stop
+	 * the charge — no real money moves either way, and refusing it would only
+	 * make people lie to the app — so the modal names the shortfall, says what
+	 * it will do to the balance, and lets them through.
+	 */
+	function overdraftConfirm(b: (typeof data.buckets)[number]) {
+		if (adjustType !== 'withdrawal') return undefined;
+		const minor = tryParseMinor(adjustAmount, b.currency);
+		if (minor === null) return undefined;
+		const short = overdraftBy(b.balanceMinor, minor);
+		if (short === 0n) return undefined;
+		return {
+			title: `${b.name} doesn't have that`,
+			body: `It holds ${formatMinor(b.balanceMinor, b.currency)}, and you're taking out ${formatMinor(minor, b.currency)}. That leaves it ${formatMinor(short, b.currency)} overdrawn, and the next accrual pays that back before it saves anything.`,
+			confirmLabel: 'Take it out anyway',
+			tone: 'danger' as const
+		};
+	}
+
+	function resetAdjustForm() {
+		adjusting = null;
+		adjustAmount = '';
+		adjustType = 'withdrawal';
 	}
 
 	function progressPct(b: (typeof data.buckets)[number]): number {
@@ -157,6 +191,16 @@
 				/>
 			</div>
 		</div>
+		<!-- On hand nets the overdrawn buckets out of the healthy ones, so it alone
+		     would hide a hole. Name what's underwater instead of leaving the total
+		     to quietly absorb it. -->
+		{#if overdrawn.length > 0}
+			<p class="px-1 text-[13px]" style="color: var(--pending)">
+				{overdrawn.length === 1
+					? `${overdrawn[0].name} is ${formatMinor(-overdrawn[0].balanceMinor, overdrawn[0].currency)} overdrawn`
+					: `${overdrawn.length} buckets are overdrawn, ${formatMinor(overdrawnTotal, data.currency)} in total`}
+			</p>
+		{/if}
 	{/if}
 
 	{#if form?.error}
@@ -276,10 +320,24 @@
 										>Paused</span
 									>
 								{/if}
+								{#if b.balanceMinor < 0n}
+									<!-- Overdrawn: more has been charged here than was ever set
+									     aside. Named on the row rather than left to a minus sign,
+									     because the next accrual pays this off before it saves
+									     anything. -->
+									<span
+										class="chip"
+										style="color: var(--pending); background: color-mix(in oklab, var(--pending) 14%, transparent)"
+										>Overdrawn</span
+									>
+								{/if}
 							</p>
 							<p class="text-[13px]" style="color: var(--ink-3)">{cadenceLine(b)}</p>
 						</div>
-						<span class="shrink-0 text-[16px] font-semibold" style="color: var(--ink)">
+						<span
+							class="shrink-0 text-[16px] font-semibold"
+							style="color: {b.balanceMinor < 0n ? 'var(--pending)' : 'var(--ink)'}"
+						>
 							<Money
 								minor={b.balanceMinor}
 								currency={b.currency}
@@ -332,7 +390,11 @@
 								</form>
 							{/if}
 							<button
-								onclick={() => (adjusting = adjusting === b.id ? null : b.id)}
+								onclick={() => {
+									const open = adjusting === b.id;
+									resetAdjustForm();
+									if (!open) adjusting = b.id;
+								}}
 								class="press inline-flex items-center gap-1"
 								style="color: var(--ink-2)"
 							>
@@ -427,7 +489,11 @@
 							<form
 								method="POST"
 								action="?/adjust"
-								use:submit={{ success: 'Bucket updated', onSuccess: () => (adjusting = null) }}
+								use:submit={{
+									confirm: overdraftConfirm(b),
+									success: 'Bucket updated',
+									onSuccess: resetAdjustForm
+								}}
 								class="mt-3 space-y-3 rounded-[14px] p-4"
 								style="background: var(--surface-2)"
 							>
@@ -437,21 +503,29 @@
 										name="amount"
 										required
 										use:money
+										bind:value={adjustAmount}
 										inputmode="decimal"
 										placeholder={b.status === 'active' ? '50.00' : '500.00'}
 										class="field text-[16px]"
 									/>
-									<select name="type" class="field text-[16px]">
+									<select name="type" bind:value={adjustType} class="field text-[16px]">
 										<option value="withdrawal">Take money out</option>
 										<option value="adjustment">Add money</option>
 									</select>
 								</div>
 								<input name="note" placeholder="Optional note" class="field text-[16px]" />
+								<!-- Said before the modal too: a warning you only meet at the
+								     final tap is a trap, not a warning. -->
+								{#if overdraftConfirm(b)}
+									<p class="text-[13px]" style="color: var(--pending)">
+										That's more than this bucket holds.
+									</p>
+								{/if}
 								<div class="flex gap-2">
 									<button class="btn btn-accent flex-1 py-2.5 text-[14px]"> Save </button>
 									<button
 										type="button"
-										onclick={() => (adjusting = null)}
+										onclick={resetAdjustForm}
 										class="btn btn-ghost flex-1 py-2.5 text-[14px]">Cancel</button
 									>
 								</div>

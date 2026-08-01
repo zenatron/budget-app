@@ -31,10 +31,21 @@
 	const heroColor = $derived(TONE_COLOR[data.narration.tone] ?? 'var(--ink)');
 
 	const outMinor = $derived(f.spentMinor);
+	/*
+	 * The month as four movements that sum to net position, each shown with the
+	 * sign it carries into that sum.
+	 *
+	 * "From buckets" is the one that needs explaining: spending charged to a
+	 * bucket is already inside Spending, and its cost was borne in the month the
+	 * money was set aside, so the funded part comes back as a credit here. What a
+	 * bucket couldn't cover isn't in this line at all, which is exactly why it
+	 * stays counted against the month.
+	 */
 	const flows = $derived([
 		{ label: 'Income', minor: f.incomeMinor, sign: true, hide: f.incomeMinor === 0n },
 		{ label: 'Spending', minor: -outMinor, sign: true, hide: false },
-		{ label: 'Set aside', minor: -f.savingsMinor, sign: true, hide: f.savingsMinor === 0n }
+		{ label: 'Set aside', minor: -f.savingsMinor, sign: true, hide: f.savingsMinor === 0n },
+		{ label: 'From buckets', minor: f.releasedMinor, sign: true, hide: f.releasedMinor === 0n }
 	]);
 
 	const catMax = $derived(

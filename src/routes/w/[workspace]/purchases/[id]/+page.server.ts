@@ -32,6 +32,7 @@ import { addDays } from '$lib/domain/recurrence/rrule';
 import { getDb } from '$lib/server/db';
 import { listEvents, loadPurchase, memberNames } from '$lib/server/repo/purchases';
 import { listCategories } from '$lib/server/repo/workspaces';
+import { bucketBalance, loadBucket } from '$lib/server/repo/buckets';
 import { merchant, purchase as purchaseTable } from '$lib/server/db/schema';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
@@ -85,6 +86,21 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			? await listImages(db, scope, p.parentPurchaseId, now)
 			: [];
 
+	// The bucket this is charged against, if any. Completing the purchase is what
+	// actually withdraws from it, so the page needs the balance to say up front
+	// whether the bucket can cover what's about to be entered.
+	let chargedBucket: { name: string; balanceMinor: bigint; currency: string } | null = null;
+	if (p.bucketId) {
+		const b = await loadBucket(db, locals.workspace!.id, p.bucketId);
+		if (b) {
+			chargedBucket = {
+				name: b.name,
+				balanceMinor: await bucketBalance(db, b.id),
+				currency: b.currency
+			};
+		}
+	}
+
 	let merchantName: string | null = null;
 	if (p.merchantId) {
 		const [m] = await db
@@ -125,6 +141,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			sealedUntil: sealed ? p.sealedUntil!.toISOString() : null,
 			sealedFromNames: sealed ? p.sealedFromMemberIds.map((id) => names.get(id) ?? 'Unknown') : [],
 			heldUntil: p.heldUntil?.toISOString() ?? null,
+			bucket: chargedBucket,
 			// The pause has lifted but nobody's decided yet — show the resurface.
 			heldReady:
 				p.state === 'held' && p.heldUntil !== null && p.heldUntil.getTime() <= now.getTime()

@@ -16,6 +16,11 @@
  * this month's cash. The bucket *accrual* is, though — it's this month's savings
  * commitment, so it's subtracted. Reserved (pending) and sleeping (held) are
  * shown, not subtracted: pending might still be denied, sleeping might be let go.
+ *
+ * The one exception is an overdrawn bucket. "It was set aside earlier" only
+ * holds when something actually was; a charge against a bucket with nothing in
+ * it is ordinary cash leaving, so its unfunded part joins `cashSpentMinor`.
+ * Without that, charging an empty bucket moved no number anywhere in the app.
  */
 
 import type { Period } from '../analytics/period';
@@ -30,7 +35,8 @@ import {
 export interface SafeToSpendBreakdown {
 	/** Everything coming in this month: one-off received + recurring projected. */
 	incomeMinor: bigint;
-	/** Completed non-bucket spending this month, net of refunds. */
+	/** Completed non-bucket spending this month, net of refunds, plus the part of
+	 *  this month's bucket charges no bucket had the money for. */
 	cashSpentMinor: bigint;
 	/** Approved-but-not-completed non-bucket purchases: money greenlit, not yet out. */
 	cashCommittedMinor: bigint;

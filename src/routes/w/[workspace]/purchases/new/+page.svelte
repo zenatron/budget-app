@@ -17,9 +17,12 @@
 		Search,
 		ShoppingBag,
 		Sparkles,
+		TriangleAlert as AlertTriangle,
 		X
 	} from '@lucide/svelte';
 	import { money } from '$lib/actions/money';
+	import { formatMinor, tryParseMinor } from '$lib/money-format';
+	import { overdraftBy } from '$lib/domain/bucket/flows';
 	import { onDestroy, onMount } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
 	import { calDateInZone } from '$lib/domain/time/zoned';
@@ -45,6 +48,42 @@
 	let itemName = $state('');
 	let merchantName = $state('');
 	let photoInput: HTMLInputElement | null = $state(null);
+
+	/*
+	 * Charging to a bucket, and what happens if the bucket can't cover it.
+	 *
+	 * A bucket is an earmark, not an account: no real money moves, so nothing
+	 * here refuses the charge. What it does is make the overdraft impossible to
+	 * walk into by accident — named in the picker, named again under it, and
+	 * confirmed on the way out. The same `overdraftBy` the ledger uses after the
+	 * fact, so the warning and the resulting balance can never disagree.
+	 */
+	let bucketId = $state('');
+	const overdraft = $derived.by(() => {
+		const b = data.buckets.find((x) => x.id === bucketId);
+		if (!b) return null;
+		const minor = tryParseMinor(amount, b.currency);
+		if (minor === null) return null;
+		const shortMinor = overdraftBy(b.balanceMinor, minor);
+		if (shortMinor === 0n) return null;
+		return {
+			bucketName: b.name,
+			currency: b.currency,
+			balanceMinor: b.balanceMinor,
+			amountMinor: minor,
+			shortMinor
+		};
+	});
+	const overdraftConfirm = $derived(
+		overdraft
+			? {
+					title: `${overdraft.bucketName} doesn't have that`,
+					body: `It holds ${formatMinor(overdraft.balanceMinor, overdraft.currency)}, and this is ${formatMinor(overdraft.amountMinor, overdraft.currency)}. Charging it anyway leaves the bucket ${formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn, and that part counts as ordinary spending rather than savings you'd already set aside.`,
+					confirmLabel: 'Charge it anyway',
+					tone: 'danger' as const
+				}
+			: undefined
+	);
 
 	// Optional category suggestion (the assist layer's first proving ground).
 	// Bound so a suggestion can fill it; a suggestion is only ever offered, never
@@ -306,7 +345,12 @@
 		<BillImport currency={data.workspace.currency} dayFirst={data.dayFirst} onapply={applyBill} />
 	{/if}
 
-	<form method="POST" enctype="multipart/form-data" use:submit class="space-y-4">
+	<form
+		method="POST"
+		enctype="multipart/form-data"
+		use:submit={{ confirm: overdraftConfirm }}
+		class="space-y-4"
+	>
 		<!-- Describe it: a sentence (typed or dictated) parsed into the fields below.
 		     Accent-tinted so it reads as the optional smart shortcut, not another
 		     required field competing with Amount. -->
@@ -454,18 +498,39 @@
 				</div>
 			{/if}
 			{#if data.buckets.length > 0}
+				<!-- Each bucket carries its balance in the option text. The modal on
+				     submit is the backstop; seeing "Travel · $0.00 left" while you pick
+				     is what actually prevents the surprise. -->
 				<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
 					<Landmark class="h-5 w-5" style="color: var(--ink-4)" />
 					<select
 						name="bucketId"
+						bind:value={bucketId}
 						class="-mx-1 flex-1 border-none bg-transparent p-0 text-[17px] outline-none"
 						style="color: var(--ink); appearance: none; background-image: none"
 					>
 						<option value="">Charge to bucket</option>
-						{#each data.buckets as b (b.id)}<option value={b.id}>{b.name}</option>{/each}
+						{#each data.buckets as b (b.id)}<option value={b.id}
+								>{b.name} · {formatMinor(b.balanceMinor, b.currency)} left</option
+							>{/each}
 					</select>
 					<ChevronDown class="h-4 w-4" style="color: var(--ink-4)" />
 				</div>
+				{#if overdraft}
+					<div
+						class="row hairline"
+						style="box-shadow: inset 0 0.5px 0 var(--hairline)"
+						transition:fade={{ duration: 120 }}
+					>
+						<AlertTriangle class="h-5 w-5 shrink-0" style="color: var(--pending)" />
+						<span class="flex-1 text-[15px] leading-snug" style="color: var(--pending)">
+							{overdraft.bucketName} only holds {formatMinor(
+								overdraft.balanceMinor,
+								overdraft.currency
+							)}. This would leave it {formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn.
+						</span>
+					</div>
+				{/if}
 			{/if}
 			<!-- Photo (optional) -->
 			<label

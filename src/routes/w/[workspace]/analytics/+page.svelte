@@ -168,10 +168,22 @@
 	);
 	const overBudget = $derived(isMonth && overallPct !== null && overallPct > 1);
 
+	/*
+	 * Net position, as three movements rather than two.
+	 *
+	 * `savings` is money that went *into* buckets, so it never goes negative.
+	 * `released` is money that came back out of a bucket that actually held it:
+	 * that spending is already inside `totalMinor`, and it was paid for in the
+	 * month it was set aside, so it's credited back here. What a bucket couldn't
+	 * cover is deliberately absent from `released` and so stays counted as
+	 * spending — see domain/bucket/flows.
+	 */
 	const savings = $derived(data.savingsMinor ?? 0n);
-	const net = $derived(data.incomeMinor - data.totalMinor - savings);
+	const released = $derived(data.releasedMinor ?? 0n);
+	const overdraft = $derived(data.overdraftMinor ?? 0n);
+	const net = $derived(data.incomeMinor - data.totalMinor - savings + released);
 	const prevNet = $derived(
-		data.prevIncomeMinor ? data.prevIncomeMinor - data.prevTotalMinor - savings : 0n
+		data.prevIncomeMinor ? data.prevIncomeMinor - data.prevTotalMinor - savings + released : 0n
 	);
 	const netChange = $derived(
 		data.incomeMinor > 0n
@@ -567,10 +579,18 @@
 					<span class="text-[13px] font-medium" style="color: var(--ink-3)">Out</span>
 					<Money minor={data.totalMinor} {currency} class="text-[16px] font-semibold" />
 				</div>
-				<div class="flex items-center justify-between px-3.5 py-1.5">
+				<div
+					class="flex items-center justify-between px-3.5 py-1.5 {released > 0n ? 'hairline' : ''}"
+				>
 					<span class="text-[13px] font-medium" style="color: var(--seal)">Saved</span>
 					<Money minor={savings} {currency} sign class="text-[16px] font-semibold" />
 				</div>
+				{#if released > 0n}
+					<div class="flex items-center justify-between px-3.5 py-1.5">
+						<span class="text-[13px] font-medium" style="color: var(--ink-3)">From buckets</span>
+						<Money minor={released} {currency} sign class="text-[16px] font-semibold" />
+					</div>
+				{/if}
 			</div>
 			<div
 				class="card flex flex-col items-center justify-center p-4"
@@ -630,6 +650,13 @@
 				Spending more than income this {period}
 			{/if}
 		</p>
+		<!-- Charged to a bucket that didn't have it. Counted as spending above,
+		     because nothing had been set aside to cover it. -->
+		{#if overdraft > 0n}
+			<p class="mt-1 px-1 text-[13px]" style="color: var(--pending)">
+				{formatMinor(overdraft, currency)} charged to buckets past their balance
+			</p>
+		{/if}
 	</div>
 
 	{#if isMonth && (data.budgets.length > 0 || data.isOwner)}

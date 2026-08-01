@@ -65,7 +65,7 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 		}
 	};
 
-	const enhanced = enhance(node, ({ cancel }) => {
+	const enhanced = enhance(node, ({ cancel, submitter }) => {
 		if (opts.confirm && !confirmed) {
 			cancel();
 			const spec: ConfirmSpec =
@@ -73,7 +73,11 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 			void requestConfirm(spec).then((ok) => {
 				if (ok) {
 					confirmed = true;
-					node.requestSubmit();
+					// Re-submit through the same button. A bare requestSubmit() posts no
+					// submitter, so a form whose buttons carry the choice (name="intent",
+					// value="log" | "request") would lose it on the way through the gate
+					// and land as a different action than the one that was confirmed.
+					node.requestSubmit(submitter);
 				}
 			});
 			return;

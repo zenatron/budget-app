@@ -2,7 +2,8 @@
 	import { enhance } from '$app/forms';
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
-	import { formatMinor } from '$lib/money-format';
+	import { formatMinor, tryParseMinor } from '$lib/money-format';
+	import { overdraftBy } from '$lib/domain/bucket/flows';
 	import {
 		Camera,
 		Check,
@@ -79,6 +80,45 @@
 			day: 'numeric'
 		});
 	}
+
+	/*
+	 * Completing is where a bucket-charged purchase actually withdraws, and the
+	 * amount entered here is the one that lands — not the one approved. So the
+	 * overdraft check lives on this field, seeded with the approved amount and
+	 * reacting as it's edited. Nothing blocks: a bucket is an earmark, and no
+	 * real money moves either way. See domain/bucket/flows.
+	 */
+	// Derived, not a snapshot: this route is reused when you navigate from one
+	// purchase to the next, so a plain `$state` seed would carry the previous
+	// purchase's amount across. What was typed is tagged with the purchase it was
+	// typed into, which lets it expire on navigation without an effect.
+	let typedFinal = $state<{ id: string; value: string } | null>(null);
+	const finalAmount = $derived(
+		typedFinal?.id === p.id
+			? typedFinal.value
+			: formatMinor(p.approvedAmountMinor ?? p.requestedAmountMinor, p.currency).replace(
+					/[^0-9.]/g,
+					''
+				)
+	);
+	const overdraft = $derived.by(() => {
+		if (!p.bucket) return null;
+		const minor = tryParseMinor(finalAmount, p.bucket.currency);
+		if (minor === null) return null;
+		const shortMinor = overdraftBy(p.bucket.balanceMinor, minor);
+		if (shortMinor === 0n) return null;
+		return { shortMinor, amountMinor: minor, currency: p.bucket.currency };
+	});
+	const overdraftConfirm = $derived(
+		overdraft && p.bucket
+			? {
+					title: `${p.bucket.name} doesn't have that`,
+					body: `It holds ${formatMinor(p.bucket.balanceMinor, overdraft.currency)}, and you spent ${formatMinor(overdraft.amountMinor, overdraft.currency)}. Recording it leaves the bucket ${formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn, and that part counts as ordinary spending rather than savings you'd already set aside.`,
+					confirmLabel: 'Record it anyway',
+					tone: 'danger' as const
+				}
+			: undefined
+	);
 
 	const displayAmount = $derived(p.finalAmountMinor ?? p.requestedAmountMinor);
 	const isPending = $derived(p.state === 'pending_approval');
@@ -796,11 +836,17 @@
 				<p class="text-[15px] font-semibold" style="color: var(--ink)">Mark as bought</p>
 				<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
 					Enter what you actually spent — a large overage triggers re-approval.
+					{#if p.bucket}
+						It comes out of {p.bucket.name}, which holds {formatMinor(
+							p.bucket.balanceMinor,
+							p.bucket.currency
+						)}.
+					{/if}
 				</p>
 				<form
 					method="POST"
 					action="?/complete"
-					use:submit={{ success: 'Marked as bought' }}
+					use:submit={{ confirm: overdraftConfirm, success: 'Marked as bought' }}
 					class="mt-3.5 space-y-3"
 				>
 					<div class="grid grid-cols-2 gap-3">
@@ -810,13 +856,10 @@
 								name="finalAmount"
 								aria-label="Final amount"
 								use:money
+								bind:value={() => finalAmount, (v) => (typedFinal = { id: p.id, value: v })}
 								required
 								inputmode="decimal"
 								placeholder="Final amount"
-								value={formatMinor(
-									p.approvedAmountMinor ?? p.requestedAmountMinor,
-									p.currency
-								).replace(/[^0-9.]/g, '')}
 								class="field num text-[17px]"
 							/>
 						</label>
@@ -831,6 +874,12 @@
 							/>
 						</label>
 					</div>
+					{#if overdraft}
+						<p class="text-[13px] leading-snug" style="color: var(--pending)">
+							That's {formatMinor(overdraft.shortMinor, overdraft.currency)} more than {p.bucket
+								?.name} holds. The bucket goes overdrawn and the shortfall counts as ordinary spending.
+						</p>
+					{/if}
 					<button class="btn btn-accent w-full">Complete purchase</button>
 				</form>
 			</div>

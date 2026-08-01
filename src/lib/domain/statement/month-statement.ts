@@ -21,8 +21,20 @@ export interface MonthStatementFigures {
 	prevSpentMinor: bigint;
 	/** Income received this month. May be 0 if the household doesn't track it. */
 	incomeMinor: bigint;
-	/** Bucket accruals this month — cash deliberately moved into savings. */
+	/** Money moved *into* buckets this month — cash deliberately set aside. Never
+	 *  negative: taking money back out is `releasedMinor`, not un-saving. */
 	savingsMinor: bigint;
+	/**
+	 * Money taken *out* of buckets this month that the buckets actually held.
+	 * Added back when netting, because `spentMinor` already counts the purchase
+	 * it paid for and that cost was borne in the month the money was set aside.
+	 * An overdraft is deliberately not in here — nothing funded it, so it stays
+	 * counted as this month's spending. See domain/bucket/flows.
+	 */
+	releasedMinor: bigint;
+	/** Money charged to buckets this month beyond what they held. Counted as
+	 *  ordinary spending above; called out in the narration so it isn't silent. */
+	overdraftMinor: bigint;
 	/** Number of completed purchases, for texture ("across 34 purchases"). */
 	txCount: number;
 	/** The category the most went to, if any spending happened. */
@@ -38,7 +50,7 @@ export interface MonthStatementFigures {
 export type MonthStatus = 'saved' | 'even' | 'over' | 'neutral';
 
 export interface MonthSummary {
-	/** income − spent − savings. Only meaningful when income was recorded. */
+	/** income − spent − savings + released. Only meaningful when income was recorded. */
 	netMinor: bigint;
 	/** Share of income set aside, in basis points. Null when income is 0. */
 	savingsRateBps: number | null;
@@ -56,7 +68,11 @@ export interface MonthSummary {
 }
 
 export function summarizeMonth(f: MonthStatementFigures): MonthSummary {
-	const netMinor = f.incomeMinor - f.spentMinor - f.savingsMinor;
+	// Spending a bucket down isn't this month's cost — it was paid for when the
+	// money was set aside — so the funded part of what came out is added back.
+	// The unfunded part never appears here, which is the point: an overdraft is
+	// spending, and it lands on this month's net like any other.
+	const netMinor = f.incomeMinor - f.spentMinor - f.savingsMinor + f.releasedMinor;
 	const hasIncome = f.incomeMinor > 0n;
 	const savingsRateBps = hasIncome ? Number((f.savingsMinor * 10_000n) / f.incomeMinor) : null;
 	const momDeltaMinor = f.spentMinor - f.prevSpentMinor;
@@ -171,6 +187,15 @@ export function narrateMonth(
 				`You went ${fmt(-s.budgetVarianceMinor)} past your ${fmt(f.budget.limitMinor)} budget.`
 			);
 		}
+	}
+
+	// What the buckets couldn't cover. Said plainly and without scolding: the
+	// charge was allowed, the money simply wasn't there, and the figures above
+	// have already counted it as spending rather than as savings coming back.
+	if (f.overdraftMinor > 0n) {
+		notes.push(
+			`${fmt(f.overdraftMinor)} of that was charged to buckets that didn't have it, so it counts as spending rather than savings coming back.`
+		);
 	}
 
 	// What you kept.

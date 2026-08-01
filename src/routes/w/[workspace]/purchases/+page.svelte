@@ -375,8 +375,11 @@
 			<Landmark class="h-[16px] w-[16px]" style="color: {m.bucketColor ?? 'var(--seal)'}" />
 		</span>
 		<div class="min-w-0 flex-1">
+			<!-- Read the direction off the sign, not the type. A refund against a
+			     bucket-charged purchase is a credit stored as a 'withdrawal' row, and
+			     labelling it "Taken from" next to a +$40 was simply untrue. -->
 			<p class="truncate text-[15px]" style="color: var(--ink-2)">
-				{m.type === 'accrual' ? 'Set aside' : m.type === 'withdrawal' ? 'Taken from' : 'Adjusted'}
+				{m.amountMinor < 0n ? 'Taken from' : m.type === 'accrual' ? 'Set aside' : 'Added to'}
 				{m.bucketName}
 			</p>
 			<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
