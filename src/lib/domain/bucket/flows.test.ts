@@ -35,12 +35,96 @@ describe('bucketFlows', () => {
 		expect(f).toEqual({ setAsideMinor: 10_000n, releasedMinor: 6_000n, overdraftMinor: 0n });
 	});
 
-	it('respects order — the same pair the other way round is an overdraft', () => {
+	/*
+	 * This pair used to read as a £60 overdraft, on the grounds that the money
+	 * wasn't there at the instant of the charge. Two problems with that. The
+	 * figures then turned on whether a charge beat the monthly accrual by an hour
+	 * on the same day, and the reading double-counted: £100 subtracted as savings
+	 * plus £60 added to spending, for a household that spent £60.
+	 */
+	it('lets money arriving later in the window cover an earlier charge', () => {
 		const f = bucketFlows(opening(), [
 			{ bucketId: 'a', amountMinor: -6_000n },
 			{ bucketId: 'a', amountMinor: 10_000n }
 		]);
-		expect(f).toEqual({ setAsideMinor: 10_000n, releasedMinor: 0n, overdraftMinor: 6_000n });
+		expect(f).toEqual({ setAsideMinor: 10_000n, releasedMinor: 6_000n, overdraftMinor: 0n });
+	});
+
+	it('reads the same whichever order the two arrived in', () => {
+		const withdrawFirst = bucketFlows(opening(), [
+			{ bucketId: 'a', amountMinor: -6_000n },
+			{ bucketId: 'a', amountMinor: 10_000n }
+		]);
+		const accrueFirst = bucketFlows(opening(), [
+			{ bucketId: 'a', amountMinor: 10_000n },
+			{ bucketId: 'a', amountMinor: -6_000n }
+		]);
+		expect(withdrawFirst).toEqual(accrueFirst);
+	});
+
+	it('covers only as much of the earlier charge as later money reaches', () => {
+		const f = bucketFlows(opening(), [
+			{ bucketId: 'a', amountMinor: -6_000n },
+			{ bucketId: 'a', amountMinor: 2_000n }
+		]);
+		expect(f).toEqual({ setAsideMinor: 2_000n, releasedMinor: 2_000n, overdraftMinor: 4_000n });
+	});
+
+	// Money still has to arrive. A charge nothing ever covered stays an overdraft.
+	it('leaves a charge nothing covered as an overdraft', () => {
+		const f = bucketFlows(opening(), [{ bucketId: 'a', amountMinor: -6_000n }]);
+		expect(f).toEqual({ setAsideMinor: 0n, releasedMinor: 0n, overdraftMinor: 6_000n });
+	});
+
+	// A bucket that arrived overdrawn owes that to an earlier period, so this
+	// period's accrual paying it down is not this period releasing anything.
+	it('does not credit an accrual against a deficit carried in', () => {
+		const f = bucketFlows(opening({ a: -3_000n }), [{ bucketId: 'a', amountMinor: 10_000n }]);
+		expect(f).toEqual({ setAsideMinor: 10_000n, releasedMinor: 0n, overdraftMinor: 0n });
+	});
+
+	it('covers only the shortfall incurred inside the window', () => {
+		// Opens £30 down, spends £20 it hasn't got, then £50 lands.
+		const f = bucketFlows(opening({ a: -3_000n }), [
+			{ bucketId: 'a', amountMinor: -2_000n },
+			{ bucketId: 'a', amountMinor: 5_000n }
+		]);
+		expect(f).toEqual({ setAsideMinor: 5_000n, releasedMinor: 2_000n, overdraftMinor: 0n });
+	});
+
+	// The identity the whole module rests on, across the awkward cases above.
+	it('keeps setAside − released − overdraft equal to the change in balance', () => {
+		const cases: { opening: Record<string, bigint>; txns: BucketTxn[] }[] = [
+			{ opening: {}, txns: [{ bucketId: 'a', amountMinor: -6_000n }] },
+			{
+				opening: {},
+				txns: [
+					{ bucketId: 'a', amountMinor: -6_000n },
+					{ bucketId: 'a', amountMinor: 10_000n }
+				]
+			},
+			{
+				opening: { a: -3_000n },
+				txns: [
+					{ bucketId: 'a', amountMinor: -2_000n },
+					{ bucketId: 'a', amountMinor: 5_000n }
+				]
+			},
+			{
+				opening: { a: 1_000n, b: -500n },
+				txns: [
+					{ bucketId: 'a', amountMinor: -4_000n },
+					{ bucketId: 'b', amountMinor: 900n },
+					{ bucketId: 'a', amountMinor: 2_500n },
+					{ bucketId: 'b', amountMinor: -100n }
+				]
+			}
+		];
+		for (const c of cases) {
+			const f = bucketFlows(opening(c.opening), c.txns);
+			const change = c.txns.reduce((s, t) => s + t.amountMinor, 0n);
+			expect(f.setAsideMinor - f.releasedMinor - f.overdraftMinor).toBe(change);
+		}
 	});
 
 	it('keeps buckets independent — one is not funded by another', () => {

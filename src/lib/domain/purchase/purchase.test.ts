@@ -24,6 +24,7 @@ function draft(overrides: Partial<Purchase> = {}): Purchase {
 		workspaceId: 'w1',
 		memberId: 'm-requester',
 		state: 'draft',
+		accountId: null,
 		itemName: 'Headphones',
 		note: null,
 		categoryId: 'cat-electronics',

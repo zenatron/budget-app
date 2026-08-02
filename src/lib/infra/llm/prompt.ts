@@ -12,23 +12,56 @@ export interface ChatMessage {
 	content: string;
 }
 
+/**
+ * A worked example: what the text looked like, and which option was right.
+ * A handful of these is the cheapest accuracy the classifier can buy — small
+ * local models in particular answer a demonstrated task far better than a
+ * described one.
+ */
+export interface ChoiceExample {
+	text: string;
+	answer: string;
+}
+
 export function choiceMessages(req: {
 	instruction: string;
 	text: string;
 	choices: Choice[];
+	/**
+	 * Extra labelled facts about the thing being classified. The classifier used
+	 * to see a bare item name with everything else stripped out, which threw away
+	 * most of what decides the answer — the merchant, the amount, and the words
+	 * the person actually chose. Anything the caller already holds and trusts can
+	 * ride along here.
+	 */
+	context?: { label: string; value: string }[];
+	examples?: ChoiceExample[];
 }): ChatMessage[] {
 	const options = req.choices.map((c) => `- ${c.label}`).join('\n');
+	const context = (req.context ?? []).filter((c) => c.value.trim().length > 0);
+
+	const parts = [req.instruction, '', `Text:\n"""${req.text}"""`];
+	if (context.length > 0) {
+		parts.push('', context.map((c) => `${c.label}: ${c.value}`).join('\n'));
+	}
+	if (req.examples && req.examples.length > 0) {
+		parts.push(
+			'',
+			'Examples:',
+			req.examples.map((e) => `"""${e.text}""" -> ${e.answer}`).join('\n')
+		);
+	}
+	parts.push('', `Options:\n${options}`, '', 'Answer:');
+
 	return [
 		{
 			role: 'system',
 			content:
 				'You are a strict classifier. Reply with the single best option copied exactly, ' +
-				'or the word NONE if nothing fits. No explanation, no punctuation, no other words.'
+				'or the word NONE if nothing fits. No explanation, no punctuation, no other words. ' +
+				'An option written as "Parent > Child" is one option: copy it whole.'
 		},
-		{
-			role: 'user',
-			content: `${req.instruction}\n\nText:\n"""${req.text}"""\n\nOptions:\n${options}\n\nAnswer:`
-		}
+		{ role: 'user', content: parts.join('\n') }
 	];
 }
 

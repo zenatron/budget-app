@@ -16,6 +16,7 @@ import {
 import { systemClock } from '$lib/infra/time/system-clock';
 import { calDateInZone } from '$lib/domain/time/zoned';
 import { parse, type ParsedIntent, type TimePeriod } from '$lib/intelligence/parser';
+import { outOfBriefingScope } from '$lib/domain/intelligence/briefing-scope';
 import { formatPct } from '$lib/format';
 import { getLlmAssist } from '$lib/infra/llm';
 import { briefingField } from '$lib/infra/llm/prompt';
@@ -373,11 +374,39 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		});
 	}
 
-	// Nothing deterministic matched. If a model is configured, let Harmony answer
-	// the question in plain language — but only over the real figures the core
-	// computes below, never numbers it invents. This is the path that makes the
-	// palette feel intelligent for anything phrased outside the parser's grammar
-	// ("am I spending more than last month?", "what's my biggest expense?").
+	/*
+	 * Nothing deterministic matched. Before reaching for the model, check whether
+	 * the briefing could contain the answer at all — it spans this month and last
+	 * month, so a question about March or 2024 is unanswerable from it no matter
+	 * how well the model behaves. Settling that here rather than asking the model
+	 * to own up to it means the refusal is a fact about our data instead of a
+	 * hoped-for property of a small local model, and it reads the same whether the
+	 * assist is on, off, or timing out.
+	 */
+	const lastMonth = previousMonthPeriod(today);
+	const outOfScope = outOfBriefingScope(query, {
+		months: [
+			{ y: today.y, m: today.m },
+			{ y: lastMonth.from.y, m: lastMonth.from.m }
+		],
+		today: { y: today.y, m: today.m }
+	});
+	if (outOfScope) {
+		return jsonSafe({
+			intent: 'unknown',
+			raw: query,
+			answer:
+				`I only keep this month and last month close to hand, so I can't answer that for ${outOfScope.mention}. ` +
+				(outOfScope.suggest === 'ledger'
+					? 'The Ledger tab has it day by day.'
+					: 'The Analytics tab goes back further.')
+		});
+	}
+
+	// In scope, so let Harmony answer in plain language — but only over the real
+	// figures the core computes below, never numbers it invents. This is the path
+	// that makes the palette feel intelligent for anything phrased outside the
+	// parser's grammar ("am I spending more than last month?").
 	if (assist.available) {
 		const briefing = await buildBriefing(db, scope, ws, now, today);
 		const answer = await assist.answerQuestion({ query, briefing });

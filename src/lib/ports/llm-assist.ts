@@ -55,8 +55,18 @@ export interface LlmAssist {
 	 * Reduce messy `text` to the id of one of `choices`, or null. The model's raw
 	 * answer is always forced back through `constrainToChoice`, so anything it
 	 * invents becomes null rather than a wrong pick.
+	 *
+	 * `context` carries labelled facts the caller already holds and trusts, and
+	 * `examples` a few worked cases. Both are optional and neither widens what the
+	 * model may return — the answer is still constrained to `choices`.
 	 */
-	pickChoice(req: { instruction: string; text: string; choices: Choice[] }): Promise<string | null>;
+	pickChoice(req: {
+		instruction: string;
+		text: string;
+		choices: Choice[];
+		context?: { label: string; value: string }[];
+		examples?: { text: string; answer: string }[];
+	}): Promise<string | null>;
 
 	/**
 	 * Normalize `text` to a short clean label (a merchant name from a bank

@@ -179,6 +179,8 @@
 	 * spending — see domain/bucket/flows.
 	 */
 	const savings = $derived(data.savingsMinor ?? 0n);
+	/** What the buckets hold right now — a balance, not this period's flow. */
+	const onHand = $derived(data.onHandMinor ?? 0n);
 	const released = $derived(data.releasedMinor ?? 0n);
 	const overdraft = $derived(data.overdraftMinor ?? 0n);
 	const net = $derived(data.incomeMinor - data.totalMinor - savings + released);
@@ -195,6 +197,21 @@
 				: 0
 	);
 	const sp = $derived(data.incomeMinor > 0n ? Number((net * 1000n) / data.incomeMinor) / 10 : 0);
+
+	/**
+	 * The one-line reading of the net figure. It used to sit under the whole grid,
+	 * which left the Net card as a lone number beside a list of four rows and read
+	 * as unfinished. It belongs against the figure it describes.
+	 */
+	const netSummary = $derived.by(() => {
+		if (data.incomeMinor === 0n) return `No income recorded this ${period}`;
+		if (onHand > 0n) {
+			const rate = sp >= 0 ? `${formatPct(sp)} free` : 'over budget';
+			return `${formatMinor(onHand, currency)} in buckets · ${rate}`;
+		}
+		if (sp >= 0) return `Saving ${formatPct(sp)} of what came in`;
+		return `Spending more than income this ${period}`;
+	});
 
 	const comparison = $derived.by(() => {
 		if (data.prevTotalMinor === 0n)
@@ -570,27 +587,43 @@
 	<div>
 		<p class="section-label mb-3 px-1">Net position</p>
 		<div class="grid grid-cols-2 gap-2.5">
+			<!--
+				Every row is its signed contribution to the Net figure beside it, so the
+				column adds up to that figure by eye. Out and Saved are negated for the
+				same reason: both take money away from net, and showing "Saved +$500"
+				next to "From buckets +$70" put one plus on a term that is subtracted and
+				another on a term that is added. This is the framing the monthly
+				statement already uses (see statement/+page.svelte) — the two screens
+				render the same four figures and disagreed about what a sign meant.
+			-->
 			<div class="card overflow-hidden py-1">
 				<div class="flex items-center justify-between px-3.5 py-1.5">
 					<span class="text-[13px] font-medium" style="color: var(--approve)">In</span>
 					<Money minor={data.incomeMinor} {currency} sign class="text-[16px] font-semibold" />
 				</div>
-				<div class="hairline flex items-center justify-between px-3.5 py-1.5">
-					<span class="text-[13px] font-medium" style="color: var(--ink-3)">Out</span>
-					<Money minor={data.totalMinor} {currency} class="text-[16px] font-semibold" />
-				</div>
+				<!--
+					The rule under Out is what separates cash flow from bucket flow. When
+					there's a "From buckets" row it belongs on the cash side of that rule,
+					directly under the Out it adjusts — it is the part of Out that earlier
+					months already paid for, not a saving made this one. So the rule moves
+					down to sit under it instead.
+				-->
 				<div
-					class="flex items-center justify-between px-3.5 py-1.5 {released > 0n ? 'hairline' : ''}"
+					class="flex items-center justify-between px-3.5 py-1.5 {released > 0n ? '' : 'hairline'}"
 				>
-					<span class="text-[13px] font-medium" style="color: var(--seal)">Saved</span>
-					<Money minor={savings} {currency} sign class="text-[16px] font-semibold" />
+					<span class="text-[13px] font-medium" style="color: var(--ink-3)">Out</span>
+					<Money minor={-data.totalMinor} {currency} sign class="text-[16px] font-semibold" />
 				</div>
 				{#if released > 0n}
-					<div class="flex items-center justify-between px-3.5 py-1.5">
+					<div class="hairline flex items-center justify-between px-3.5 py-1.5">
 						<span class="text-[13px] font-medium" style="color: var(--ink-3)">From buckets</span>
 						<Money minor={released} {currency} sign class="text-[16px] font-semibold" />
 					</div>
 				{/if}
+				<div class="flex items-center justify-between px-3.5 py-1.5">
+					<span class="text-[13px] font-medium" style="color: var(--seal)">Saved</span>
+					<Money minor={-savings} {currency} sign class="text-[16px] font-semibold" />
+				</div>
 			</div>
 			<div
 				class="card flex flex-col items-center justify-center p-4"
@@ -635,25 +668,22 @@
 						{/if}
 					</span>
 				{/if}
+				<!-- Bled to the card edges so the rule matches the breakdown's own
+				     dividers rather than floating inset. -->
+				<div
+					class="-mx-4 mt-3 w-[calc(100%+2rem)] px-4 pt-3"
+					style="border-top: 1px solid var(--hairline)"
+				>
+					<p class="text-center text-[12px] leading-snug" style="color: var(--ink-3)">
+						{netSummary}
+					</p>
+				</div>
 			</div>
 		</div>
-		<p class="mt-2.5 px-1 text-[13px]" style="color: var(--ink-3)">
-			{#if data.incomeMinor === 0n}
-				No income recorded this {period}
-			{:else if savings > 0n}
-				{formatMinor(savings, currency)} in buckets · {sp >= 0
-					? `${formatPct(sp)} free`
-					: 'over budget'}
-			{:else if sp >= 0}
-				Saving {formatPct(sp)} of what came in
-			{:else}
-				Spending more than income this {period}
-			{/if}
-		</p>
 		<!-- Charged to a bucket that didn't have it. Counted as spending above,
 		     because nothing had been set aside to cover it. -->
 		{#if overdraft > 0n}
-			<p class="mt-1 px-1 text-[13px]" style="color: var(--pending)">
+			<p class="mt-2.5 px-1 text-[13px]" style="color: var(--pending)">
 				{formatMinor(overdraft, currency)} charged to buckets past their balance
 			</p>
 		{/if}

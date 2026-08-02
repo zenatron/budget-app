@@ -1,17 +1,4 @@
-import {
-	and,
-	count,
-	desc,
-	eq,
-	gte,
-	ilike,
-	inArray,
-	isNull,
-	lt,
-	or,
-	sql,
-	type SQL
-} from 'drizzle-orm';
+import { and, count, eq, gte, ilike, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { unionAll } from 'drizzle-orm/pg-core';
 import type { Db } from '$lib/server/db';
 import { bucket, bucketTransaction, merchant, purchase } from '$lib/server/db/schema';
@@ -65,6 +52,8 @@ export interface LedgerOpts {
 	/** Sentinel for "has no category" — the rows analytics shows as "Other". */
 	uncategorized?: boolean;
 	memberId?: string;
+	/** Only purchases known to be on this card. */
+	accountId?: string;
 	/** Instants, half-open [from, to). Convert from calendar dates with
 	 *  periodBoundsUtc so the boundary matches the analytics page exactly. */
 	from?: Date;
@@ -78,6 +67,22 @@ export interface LedgerOpts {
 
 /** Purchases sort by when they happened, falling back through their lifecycle. */
 const purchaseAt = sql`coalesce(${purchase.completedAt}, ${purchase.decidedAt}, ${purchase.requestedAt}, ${purchase.createdAt})`;
+
+/*
+ * Both key queries order by `at desc, id desc` — the id half is not cosmetic.
+ *
+ * Ties on `at` are ordinary, not exotic: a backfill, a recurring rule
+ * materializing, or a statement import all write the same date-derived midnight
+ * to many rows at once. `ORDER BY at DESC` alone leaves those rows in whatever
+ * order the plan happens to produce, which means two things go wrong. The list
+ * reshuffles between loads for no reason the person can see, and — because the
+ * page window is LIMIT/OFFSET over that same unstable order — tapping "Show
+ * more" can hand back a row already on screen while silently skipping another.
+ *
+ * Ids are uuidv7, so they ascend with creation time: `id desc` is a real
+ * insertion-order tiebreak rather than an arbitrary one, and it total-orders the
+ * result so the offset window is well defined.
+ */
 
 export async function listLedger(
 	db: Db,
@@ -104,6 +109,7 @@ export async function listLedger(
 	if (opts.categoryId) purchaseWhere.push(eq(purchase.categoryId, opts.categoryId));
 	if (opts.uncategorized) purchaseWhere.push(isNull(purchase.categoryId));
 	if (opts.memberId) purchaseWhere.push(eq(purchase.memberId, opts.memberId));
+	if (opts.accountId) purchaseWhere.push(eq(purchase.accountId, opts.accountId));
 
 	// On the spend basis a row is dated by when it completed, and only settled
 	// states count — matching analytics exactly. On the activity basis a row is
@@ -148,6 +154,7 @@ export async function listLedger(
 		!opts.categoryId &&
 		!opts.uncategorized &&
 		!opts.memberId &&
+		!opts.accountId &&
 		basis !== 'spend';
 
 	/*
@@ -196,7 +203,7 @@ export async function listLedger(
 
 		const [rows, pc, mc] = await Promise.all([
 			unionAll(purchaseKeys, movementKeys)
-				.orderBy(sql`at desc`)
+				.orderBy(sql`at desc, id desc`)
 				.limit(limit + 1)
 				.offset(offset),
 			countPurchases,
@@ -211,7 +218,7 @@ export async function listLedger(
 	} else {
 		const [rows, pc] = await Promise.all([
 			purchaseKeys
-				.orderBy(desc(sql`at`))
+				.orderBy(sql`at desc, id desc`)
 				.limit(limit + 1)
 				.offset(offset),
 			countPurchases

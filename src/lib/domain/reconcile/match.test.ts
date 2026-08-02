@@ -201,3 +201,64 @@ describe('matchLines — assignment', () => {
 		expect(JSON.stringify(ps)).not.toContain('1250');
 	});
 });
+
+describe('matchLines — one statement per card', () => {
+	const onCard = (id: string, amountMinor: number, d: number, accountId: string | null) => ({
+		...candidate(id, amountMinor, d),
+		accountId
+	});
+
+	// The default, and what every import made before cards existed did.
+	it('considers every purchase when the statement names no card', () => {
+		const p = matchLines([line(-1250, 10)], [onCard('a', 1250, 10, 'visa')]);
+		expect(p[0].purchaseId).toBe('a');
+	});
+
+	// The whole point: once a purchase has been reconciled onto one card, another
+	// card's statement must not be able to claim it too.
+	it('excludes a purchase already known to be on a different card', () => {
+		const p = matchLines([line(-1250, 10)], [onCard('a', 1250, 10, 'visa')], {
+			accountId: 'amex'
+		});
+		expect(p[0].state).toBe('unmatched');
+		expect(p[0].suggestions).toEqual([]);
+	});
+
+	it('matches a purchase already known to be on this card', () => {
+		const p = matchLines([line(-1250, 10)], [onCard('a', 1250, 10, 'visa')], {
+			accountId: 'visa'
+		});
+		expect(p[0].purchaseId).toBe('a');
+	});
+
+	// Almost every purchase starts with no card recorded. Excluding those would
+	// reconcile nothing at all, so they stay eligible.
+	it('keeps purchases with no card recorded eligible', () => {
+		const p = matchLines([line(-1250, 10)], [onCard('a', 1250, 10, null)], {
+			accountId: 'amex'
+		});
+		expect(p[0].purchaseId).toBe('a');
+	});
+
+	// Two cards, one amount, one day — previously a coin flip between them.
+	it('picks the purchase belonging to this card over an identical rival', () => {
+		const p = matchLines(
+			[line(-1250, 10)],
+			[onCard('visa-one', 1250, 10, 'visa'), onCard('amex-one', 1250, 10, 'amex')],
+			{ accountId: 'amex' }
+		);
+		expect(p[0].state).toBe('matched');
+		expect(p[0].purchaseId).toBe('amex-one');
+	});
+
+	// Scoping must not turn a genuine ambiguity into a false confidence.
+	it('still refuses to choose between two eligible purchases', () => {
+		const p = matchLines(
+			[line(-1250, 10)],
+			[onCard('a', 1250, 10, null), onCard('b', 1250, 10, 'amex')],
+			{ accountId: 'amex' }
+		);
+		expect(p[0].state).toBe('unmatched');
+		expect(p[0].suggestions.map((s) => s.purchaseId).sort()).toEqual(['a', 'b']);
+	});
+});

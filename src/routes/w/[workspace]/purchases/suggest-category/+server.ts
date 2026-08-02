@@ -1,47 +1,43 @@
 import { json } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
-import { listCategories } from '$lib/server/repo/workspaces';
 import { getLlmAssist } from '$lib/infra/llm';
+import { suggestCategory } from '$lib/application/suggest-category';
 import type { RequestHandler } from './$types';
 
 /**
- * The first proving ground for the assist layer: suggest a category for a
- * purchase from its item name (and merchant, if given). Deterministic-first —
- * with AI off, or on any failure, this returns { categoryId: null } and the
- * form behaves exactly as it always has. A suggestion is never applied here; the
- * client shows it as a chip the person taps to accept.
+ * Suggest a category for a purchase from its item name and merchant, as the Add
+ * form's fields lose focus. A suggestion is never applied here; the client shows
+ * it as a chip the person taps to accept.
+ *
+ * The thinking lives in `suggestCategory`, shared with the describe box. Note
+ * what this no longer does: it used to bail out immediately when the assist was
+ * off, because a model was the only thing it knew how to ask. The merchant
+ * memory needs no model, so the question is worth asking either way — and with
+ * AI off this is now the only category help in the app rather than none.
  */
 export const POST: RequestHandler = async ({ locals, request }) => {
 	const ws = locals.workspace!;
-	const assist = getLlmAssist({
-		aiMode: ws.aiMode,
-		aiEndpoint: ws.aiEndpoint,
-		aiModel: ws.aiModel,
-		aiApiKey: ws.aiApiKey
-	});
-	if (!assist.available) return json({ categoryId: null });
-
 	const body = await request.json().catch(() => ({}));
 	const itemName = typeof body?.itemName === 'string' ? body.itemName.trim().slice(0, 120) : '';
 	const merchantName =
 		typeof body?.merchantName === 'string' ? body.merchantName.trim().slice(0, 200) : '';
-	if (!itemName) return json({ categoryId: null });
+	if (!itemName && !merchantName) return json({ categoryId: null });
 
-	const categories = await listCategories(getDb(), ws.id);
-	if (categories.length === 0) return json({ categoryId: null });
+	const suggestion = await suggestCategory(
+		getDb(),
+		getLlmAssist({
+			aiMode: ws.aiMode,
+			aiEndpoint: ws.aiEndpoint,
+			aiModel: ws.aiModel,
+			aiApiKey: ws.aiApiKey
+		}),
+		ws.id,
+		{ itemName, merchantName }
+	);
 
-	const choices = categories.map((c) => ({ id: c.id, label: c.name }));
-	const text = merchantName ? `${itemName} (from ${merchantName})` : itemName;
-	const categoryId = await assist.pickChoice({
-		instruction: 'Pick the spending category that best fits this purchase.',
-		text,
-		choices
-	});
-
-	const match = categoryId ? categories.find((c) => c.id === categoryId) : null;
 	return json({
-		categoryId: match?.id ?? null,
-		name: match?.name ?? null,
-		icon: match?.icon ?? null
+		categoryId: suggestion.categoryId,
+		name: suggestion.name,
+		icon: suggestion.icon
 	});
 };

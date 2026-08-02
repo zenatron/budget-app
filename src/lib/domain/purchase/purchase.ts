@@ -34,6 +34,9 @@ export interface Purchase {
 	note: string | null;
 	categoryId: string | null;
 	merchantId: string | null;
+	/** The card this was paid on. Carries no meaning for approval or money —
+	 *  it exists so reconciliation can tell one card's statement from another. */
+	accountId: string | null;
 	requestedAmount: Money;
 	approvedAmount: Money | null;
 	finalAmount: Money | null;

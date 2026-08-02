@@ -65,6 +65,7 @@ function toDomain(row: PurchaseRow, approverMemberIds: string[]): Purchase {
 		note: row.note,
 		categoryId: row.categoryId,
 		merchantId: row.merchantId,
+		accountId: row.accountId,
 		requestedAmount: Money.of(row.requestedAmountMinor, row.currency),
 		approvedAmount:
 			row.approvedAmountMinor === null ? null : Money.of(row.approvedAmountMinor, row.currency),
@@ -187,6 +188,7 @@ export async function insertPurchase(
 		note: p.note,
 		categoryId: p.categoryId,
 		merchantId: p.merchantId,
+		accountId: p.accountId,
 		requestedAmountMinor: p.requestedAmount.minor,
 		approvedAmountMinor: p.approvedAmount?.minor ?? null,
 		finalAmountMinor: p.finalAmount?.minor ?? null,
@@ -475,4 +477,45 @@ export async function memberNames(db: Db, memberIds: string[]): Promise<Map<stri
 		.innerJoin(user, eq(workspaceMember.userId, user.id))
 		.where(inArray(workspaceMember.id, memberIds));
 	return new Map(rows.map((r) => [r.id, r.name]));
+}
+
+/**
+ * The category this workspace last filed a merchant under.
+ *
+ * The basis of the deterministic half of the category suggestion: if you have
+ * already told the app that Blue Bottle is Coffee, it should not need a language
+ * model to work that out a second time. Only settled states count — a pending
+ * request is a claim about the future, and a denied or cancelled one was
+ * explicitly rejected, so neither is evidence of how you file this merchant.
+ *
+ * Most recent wins rather than most frequent: when a merchant genuinely changes
+ * category for you, the correction should take effect immediately instead of
+ * being outvoted by history.
+ *
+ * Deliberately *not* seal-filtered. It returns a category id and nothing else —
+ * no item, no amount, no date — and it is only ever used to pre-fill a field on
+ * a form the person is already filling in about that same merchant. Threading a
+ * viewer through would suggest it leaks something it cannot.
+ */
+export async function lastCategoryForMerchant(
+	db: Db,
+	workspaceId: string,
+	normalizedMerchantName: string
+): Promise<string | null> {
+	const [row] = await db
+		.select({ categoryId: purchase.categoryId })
+		.from(purchase)
+		.innerJoin(merchant, eq(purchase.merchantId, merchant.id))
+		.innerJoin(category, eq(purchase.categoryId, category.id))
+		.where(
+			and(
+				eq(purchase.workspaceId, workspaceId),
+				eq(merchant.normalizedName, normalizedMerchantName),
+				inArray(purchase.state, ['completed', 'approved']),
+				eq(category.isArchived, false)
+			)
+		)
+		.orderBy(desc(purchase.createdAt))
+		.limit(1);
+	return row?.categoryId ?? null;
 }

@@ -29,18 +29,47 @@
 	// When a model is configured, Harmony can answer free text the parser doesn't
 	// recognize — so any non-trivial query is submittable, not just grammar the
 	// deterministic parser owns. Without a model we keep the old gate: unrecognized
-	// input stays a dead end and we show suggestions instead.
+	// input stays a dead end.
 	// Only 'unknown' input is handed to the model. 'incomplete' (a command missing
 	// its amount, say) keeps the deterministic completion hints — those guide the
 	// user better than a round-trip would.
 	const canAsk = $derived(
 		assistEnabled && reading.intent === 'unknown' && paletteQuery.value.trim().length >= 3
 	);
-	const ready = $derived(reading.ready || canAsk);
+
+	/*
+	 * Two different questions, which used to share one `ready` flag:
+	 *
+	 *   canSubmit      — would pressing Enter do anything?
+	 *   showSuggestions — should we offer example queries?
+	 *
+	 * Folding `canAsk` into both meant that the moment a model was configured,
+	 * every unrecognised query became "ready" and the suggestion list switched
+	 * itself off — for exactly the 'unknown' case that exists to produce it. With
+	 * AI on you got no chips, and no slot chips either (an unknown reading has no
+	 * label), so the box showed nothing at all about what it made of your words.
+	 *
+	 * They are independent: a query can be both answerable by the model *and*
+	 * worth showing examples next to, because the parser still doesn't recognise it.
+	 */
+	const canSubmit = $derived(reading.ready || canAsk);
+	const showSuggestions = $derived(!reading.ready);
+
+	// An 'unknown' reading has no deterministic label. When a model is standing by
+	// to take it, say so — silence reads as "this box is ignoring me".
+	const readingLabel = $derived(reading.label || (canAsk ? 'Ask Harmony' : ''));
 
 	// Completing a half-typed command, versus offering cold-start examples.
 	const completing = $derived(reading.suggestions.length > 0 && paletteQuery.value.length > 0);
 	const prompts = $derived(completing ? reading.suggestions : EXAMPLE_PROMPTS);
+
+	// A reply that answered nothing — the deterministic fallback, or a failed
+	// round trip. Without the examples underneath it, it's a dead end.
+	const answerWasDeadEnd = $derived(
+		!!paletteResponse.value &&
+			!paletteResponse.value.propose &&
+			(paletteResponse.value.intent === 'unknown' || paletteResponse.value.intent === 'error')
+	);
 
 	function proposalSummary(p: Proposal): string {
 		if (p.intent === 'create_bucket') {
@@ -99,7 +128,7 @@
 					bind:this={paletteInputEl.value}
 					bind:value={paletteQuery.value}
 					onkeydown={(e) => {
-						if (e.key === 'Enter' && ready) submit();
+						if (e.key === 'Enter' && canSubmit) submit();
 					}}
 					placeholder="Ask Harmony…"
 					autocomplete="off"
@@ -112,9 +141,9 @@
 				{#if paletteQuery.value}
 					<button
 						onclick={submit}
-						disabled={paletteLoading.value || !ready}
+						disabled={paletteLoading.value || !canSubmit}
 						class="press shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-opacity"
-						style="background: var(--ws-accent); color: white; opacity: {ready &&
+						style="background: var(--ws-accent); color: white; opacity: {canSubmit &&
 						!paletteLoading.value
 							? '1'
 							: '0.35'}"
@@ -133,7 +162,7 @@
 			</div>
 
 			<!-- Live reading of the query: what we think it means, before you commit. -->
-			{#if !paletteResponse.value && reading.label}
+			{#if !paletteResponse.value && readingLabel}
 				<div
 					class="flex flex-wrap items-center gap-1.5 px-4 pb-3.5"
 					transition:fly={{ y: -4, duration: 140 }}
@@ -141,7 +170,7 @@
 					<span
 						class="rounded-full px-2 py-[3px] text-[11px] font-semibold tracking-[0.04em] uppercase"
 						style="background: color-mix(in oklab, var(--ws-accent) 16%, transparent); color: color-mix(in oklab, var(--ws-accent) 75%, black)"
-						>{reading.label}</span
+						>{readingLabel}</span
 					>
 					{#each reading.slots as slot (slot.label)}
 						<span
@@ -164,6 +193,23 @@
 
 			<div class="h-px" style="background: var(--hairline)"></div>
 		</div>
+
+		{#snippet suggestions(heading: string, items: string[], pick: (p: string) => void)}
+			<p class="text-[11px] font-semibold tracking-[0.08em] uppercase" style="color: var(--ink-3)">
+				{heading}
+			</p>
+			<div class="mt-2 flex flex-col items-start gap-1.5">
+				{#each items as example (example)}
+					<button
+						onclick={() => pick(example)}
+						class="press max-w-full rounded-full px-3 py-1.5 text-left text-[13px]"
+						style="background: var(--surface-2); color: var(--ink-2)"
+					>
+						{example}
+					</button>
+				{/each}
+			</div>
+		{/snippet}
 
 		<div class="max-h-[50vh] overflow-y-auto">
 			{#if paletteResponse.value}
@@ -228,27 +274,21 @@
 						>
 							Ask something else
 						</button>
+						<!-- A reply that answered nothing needs somewhere to go next. -->
+						{#if answerWasDeadEnd}
+							<div class="mt-4">
+								{@render suggestions('Try asking', EXAMPLE_PROMPTS, pickExample)}
+							</div>
+						{/if}
 					{/if}
 				</div>
-			{:else if !ready}
+			{:else if showSuggestions}
 				<div class="p-4">
-					<p
-						class="text-[11px] font-semibold tracking-[0.08em] uppercase"
-						style="color: var(--ink-3)"
-					>
-						{completing ? 'Did you mean' : 'Try asking'}
-					</p>
-					<div class="mt-2 flex flex-col items-start gap-1.5">
-						{#each prompts as example (example)}
-							<button
-								onclick={() => (completing ? fillExample(example) : pickExample(example))}
-								class="press max-w-full rounded-full px-3 py-1.5 text-left text-[13px]"
-								style="background: var(--surface-2); color: var(--ink-2)"
-							>
-								{example}
-							</button>
-						{/each}
-					</div>
+					{@render suggestions(
+						completing ? 'Did you mean' : 'Try asking',
+						prompts,
+						completing ? fillExample : pickExample
+					)}
 				</div>
 			{/if}
 		</div>

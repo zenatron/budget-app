@@ -26,9 +26,13 @@
  * counted against you, because nothing ever paid for it.
  *
  * Pure integer arithmetic over an ordered replay — no clock, no rounding, no
- * estimate. The order is the caller's contract: transactions must arrive
- * oldest-first, because "was the money there?" is a question about the balance
- * at that instant, not at the end of the period.
+ * estimate. Transactions must arrive oldest-first: "was the money there?" is a
+ * question about the balance as the window played out.
+ *
+ * It is asked about the window as a whole, though, not about the instant. Money
+ * that lands later in the period covers a shortfall from earlier in it, so the
+ * answer doesn't hinge on whether a charge beat the monthly accrual by an hour.
+ * See the note on the inflow branch below.
  */
 
 export interface BucketTxn {
@@ -70,6 +74,14 @@ export function bucketFlows(
 	txns: readonly BucketTxn[]
 ): BucketFlows {
 	const balances = new Map(openingBalances);
+	/**
+	 * Shortfall incurred *inside this window*, per bucket, not yet covered.
+	 *
+	 * Deliberately not seeded from `openingBalances`: a bucket that arrived
+	 * overdrawn owes that money to an earlier period, and this period's accruals
+	 * paying it down is not this period releasing anything.
+	 */
+	const unfunded = new Map<string, bigint>();
 	let setAsideMinor = 0n;
 	let releasedMinor = 0n;
 	let overdraftMinor = 0n;
@@ -78,6 +90,33 @@ export function bucketFlows(
 		const balance = balances.get(t.bucketId) ?? 0n;
 		if (t.amountMinor >= 0n) {
 			setAsideMinor += t.amountMinor;
+
+			/*
+			 * Money arriving later in the window pays off a shortfall from earlier in
+			 * it, and that charge stops counting as unfunded.
+			 *
+			 * Without this the figures depend on the order of two events inside a
+			 * single day. Charge an empty bucket at 08:00 and let the monthly accrual
+			 * land at 09:00, and the charge is overdraft; do the same two things in
+			 * the other order and it is funded — same day, same money, same closing
+			 * balance, two different readings of the month.
+			 *
+			 * Worse, the first reading double-counts. The accrual is subtracted as
+			 * savings *and* the charge is added to spending, so a household that spent
+			 * £50 is shown £100 poorer. Reclassifying the covered part as released
+			 * settles it at £50, which is what actually left.
+			 *
+			 * The inflow still counts in full as `setAside` — it genuinely moved in.
+			 * Only the earlier withdrawal is re-read, moving from overdraft to
+			 * released, which is what keeps the closing identity below intact.
+			 */
+			const debt = unfunded.get(t.bucketId) ?? 0n;
+			if (debt > 0n) {
+				const covered = t.amountMinor < debt ? t.amountMinor : debt;
+				overdraftMinor -= covered;
+				releasedMinor += covered;
+				unfunded.set(t.bucketId, debt - covered);
+			}
 		} else {
 			const wanted = -t.amountMinor;
 			// An overdrawn bucket funds nothing, so the floor is zero rather than
@@ -85,8 +124,10 @@ export function bucketFlows(
 			// money available to release.
 			const available = balance > 0n ? balance : 0n;
 			const funded = wanted < available ? wanted : available;
+			const short = wanted - funded;
 			releasedMinor += funded;
-			overdraftMinor += wanted - funded;
+			overdraftMinor += short;
+			if (short > 0n) unfunded.set(t.bucketId, (unfunded.get(t.bucketId) ?? 0n) + short);
 		}
 		balances.set(t.bucketId, balance + t.amountMinor);
 	}

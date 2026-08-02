@@ -105,10 +105,27 @@
 		total = data.total;
 	});
 
+	/*
+	 * The q the URL is expected to hold, as far as this component is concerned.
+	 *
+	 * The box has to follow the URL when someone presses back or clears — but the
+	 * URL is *also* written by our own debounced search, and those two cases used
+	 * to be indistinguishable. Typing raced itself: "coffee" typed quickly fired a
+	 * navigation for "coff", and when that landed a moment later the box was
+	 * written back to "coff", eating the letters typed in between. The faster you
+	 * typed, the more it ate.
+	 *
+	 * Recording what we sent lets the effect ignore the echo of our own write and
+	 * react only to a change that came from somewhere else.
+	 */
+	let knownQuery = page.url.searchParams.get('q') ?? '';
+
 	// Keep the box in step when the URL changes underneath it — back button,
-	// or the clear affordance.
+	// or the clear affordance. Never when the change was ours.
 	$effect(() => {
 		const fromUrl = activeQuery;
+		if (fromUrl === knownQuery) return;
+		knownQuery = fromUrl;
 		if (fromUrl !== untrack(() => search)) search = fromUrl;
 	});
 
@@ -136,7 +153,12 @@
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 	function onSearchInput() {
 		clearTimeout(searchTimer);
-		searchTimer = setTimeout(() => void navigateWith({ q: search }, { replace: true }), 250);
+		searchTimer = setTimeout(() => {
+			// Claim the value before navigating, so the URL settling on it is
+			// recognised as our own echo rather than an external change.
+			knownQuery = search;
+			void navigateWith({ q: search }, { replace: true });
+		}, 250);
 	}
 
 	// These commit a filter but leave the modal open, so you can stack a date, a
@@ -210,6 +232,8 @@
 	function clearSearch() {
 		search = '';
 		clearTimeout(searchTimer);
+		searchTimer = undefined;
+		knownQuery = '';
 		void navigateWith({ q: '' }, { replace: true });
 	}
 

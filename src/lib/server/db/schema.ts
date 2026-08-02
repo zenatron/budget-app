@@ -44,7 +44,9 @@ export const bucketStatus = pgEnum('bucket_status', ['active', 'paused', 'archiv
 // allows a third-party API for those who don't mind the privacy trade.
 export const aiMode = pgEnum('workspace_ai_mode', ['off', 'local', 'external']);
 export const bucketTxnType = pgEnum('bucket_txn_type', ['accrual', 'withdrawal', 'adjustment']);
-export const statementImportFormat = pgEnum('statement_import_format', ['csv', 'ofx']);
+export const statementImportFormat = pgEnum('statement_import_format', ['csv', 'pdf']);
+/** A card or account statements arrive for. See the `account` table. */
+export const accountKind = pgEnum('account_kind', ['card', 'bank']);
 export const statementLineMatchState = pgEnum('statement_line_match_state', [
 	'unmatched',
 	'matched',
@@ -202,6 +204,36 @@ export const merchant = pgTable(
 	(t) => [uniqueIndex('merchant_workspace_normalized_uq').on(t.workspaceId, t.normalizedName)]
 );
 
+/**
+ * A card or account money is spent from.
+ *
+ * Exists for reconciliation. Statements arrive per card, but a workspace's
+ * purchases were one undifferentiated pool, so importing three cards over the
+ * same month put every purchase in the running for every card's lines — and
+ * nothing recorded which card a purchase was actually on. Both halves are fixed
+ * by the same nullable reference.
+ *
+ * Nullable everywhere on purpose: a household that never reconciles never has
+ * to name an account, and every purchase recorded before this existed stays
+ * valid. `last4` is a label, not a credential — the digits printed on the card
+ * so two Visas can be told apart in a picker.
+ */
+export const account = pgTable(
+	'account',
+	{
+		id: uuid('id').primaryKey(),
+		workspaceId: uuid('workspace_id')
+			.notNull()
+			.references(() => workspace.id),
+		name: text('name').notNull(),
+		last4: text('last4'),
+		kind: accountKind('kind').notNull().default('card'),
+		isArchived: boolean('is_archived').notNull().default(false),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull()
+	},
+	(t) => [index('account_workspace_idx').on(t.workspaceId, t.isArchived)]
+);
+
 export const purchase = pgTable(
 	'purchase',
 	{
@@ -217,6 +249,9 @@ export const purchase = pgTable(
 		note: text('note'),
 		categoryId: uuid('category_id').references(() => category.id),
 		merchantId: uuid('merchant_id').references(() => merchant.id),
+		/** Which card this was paid on. Null until reconciling teaches us, or the
+		 *  person picks one on the form. */
+		accountId: uuid('account_id').references(() => account.id),
 		requestedAmountMinor: bigint('requested_amount_minor', { mode: 'bigint' }).notNull(),
 		approvedAmountMinor: bigint('approved_amount_minor', { mode: 'bigint' }),
 		finalAmountMinor: bigint('final_amount_minor', { mode: 'bigint' }),
@@ -471,6 +506,9 @@ export const statementImport = pgTable(
 			.notNull()
 			.references(() => workspaceMember.id),
 		filename: text('filename').notNull(),
+		/** The card this statement is for. Null keeps the old behaviour: match
+		 *  against every purchase in the window. */
+		accountId: uuid('account_id').references(() => account.id),
 		format: statementImportFormat('format').notNull(),
 		currency: text('currency').notNull(),
 		blobId: text('blob_id'),

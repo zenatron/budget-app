@@ -8,6 +8,7 @@ import {
 	importStatement
 } from '$lib/application/reconcile';
 import { detectColumns } from '$lib/domain/reconcile/parse-csv';
+import { createAccount, listAccounts } from '$lib/server/repo/accounts';
 import { rateLimitOk } from '$lib/server/rate-limit';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
@@ -21,11 +22,21 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	void params.workspace;
 	const db = getDb();
 	const ws = locals.workspace!;
-	return {
-		currency: ws.currency,
-		imports: await listImports(db, ws.id)
-	};
+	const [imports, accounts] = await Promise.all([listImports(db, ws.id), listAccounts(db, ws.id)]);
+	return { currency: ws.currency, imports, accounts };
 };
+
+/**
+ * The card a statement is for, validated against this workspace. An id from
+ * anywhere else, or a blank picker, becomes null — which is the old behaviour of
+ * matching against every purchase in the window.
+ */
+async function accountFrom(form: FormData, workspaceId: string): Promise<string | null> {
+	const raw = form.get('accountId');
+	if (typeof raw !== 'string' || !raw) return null;
+	const accounts = await listAccounts(getDb(), workspaceId);
+	return accounts.some((a) => a.id === raw) ? raw : null;
+}
 
 /** First row of a CSV, for the manual column mapper. */
 function headerOf(csv: string): string[] {
@@ -46,15 +57,37 @@ export const actions: Actions = {
 		void getClientAddress;
 
 		const form = await request.formData();
-		const file = form.get('statement');
-		if (!(file instanceof File) || file.size === 0) {
-			return fail(400, { error: 'Choose a CSV file to import.' });
+
+		/*
+		 * Two ways in. A CSV is posted as a file and read here. A PDF was already
+		 * reduced to these same three columns in the browser — see
+		 * $lib/reconcile/read-statement-pdf, which keeps the document on the device
+		 * — and arrives as text with a name and a format alongside it.
+		 */
+		const posted = form.get('csv');
+		const isDerived = typeof posted === 'string' && posted.length > 0;
+		const format = form.get('format') === 'pdf' ? ('pdf' as const) : ('csv' as const);
+
+		let csv: string;
+		let filename: string;
+		if (isDerived) {
+			csv = posted;
+			filename = String(form.get('filename') ?? 'statement.pdf');
+		} else {
+			const file = form.get('statement');
+			if (!(file instanceof File) || file.size === 0) {
+				return fail(400, { error: 'Choose a CSV or PDF statement to import.' });
+			}
+			if (file.size > MAX_CSV_BYTES) {
+				return fail(400, { error: 'That file is too large to import.' });
+			}
+			csv = await file.text();
+			filename = file.name;
 		}
-		if (file.size > MAX_CSV_BYTES) {
+		if (csv.length > MAX_CSV_BYTES) {
 			return fail(400, { error: 'That file is too large to import.' });
 		}
-
-		const csv = await file.text();
+		const accountId = await accountFrom(form, locals.workspace!.id);
 
 		/*
 		 * Column mapping. Auto-detection handles the common exports; when it
@@ -81,7 +114,8 @@ export const actions: Actions = {
 			// Hand the file back with its headers so the mapper can be shown.
 			return fail(400, {
 				needsMapping: true,
-				filename: file.name,
+				filename,
+				accountId,
 				headers: headerOf(csv),
 				csv,
 				error: "Couldn't work out which columns are which. Point them out below."
@@ -95,10 +129,12 @@ export const actions: Actions = {
 				deps,
 				{ workspaceId: locals.workspace!.id, memberId: locals.member!.id },
 				{
-					filename: file.name,
+					filename,
 					csv,
 					currency: locals.workspace!.currency,
-					map: explicit
+					map: explicit,
+					accountId,
+					format
 				}
 			);
 			importId = result.importId;
@@ -115,6 +151,8 @@ export const actions: Actions = {
 		const csv = String(form.get('csv') ?? '');
 		const filename = String(form.get('filename') ?? 'statement.csv');
 		if (!csv) return fail(400, { error: 'That file is no longer available. Choose it again.' });
+		const accountId = await accountFrom(form, locals.workspace!.id);
+		const format = form.get('format') === 'pdf' ? ('pdf' as const) : ('csv' as const);
 
 		let importId: string;
 		try {
@@ -132,7 +170,9 @@ export const actions: Actions = {
 						descriptionCol: Number(form.get('descriptionCol')),
 						invertAmount: form.get('invertAmount') === 'on',
 						dateOrder: (form.get('dateOrder') as 'MDY' | 'DMY' | 'YMD') || 'MDY'
-					}
+					},
+					accountId,
+					format
 				}
 			);
 			importId = result.importId;
@@ -141,6 +181,18 @@ export const actions: Actions = {
 			throw e;
 		}
 		redirect(303, `/w/${params.workspace}/reconcile/${importId}`);
+	},
+
+	/** Name a card without leaving the import screen. */
+	addAccount: async ({ request, locals }) => {
+		const form = await request.formData();
+		const name = String(form.get('name') ?? '').trim();
+		if (!name) return fail(400, { error: 'Give the card a name.' });
+		await createAccount(getDb(), deps, locals.workspace!.id, {
+			name: name.slice(0, 60),
+			last4: String(form.get('last4') ?? '')
+		});
+		return { ok: true };
 	},
 
 	delete: async ({ request, locals }) => {

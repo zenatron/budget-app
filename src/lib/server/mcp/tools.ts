@@ -76,6 +76,7 @@ import {
 import { listLedger } from '$lib/server/repo/ledger';
 import { listPurchases, loadPurchase, listEvents, memberNames } from '$lib/server/repo/purchases';
 import { listCategories, listMembers } from '$lib/server/repo/workspaces';
+import { accountLabel, listAccounts } from '$lib/server/repo/accounts';
 import { listBuckets } from '$lib/server/repo/buckets';
 import { safeToSpend } from '$lib/server/repo/forecast';
 import { narrateSafeToSpend } from '$lib/domain/forecast/safe-to-spend';
@@ -281,6 +282,26 @@ export const TOOLS: McpTool[] = [
 			const text = data.length
 				? data.map((c) => `- ${c.icon ?? ''} ${c.name} (${c.id})`).join('\n')
 				: 'No categories yet.';
+			return { text, data };
+		}
+	},
+	{
+		name: 'list_accounts',
+		description:
+			'List the cards and accounts in this workspace, with their ids (for use as account_id when logging a purchase). Statements are reconciled per card.',
+		scope: 'read',
+		inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+		async handler(ctx) {
+			const accounts = await listAccounts(ctx.db, ctx.authed.workspace.id);
+			const data = accounts.map((a) => ({
+				id: a.id,
+				name: a.name,
+				last4: a.last4,
+				kind: a.kind
+			}));
+			const text = data.length
+				? data.map((a) => `- ${accountLabel(a)} — ${a.kind} (${a.id})`).join('\n')
+				: 'No cards or accounts named yet.';
 			return { text, data };
 		}
 	},
@@ -495,7 +516,9 @@ export const TOOLS: McpTool[] = [
 					spent: fmt(r.breakdown.cashSpentMinor, ctx),
 					committed: fmt(r.breakdown.cashCommittedMinor, ctx),
 					upcoming_bills: fmt(r.breakdown.upcomingBillsMinor, ctx),
-					planned_savings: fmt(r.breakdown.savingsMinor, ctx),
+					// Set aside so far this month plus what is still due to accrue —
+					// not purely a forecast, so not named as one.
+					savings: fmt(r.breakdown.savingsMinor, ctx),
 					reserved_pending: fmt(r.breakdown.reservedMinor, ctx),
 					sleeping: fmt(r.breakdown.sleepingMinor, ctx),
 					budget_remaining:
@@ -507,7 +530,7 @@ export const TOOLS: McpTool[] = [
 			const text =
 				`${read.text}\n\n` +
 				`Free to spend: ${data.free} (${r.status})\n` +
-				`Income ${data.breakdown.income} − spent ${data.breakdown.spent} − committed ${data.breakdown.committed} − bills ${data.breakdown.upcoming_bills} − saved ${data.breakdown.planned_savings}\n` +
+				`Income ${data.breakdown.income} − spent ${data.breakdown.spent} − committed ${data.breakdown.committed} − bills ${data.breakdown.upcoming_bills} − saved ${data.breakdown.savings}\n` +
 				`If all pending approved: ${data.after_reserved}` +
 				(data.on_plan ? ` · budget leaves ${data.on_plan}` : '');
 			return { text, data };
@@ -1027,6 +1050,7 @@ export const TOOLS: McpTool[] = [
 				spentAt: parseDateArg(str(args, 'spent_at'), tz),
 				merchantName: str(args, 'merchant') ?? null,
 				bucketId: str(args, 'bucket_id') ?? null,
+				accountId: str(args, 'account_id') ?? null,
 				seal: buildSeal(args, tz)
 			});
 			const p = await loadPurchase(ctx.db, viewScope(ctx), purchaseId, { now: ctx.now });
@@ -1064,6 +1088,14 @@ export const TOOLS: McpTool[] = [
 				category_id: { type: 'string' },
 				merchant: { type: 'string' },
 				note: { type: 'string' },
+				bucket_id: {
+					type: 'string',
+					description: 'Optional bucket to charge this against (see list_buckets).'
+				},
+				account_id: {
+					type: 'string',
+					description: 'Optional card it would be paid on (see list_accounts).'
+				},
 				hide_from: {
 					type: 'array',
 					items: { type: 'string' },
@@ -1085,6 +1117,12 @@ export const TOOLS: McpTool[] = [
 				note: str(args, 'note') ?? null,
 				intent: 'request',
 				merchantName: str(args, 'merchant') ?? null,
+				// Parity with log_purchase and with the web form, which has always
+				// passed a bucket on both paths. There is no spent_at here on
+				// purpose: a request is money that hasn't moved, so it has no date
+				// it was spent on.
+				bucketId: str(args, 'bucket_id') ?? null,
+				accountId: str(args, 'account_id') ?? null,
 				seal: buildSeal(args, ctx.authed.workspace.timezone)
 			});
 			const p = await loadPurchase(ctx.db, viewScope(ctx), purchaseId, { now: ctx.now });

@@ -13,6 +13,7 @@ import { getBlobStore } from '$lib/server/blobs';
 import { getDb } from '$lib/server/db';
 import { listCategories, listMembers } from '$lib/server/repo/workspaces';
 import { listBuckets } from '$lib/server/repo/buckets';
+import { listAccounts } from '$lib/server/repo/accounts';
 import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
@@ -34,10 +35,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	// a locals-only load declares no such dependency. See +layout.server.ts.
 	void params.workspace;
 	const db = getDb();
-	const [categories, members, buckets] = await Promise.all([
+	const [categories, members, buckets, accounts] = await Promise.all([
 		listCategories(db, locals.workspace!.id),
 		listMembers(db, locals.workspace!.id),
-		listBuckets(db, locals.workspace!.id)
+		listBuckets(db, locals.workspace!.id),
+		listAccounts(db, locals.workspace!.id)
 	]);
 	const env = getEnv();
 	return {
@@ -70,7 +72,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 				name: b.bucket.name,
 				balanceMinor: b.balanceMinor,
 				currency: b.bucket.currency
-			}))
+			})),
+		// Only offered once at least one card has been named; a household with none
+		// never sees the field.
+		accounts: accounts.map((a) => ({ id: a.id, name: a.name, last4: a.last4 }))
 	};
 };
 
@@ -144,7 +149,8 @@ export const actions: Actions = {
 					spentAt,
 					seal,
 					merchantName: form.get('merchantName')?.toString()?.trim() || null,
-					bucketId: form.get('bucketId')?.toString()?.trim() || null
+					bucketId: form.get('bucketId')?.toString()?.trim() || null,
+					accountId: form.get('accountId')?.toString()?.trim() || null
 				}
 			));
 		} catch (e) {

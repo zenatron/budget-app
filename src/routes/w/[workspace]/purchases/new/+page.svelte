@@ -59,6 +59,7 @@
 	 * fact, so the warning and the resulting balance can never disagree.
 	 */
 	let bucketId = $state('');
+	let accountId = $state('');
 	const overdraft = $derived.by(() => {
 		const b = data.buckets.find((x) => x.id === bucketId);
 		if (!b) return null;
@@ -136,33 +137,46 @@
 	// Everything lands as editable fields — you still tap Log it / Ask first.
 	let describeText = $state('');
 	let parsing = $state(false);
+	/**
+	 * Why the last attempt gave you nothing. This used to be swallowed entirely,
+	 * which made an unreachable server look exactly like a sentence we couldn't
+	 * read — you'd retype the same words at a box that was never going to answer.
+	 * The form is still never touched on a failure; you just get told.
+	 */
+	let describeError = $state('');
 
 	async function parseDescription() {
 		const text = describeText.trim();
 		if (!text || parsing) return;
 		parsing = true;
+		describeError = '';
 		try {
 			const res = await fetch(`/w/${slug}/purchases/parse`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ text })
 			});
-			if (res.ok) {
-				const d = await res.json();
-				if (!d.empty) {
-					if (d.amount) amount = d.amount;
-					if (d.itemName) itemName = d.itemName;
-					if (d.merchantName) merchantName = d.merchantName;
-					if (d.spentAt) spentAt = d.spentAt;
-					if (d.categoryId) {
-						categoryId = d.categoryId;
-						suggested = null;
-						lastSuggestKey = `${itemName}|${merchantName}`; // don't re-ask on blur
-					}
-				}
+			if (!res.ok) {
+				describeError = "Couldn't reach Harmony just now — fill the fields in below.";
+				return;
+			}
+			const d = await res.json();
+			if (d.empty || (!d.amount && !d.itemName && !d.merchantName)) {
+				describeError = "Couldn't make anything out of that. Try “23 on lunch at Chipotle”.";
+				return;
+			}
+			if (d.amount) amount = d.amount;
+			if (d.itemName) itemName = d.itemName;
+			if (d.merchantName) merchantName = d.merchantName;
+			if (d.spentAt) spentAt = d.spentAt;
+			if (d.categoryId) {
+				categoryId = d.categoryId;
+				suggested = null;
+				lastSuggestKey = `${itemName}|${merchantName}`; // don't re-ask on blur
 			}
 		} catch {
-			// Leave the form untouched; the person can fill it by hand.
+			// Offline, or the request never landed. Leave the form untouched.
+			describeError = "Couldn't reach Harmony just now — fill the fields in below.";
 		} finally {
 			parsing = false;
 		}
@@ -362,6 +376,7 @@
 				<Sparkles class="h-5 w-5 shrink-0" style="color: var(--ws-accent)" />
 				<input
 					bind:value={describeText}
+					oninput={() => (describeError = '')}
 					onkeydown={(e) => {
 						if (e.key === 'Enter') {
 							e.preventDefault();
@@ -390,7 +405,15 @@
 					{/if}
 				</button>
 			</div>
-			{#if !describeText}
+			{#if describeError}
+				<p
+					class="mt-2 pl-[30px] text-[12px] leading-snug"
+					role="status"
+					style="color: var(--ink-2)"
+				>
+					{describeError}
+				</p>
+			{:else if !describeText}
 				<p class="mt-2 pl-[30px] text-[12px] leading-snug" style="color: var(--ink-3)">
 					Type or dictate a sentence like "23 on lunch at Chipotle yesterday". Harmony fills in the
 					amount, item, and category; you confirm before saving.
@@ -531,6 +554,25 @@
 						</span>
 					</div>
 				{/if}
+			{/if}
+			{#if data.accounts.length > 0}
+				<!-- Which card. Optional, and usually left alone: reconciling a
+				     statement fills it in for you. -->
+				<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
+					<CreditCard class="h-5 w-5" style="color: var(--ink-4)" />
+					<select
+						name="accountId"
+						bind:value={accountId}
+						class="-mx-1 flex-1 border-none bg-transparent p-0 text-[17px] outline-none"
+						style="color: var(--ink); appearance: none; background-image: none"
+					>
+						<option value="">Card</option>
+						{#each data.accounts as a (a.id)}<option value={a.id}
+								>{a.last4 ? `${a.name} ·${a.last4}` : a.name}</option
+							>{/each}
+					</select>
+					<ChevronDown class="h-4 w-4" style="color: var(--ink-4)" />
+				</div>
 			{/if}
 			<!-- Photo (optional) -->
 			<label

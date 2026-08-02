@@ -39,6 +39,7 @@ import {
 	insertPurchase,
 	loadPurchase
 } from '$lib/server/repo/purchases';
+import { normalizeMerchantName } from '$lib/domain/purchase/merchant';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 import type { Notifier } from '$lib/ports/notifier';
@@ -71,7 +72,7 @@ async function findOrCreateMerchant(
 	workspaceId: string,
 	name: string
 ): Promise<string | null> {
-	const normalized = name.trim().toLowerCase().replace(/\s+/g, ' ');
+	const normalized = normalizeMerchantName(name);
 	if (normalized.length === 0) return null;
 	const [existing] = await tx
 		.select({ id: merchant.id })
@@ -103,6 +104,8 @@ export interface SubmitPurchaseCmd {
 	merchantName?: string | null;
 	/** Charge this purchase against a bucket (withdraw on completion). */
 	bucketId?: string | null;
+	/** The card it was paid on, when known. */
+	accountId?: string | null;
 }
 
 /**
@@ -199,6 +202,7 @@ export async function submitPurchase(
 			approverMemberIds: [],
 			bucketId: cmd.bucketId ?? null,
 			merchantId,
+			accountId: cmd.accountId ?? null,
 			heldUntil: null,
 			heldBy: null
 		};

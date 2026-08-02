@@ -33,7 +33,7 @@ export async function safeToSpend(db: Db, scope: ForecastScope, now: Date): Prom
 	const period = monthPeriod(today);
 	const { from, to } = periodBoundsUtc(period, scope.timezone);
 
-	const [incomeMinor, upcomingBillsMinor, savingsMinor, flows, bucket, budgetRemainingMinor] =
+	const [incomeMinor, upcomingBillsMinor, stillToAccrueMinor, flows, bucket, budgetRemainingMinor] =
 		await Promise.all([
 			monthIncome(db, scope.workspaceId, period, scope.timezone),
 			upcomingBills(db, scope.workspaceId, period, scope.timezone),
@@ -42,6 +42,25 @@ export async function safeToSpend(db: Db, scope: ForecastScope, now: Date): Prom
 			bucketFlowsInPeriod(db, scope.workspaceId, period, scope.timezone),
 			budgetRemaining(db, scope, period, now)
 		]);
+
+	/*
+	 * Savings this month is what has already moved into buckets plus what is still
+	 * due to.
+	 *
+	 * It used to be the second half alone, which read as £0 the moment the month's
+	 * accrual ran — the figure went to zero exactly when the saving actually
+	 * happened. It was also wrong in the arithmetic, not just the label: cash that
+	 * left the spendable pool on the 1st stopped being subtracted from free money,
+	 * so Safe to Spend quietly overstated itself by the accrual for the rest of
+	 * the month.
+	 *
+	 * The two halves can't overlap. `plannedSavings` counts from each bucket's
+	 * `nextAccrualAt` forward, and that pointer only advances once the accrual has
+	 * been written — so an occurrence is in exactly one of the two terms, never
+	 * both. Manual deposits land in the first, which is right: moving money into a
+	 * bucket by hand is saving it just as much as a rule doing it.
+	 */
+	const savingsMinor = bucket.setAsideMinor + stillToAccrueMinor;
 
 	return computeSafeToSpend(
 		{

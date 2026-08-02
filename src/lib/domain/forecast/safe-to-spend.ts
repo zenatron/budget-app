@@ -13,9 +13,10 @@
  *
  * Buckets are deliberately out of the cash equation on the *spend* side: money
  * in a bucket was already set aside in some earlier month, so spending it isn't
- * this month's cash. The bucket *accrual* is, though — it's this month's savings
- * commitment, so it's subtracted. Reserved (pending) and sleeping (held) are
- * shown, not subtracted: pending might still be denied, sleeping might be let go.
+ * this month's cash. Money moving *into* a bucket is, though — whether it has
+ * already gone or is still due before month end, it is cash this month has
+ * committed to saving, so it's subtracted. Reserved (pending) and sleeping (held)
+ * are shown, not subtracted: pending might still be denied, sleeping might be let go.
  *
  * The one exception is an overdrawn bucket. "It was set aside earlier" only
  * holds when something actually was; a charge against a bucket with nothing in
@@ -42,7 +43,8 @@ export interface SafeToSpendBreakdown {
 	cashCommittedMinor: bigint;
 	/** Recurring charges still to land this month — bills you can't dodge. */
 	upcomingBillsMinor: bigint;
-	/** This month's bucket accruals — cash you've chosen to move into savings. */
+	/** This month's saving: what has already moved into buckets, plus what is
+	 *  still due to accrue before the month is out. */
 	savingsMinor: bigint;
 	/** Pending requests: shown provisionally, not yet committed. */
 	reservedMinor: bigint;

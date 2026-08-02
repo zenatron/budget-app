@@ -210,7 +210,8 @@ export async function matchCandidates(
 			final: purchase.finalAmountMinor,
 			completedAt: purchase.completedAt,
 			itemName: purchase.itemName,
-			merchantName: merchant.name
+			merchantName: merchant.name,
+			accountId: purchase.accountId
 		})
 		.from(purchase)
 		.leftJoin(merchant, eq(purchase.merchantId, merchant.id))
@@ -233,7 +234,8 @@ export async function matchCandidates(
 		amountMinor: r.final ?? r.requested,
 		completedAt: r.completedAt!,
 		itemName: r.itemName,
-		merchantName: r.merchantName
+		merchantName: r.merchantName,
+		accountId: r.accountId
 	}));
 }
 

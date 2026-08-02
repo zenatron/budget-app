@@ -56,6 +56,7 @@ export function ledgerOptsFromUrl(params: URLSearchParams, timezone: string): Le
 		categoryId: uncategorized ? undefined : rawCategory || undefined,
 		uncategorized,
 		memberId: params.get('member') || undefined,
+		accountId: params.get('account') || undefined,
 		from: bounds?.from,
 		to: bounds?.to,
 		basis,

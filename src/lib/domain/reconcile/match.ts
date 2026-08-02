@@ -32,6 +32,11 @@ export interface MatchCandidate {
 	completedAt: Date;
 	itemName: string;
 	merchantName: string | null;
+	/**
+	 * The card this purchase is known to have been paid on, or null for the
+	 * great majority that have never been told. See `eligibleFor`.
+	 */
+	accountId?: string | null;
 }
 
 export type MatchState = 'unmatched' | 'matched';
@@ -53,6 +58,22 @@ export interface MatchProposal {
 }
 
 export interface MatchOptions {
+	/**
+	 * The card this statement belongs to, when it is known.
+	 *
+	 * Undefined or null keeps the original behaviour — every purchase in the
+	 * window is in the running — which is what a household with one card wants
+	 * and what every import made before accounts existed did.
+	 *
+	 * Set it and the rule is deliberately lopsided: a purchase already known to
+	 * be on a *different* card is excluded, but a purchase with no card recorded
+	 * stays eligible. Almost every purchase starts with no card, so excluding
+	 * those would reconcile nothing at all. What this buys is that once you have
+	 * reconciled a purchase onto one card, another card's statement can no longer
+	 * claim it — which is exactly the failure mode of importing three cards over
+	 * the same month.
+	 */
+	accountId?: string | null;
 	/**
 	 * How far a bank line may sit from the purchase date and still be the same
 	 * event. Three days by default: card transactions commonly post one to three
@@ -131,11 +152,20 @@ export function matchLines(
 	options: MatchOptions = {}
 ): MatchProposal[] {
 	const tolerance = options.toleranceDays ?? 3;
+	const statementAccount = options.accountId ?? null;
+
+	/**
+	 * A purchase pinned to a different card cannot be this line. A purchase with
+	 * no card recorded still can — see the note on `MatchOptions.accountId`.
+	 */
+	const eligibleFor = (c: MatchCandidate): boolean =>
+		!statementAccount || !c.accountId || c.accountId === statementAccount;
 
 	// Per line, everything within amount+date range, scored.
 	const scored: Scored[][] = lines.map((line) => {
 		const out: Scored[] = [];
 		for (const c of candidates) {
+			if (!eligibleFor(c)) continue;
 			if (!sameAmount(line.amountMinor, c.amountMinor)) continue;
 			const distance = daysApart(line.postedAt, c.completedAt);
 			if (distance > tolerance) continue;

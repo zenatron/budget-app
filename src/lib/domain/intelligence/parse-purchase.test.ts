@@ -69,4 +69,94 @@ describe('parsePurchaseText', () => {
 		expect(r.amount).toBe('40');
 		expect(r.itemName).toBe('haircut');
 	});
+
+	describe('merchant without a preposition', () => {
+		it('reads a capitalised name before an errand word', () => {
+			const r = parsePurchaseText('Costco run, 84 bucks');
+			expect(r.merchantName).toBe('Costco');
+			expect(r.amount).toBe('84');
+		});
+
+		it('reads a capitalised name set off by commas', () => {
+			const r = parsePurchaseText('lunch, Chipotle, 12');
+			expect(r.merchantName).toBe('Chipotle');
+			expect(r.amount).toBe('12');
+			expect(r.itemName).toBe('lunch');
+		});
+
+		// The point of leaning on the person's own capitals: a lower-case
+		// describing word must never be promoted to a merchant.
+		it('does not invent a merchant from a lower-case aside', () => {
+			const r = parsePurchaseText('coffee, black, 4');
+			expect(r.merchantName).toBeNull();
+		});
+
+		it('does not treat a capitalised filler word as a name', () => {
+			const r = parsePurchaseText('The run, 20');
+			expect(r.merchantName).toBeNull();
+		});
+	});
+
+	describe('capitalisation', () => {
+		it("leaves a brand's own styling alone", () => {
+			expect(parsePurchaseText('bought an iPhone at Apple').merchantName).toBe('Apple');
+			expect(parsePurchaseText('$5 from iHop').merchantName).toBe('iHop');
+		});
+
+		it('does not capitalise the letter after an apostrophe', () => {
+			expect(parsePurchaseText("$8 at mcdonald's").merchantName).toBe("Mcdonald's");
+		});
+	});
+
+	describe('absolute dates', () => {
+		const today = { y: 2026, m: 8, d: 2 };
+
+		it('reads a day of the month that has already passed', () => {
+			const r = parsePurchaseText('$23 groceries on the 1st', today);
+			expect(r.dateOffsetDays).toBe(-1);
+			expect(r.amount).toBe('23');
+		});
+
+		// "the 20th" with today the 2nd can only mean last month — a purchase is
+		// something that already happened.
+		it('walks back a month when the day is still ahead', () => {
+			const r = parsePurchaseText('$23 groceries on the 20th', today);
+			expect(r.dateOffsetDays).toBe(-13);
+		});
+
+		it('reads "Jan 12" without billing the 12 as money', () => {
+			const r = parsePurchaseText('flight Jan 12', today);
+			expect(r.dateOffsetDays).toBe(-202);
+			expect(r.amount).toBeNull();
+			expect(r.itemName).toBe('flight');
+		});
+
+		it('reads "12 July" and keeps the amount separate', () => {
+			const r = parsePurchaseText('$60 dinner on 12 July', today);
+			expect(r.dateOffsetDays).toBe(-21);
+			expect(r.amount).toBe('60');
+		});
+
+		it('reads an ISO date', () => {
+			const r = parsePurchaseText('2026-07-30 coffee $4', today);
+			expect(r.dateOffsetDays).toBe(-3);
+			expect(r.amount).toBe('4');
+		});
+
+		// One component over 12 settles the order; a bare 12/03 never can, so it
+		// is left unread rather than guessed at.
+		it('reads a slash date only when it is unambiguous', () => {
+			expect(parsePurchaseText('$10 lunch 25/12', today).dateOffsetDays).toBe(-220);
+			expect(parsePurchaseText('$10 lunch 12/03', today).dateOffsetDays).toBe(0);
+		});
+
+		it('ignores an impossible day rather than clamping it', () => {
+			const r = parsePurchaseText('$9 snack on Feb 31', today);
+			expect(r.dateOffsetDays).toBe(0);
+		});
+
+		it('ignores absolute dates when given no reference day', () => {
+			expect(parsePurchaseText('$23 groceries on the 1st').dateOffsetDays).toBe(0);
+		});
+	});
 });

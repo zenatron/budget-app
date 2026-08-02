@@ -78,7 +78,21 @@ export async function importStatement(
 	db: Db,
 	deps: Deps,
 	scope: Scope,
-	input: { filename: string; csv: string; currency: string; map?: CsvColumnMap }
+	input: {
+		filename: string;
+		csv: string;
+		currency: string;
+		map?: CsvColumnMap;
+		/** The card this statement is for, when the person named one. */
+		accountId?: string | null;
+		/**
+		 * How the rows were obtained. A PDF arrives here already reduced to the
+		 * same three columns — the extraction happens in the browser so the file
+		 * never leaves the device — so the only difference this makes is what gets
+		 * recorded about where the import came from.
+		 */
+		format?: 'csv' | 'pdf';
+	}
 ): Promise<ImportResult> {
 	if (input.csv.length > MAX_CSV_BYTES) {
 		throw new ReconcileError('That file is too large to import.');
@@ -118,7 +132,10 @@ export async function importStatement(
 		sealedCandidateKeys(db, viewerScope, from, to, now)
 	]);
 
-	const proposals = matchLines(lines, candidates, { toleranceDays: TOLERANCE_DAYS });
+	const proposals = matchLines(lines, candidates, {
+		toleranceDays: TOLERANCE_DAYS,
+		accountId: input.accountId ?? null
+	});
 
 	/*
 	 * Seal-aware second pass.
@@ -163,7 +180,8 @@ export async function importStatement(
 			workspaceId: scope.workspaceId,
 			memberId: scope.memberId,
 			filename: input.filename,
-			format: 'csv',
+			accountId: input.accountId ?? null,
+			format: input.format ?? 'csv',
 			currency: input.currency,
 			blobId: null,
 			periodStart,
@@ -239,6 +257,7 @@ export async function confirmMatch(
 	}
 
 	const now = deps.clock.now();
+	const accountId = await importAccountId(db, line.importId);
 	await db.transaction(async (tx) => {
 		await tx
 			.update(statementLine)
@@ -246,12 +265,26 @@ export async function confirmMatch(
 			.where(eq(statementLine.id, lineId));
 		await tx
 			.update(purchase)
-			.set({ clearedAt: now, updatedAt: now })
+			// Confirming is the moment we learn which card this was paid on: it
+			// appeared on that card's statement and a person agreed. Recorded here so
+			// the ledger gains card attribution as a by-product of reconciling,
+			// rather than asking anyone to tag purchases by hand.
+			.set({ clearedAt: now, updatedAt: now, ...(accountId ? { accountId } : {}) })
 			.where(
 				and(eq(purchase.id, line.matchedPurchaseId!), eq(purchase.workspaceId, scope.workspaceId))
 			);
 	});
 	await refreshMatchedCount(db, line.importId);
+}
+
+/** The card an import belongs to, or null when it was imported without one. */
+async function importAccountId(db: Db, importId: string): Promise<string | null> {
+	const [row] = await db
+		.select({ accountId: statementImport.accountId })
+		.from(statementImport)
+		.where(eq(statementImport.id, importId))
+		.limit(1);
+	return row?.accountId ?? null;
 }
 
 /**
@@ -298,6 +331,7 @@ export async function linkManually(
 	if (!line) throw new ReconcileError('That statement line no longer exists.');
 
 	const now = deps.clock.now();
+	const accountId = await importAccountId(db, line.importId);
 
 	// Re-read the purchase through the seal filter rather than trusting the id
 	// from the form: a posted id must never become a way to mark, and thereby
@@ -340,7 +374,9 @@ export async function linkManually(
 			.where(eq(statementLine.id, lineId));
 		await tx
 			.update(purchase)
-			.set({ clearedAt: now, updatedAt: now })
+			// Same card attribution as confirmMatch — a hand-picked link is if
+			// anything a stronger statement about which card this was on.
+			.set({ clearedAt: now, updatedAt: now, ...(accountId ? { accountId } : {}) })
 			.where(eq(purchase.id, purchaseId));
 	});
 	await refreshMatchedCount(db, line.importId);

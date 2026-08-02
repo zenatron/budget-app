@@ -290,6 +290,7 @@ export async function materializeDueRules(db: Db, deps: Deps): Promise<number> {
 					approverMemberIds: [],
 					bucketId: r.bucketId,
 					merchantId: null,
+					accountId: null,
 					heldUntil: null,
 					heldBy: null
 				};

@@ -78,3 +78,38 @@ describe('sanitizeLabel', () => {
 		expect(sanitizeLabel('unknown')).toBeNull();
 	});
 });
+
+describe('constrainToChoice with hierarchical labels', () => {
+	const choices = [
+		{ id: 'g', label: 'Food > Groceries' },
+		{ id: 'd', label: 'Food > Dining' },
+		{ id: 't', label: 'Transport' }
+	];
+
+	it('accepts the full path', () => {
+		expect(constrainToChoice('Food > Groceries', choices)).toBe('g');
+	});
+
+	// Shown a path, a model will often answer with just the leaf. That is a
+	// correct answer in a different shape, not a miss.
+	it('accepts a unique leaf', () => {
+		expect(constrainToChoice('Groceries', choices)).toBe('g');
+		expect(constrainToChoice('Transport', choices)).toBe('t');
+	});
+
+	it('accepts a leaf wrapped in a sentence', () => {
+		expect(constrainToChoice("It's Dining.", choices)).toBe('d');
+	});
+
+	it('refuses a leaf shared by two options', () => {
+		const ambiguous = [
+			{ id: 'a', label: 'Food > Treats' },
+			{ id: 'b', label: 'Gifts > Treats' }
+		];
+		expect(constrainToChoice('Treats', ambiguous)).toBeNull();
+	});
+
+	it('still refuses an invented category', () => {
+		expect(constrainToChoice('Crypto', choices)).toBeNull();
+	});
+});

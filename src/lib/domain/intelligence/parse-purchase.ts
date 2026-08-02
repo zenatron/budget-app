@@ -13,6 +13,8 @@
  * nothing is ever submitted from here.
  */
 
+import { compareDates, daysInMonth, type CalDate } from '../recurrence/rrule';
+
 export interface ParsedPurchase {
 	/** Decimal amount string (e.g. "23.50"), or null. Caller converts to minor. */
 	amount: string | null;
@@ -60,8 +62,81 @@ function extractAmount(text: string): { amount: string | null; span: [number, nu
 	return { amount: null, span: null };
 }
 
-/** Extract a relative date. Only unambiguous, common phrases — never a guess. */
-function extractDate(text: string): {
+const MONTHS: Record<string, number> = {
+	jan: 1,
+	january: 1,
+	feb: 2,
+	february: 2,
+	mar: 3,
+	march: 3,
+	apr: 4,
+	april: 4,
+	may: 5,
+	jun: 6,
+	june: 6,
+	jul: 7,
+	july: 7,
+	aug: 8,
+	august: 8,
+	sep: 9,
+	sept: 9,
+	september: 9,
+	oct: 10,
+	october: 10,
+	nov: 11,
+	november: 11,
+	dec: 12,
+	december: 12
+};
+
+/**
+ * Resolve a calendar date the person named without a year into an offset from
+ * today. A purchase is something that already happened, so an unqualified
+ * "the 3rd" or "Jan 12" means the most recent one at or before today — never a
+ * future date, which would be a different kind of claim entirely.
+ *
+ * Returns null when the date can't exist (the 31st of a 30-day month), rather
+ * than clamping. Clamping would silently record a different day than was said.
+ */
+function offsetToRecent(today: CalDate, month: number | null, day: number): number | null {
+	let y = today.y;
+	let m = month ?? today.m;
+	if (day < 1) return null;
+
+	if (month === null) {
+		// Day-of-month only: this month if it has already passed, else last month.
+		if (day > today.d) {
+			m -= 1;
+			if (m === 0) {
+				m = 12;
+				y -= 1;
+			}
+		}
+	} else if (compareDates({ y, m, d: day }, today) > 0) {
+		y -= 1;
+	}
+
+	if (day > daysInMonth(y, m)) return null;
+	return compareDates({ y, m, d: day }, today);
+}
+
+/**
+ * Extract a date. Only unambiguous, common phrases — never a guess.
+ *
+ * Relative phrases need no reference point. Absolute ones ("on the 3rd",
+ * "Jan 12") do, so they resolve only when the caller passes `today`; without it
+ * they are left alone and the sentence dates to today as before.
+ *
+ * Deliberately absent: bare numeric dates like "12/03". There is no way to tell
+ * 3 December from 12 March without a locale this app never asks for, and a wrong
+ * guess backdates money by months. Slash forms are read only when one component
+ * settles it (25/12 can only be December), and ISO "2026-01-12" is read because
+ * it is unambiguous by construction.
+ */
+function extractDate(
+	text: string,
+	today?: CalDate
+): {
 	offset: number;
 	label: string | null;
 	span: [number, number] | null;
@@ -81,22 +156,123 @@ function extractDate(text: string): {
 			return { offset: p.offset(m), label, span: [m.index, m.index + m[0].length] };
 		}
 	}
+
+	if (!today) return { offset: 0, label: null, span: null };
+
+	const months = Object.keys(MONTHS).join('|');
+	// Each entry yields [month|null, day]; a null month means day-of-month only.
+	const absolute: { re: RegExp; parts: (m: RegExpExecArray) => [number | null, number] }[] = [
+		// ISO: 2026-01-12
+		{
+			re: /\b(\d{4})-(\d{2})-(\d{2})\b/,
+			parts: (m) => [Number(m[2]), Number(m[3])]
+		},
+		// "Jan 12", "January 12th"
+		{
+			re: new RegExp(`\\b(?:on\\s+)?(${months})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b`),
+			parts: (m) => [MONTHS[m[1]], Number(m[2])]
+		},
+		// "12 Jan", "12th of January"
+		{
+			re: new RegExp(`\\b(?:on\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(${months})\\.?\\b`),
+			parts: (m) => [MONTHS[m[2]], Number(m[1])]
+		},
+		// Slashes, only where one component can't be a month.
+		{
+			re: /\b(\d{1,2})\/(\d{1,2})\b/,
+			parts: (m) => {
+				const a = Number(m[1]);
+				const b = Number(m[2]);
+				if (a > 12 && b <= 12) return [b, a];
+				if (b > 12 && a <= 12) return [a, b];
+				return [null, -1];
+			}
+		},
+		// "on the 3rd", "the 21st"
+		{
+			re: /\bthe\s+(\d{1,2})(?:st|nd|rd|th)\b/,
+			parts: (m) => [null, Number(m[1])]
+		}
+	];
+
+	for (const p of absolute) {
+		const m = p.re.exec(t);
+		if (!m) continue;
+		const [month, day] = p.parts(m);
+		const offset = offsetToRecent(today, month, day);
+		if (offset === null) continue;
+		return { offset, label: m[0].replace(/^on\s+/, ''), span: [m.index, m.index + m[0].length] };
+	}
+
 	return { offset: 0, label: null, span: null };
 }
 
-/** Extract a merchant named with "at"/"from", stopping at a natural boundary. */
+/**
+ * Words that are capitalised often enough at the head of a sentence that seeing
+ * a capital tells us nothing about them being a name.
+ */
+const NOT_A_MERCHANT =
+	/^(?:i|a|an|the|my|our|we|it|this|that|just|bought|spent|paid|got|grabbed|picked|log|logged|add|added|buy|purchase|purchased|lunch|dinner|breakfast|coffee|groceries|gas|food|stuff|things?)$/i;
+
+/**
+ * Extract the merchant.
+ *
+ * Three shapes, strongest first. The first is explicit — "at Chipotle", "from
+ * Amazon" — and works however the person capitalised things, because the
+ * preposition is doing the work.
+ *
+ * The other two lean on the person's own capitals as the signal that a word is a
+ * name: "Costco run, 84 bucks" and "lunch, Chipotle, 12". That means a sentence
+ * typed entirely in lower case gives up its merchant, which is the right way to
+ * fail here — the module's whole stance is that a missed field is a small
+ * annoyance the person fixes in the form, while a confidently wrong one is a
+ * wrong record. "coffee, black, 4" must not decide it shopped at Black.
+ */
 function extractMerchant(text: string): { merchant: string | null; span: [number, number] | null } {
-	const m =
+	// A name: one to three capitalised words, allowing &, ', . and - inside.
+	const NAME = "[A-Z][\\w&'.\\-]*(?:\\s+[A-Z][\\w&'.\\-]*){0,2}";
+
+	const byPreposition =
 		/\b(?:at|from)\s+([A-Za-z0-9&'.\- ]+?)(?=\s+(?:yesterday|today|for|on|and|,|\d)|$)/i.exec(text);
-	if (!m) return { merchant: null, span: null };
-	const merchant = titleCase(m[1].trim());
-	return merchant
-		? { merchant, span: [m.index, m.index + m[0].length] }
-		: { merchant: null, span: null };
+	if (byPreposition) {
+		const merchant = titleCase(byPreposition[1].trim());
+		if (merchant)
+			return {
+				merchant,
+				span: [byPreposition.index, byPreposition.index + byPreposition[0].length]
+			};
+	}
+
+	// "Costco run", "Target trip" — the cue word marks the capital as a store.
+	const byErrand = new RegExp(`\\b(${NAME})\\s+(?:run|trip|haul)\\b`).exec(text);
+	if (byErrand && !NOT_A_MERCHANT.test(byErrand[1])) {
+		return {
+			merchant: titleCase(byErrand[1]),
+			span: [byErrand.index, byErrand.index + byErrand[1].length]
+		};
+	}
+
+	// "lunch, Chipotle, 12" — a capitalised run set off by a comma.
+	const byComma = new RegExp(`,\\s*(${NAME})\\s*(?=,|$)`).exec(text);
+	if (byComma && !NOT_A_MERCHANT.test(byComma[1])) {
+		const at = byComma.index + byComma[0].indexOf(byComma[1]);
+		return { merchant: titleCase(byComma[1]), span: [at, at + byComma[1].length] };
+	}
+
+	return { merchant: null, span: null };
 }
 
+/**
+ * Capitalise each word's first letter, but leave a word alone when the person
+ * already put a capital inside it. Brands style themselves — "iPhone", "eBay" —
+ * and a blanket \b\w uppercase both destroyed that and turned "mcdonald's" into
+ * "Mcdonald'S", because \b matches after the apostrophe too.
+ */
 function titleCase(s: string): string {
-	return s.replace(/\b\w/g, (c) => c.toUpperCase());
+	return s
+		.split(/(\s+)/)
+		.map((w) => (/[A-Z]/.test(w.slice(1)) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+		.join('');
 }
 
 /**
@@ -113,12 +289,26 @@ function blank(text: string, span: [number, number] | null): string {
 const FILLER =
 	/^(?:i\s+)?(?:just\s+)?(?:bought|spent|paid(?:\s+for)?|got|grabbed|picked up|log|logged|add|added|buy|purchase[d]?|for|on|a|an|the|some|of|money|dollars?|bucks?)\b/i;
 
-export function parsePurchaseText(text: string): ParsedPurchase {
+/**
+ * @param today The person's calendar date in their own timezone, used only to
+ * resolve absolute dates ("the 3rd") into an offset. Omit it and those phrases
+ * are ignored; relative ones work either way.
+ */
+export function parsePurchaseText(text: string, today?: CalDate): ParsedPurchase {
 	const original = text.trim();
 	const intent: ParsedPurchase['intent'] = REQUEST_CUES.test(original) ? 'request' : 'log';
 
-	const amt = extractAmount(original);
-	const date = extractDate(original);
+	/*
+	 * Date first, and the amount reads the sentence with the date already blanked
+	 * out. Dates are full of bare numbers that are not money: "Jan 12" has no
+	 * currency marker and no money word, so the amount's last-resort integer rule
+	 * would happily bill it as $12. Taking the date out of the running first
+	 * removes the whole class of collision instead of guarding one phrase at a
+	 * time — the guards inside extractAmount stay as a second line of defence for
+	 * the date shapes we don't parse.
+	 */
+	const date = extractDate(original, today);
+	const amt = extractAmount(blank(original, date.span));
 	const merch = extractMerchant(original);
 
 	// Strip everything structured, leaving the item as the residual text.
@@ -126,7 +316,16 @@ export function parsePurchaseText(text: string): ParsedPurchase {
 	residual = blank(residual, amt.span);
 	residual = blank(residual, date.span);
 	residual = blank(residual, merch.span);
-	residual = residual.replace(REQUEST_CUES, ' ').replace(/[$£€]/g, ' ').replace(/\s+/g, ' ').trim();
+	residual = residual
+		.replace(REQUEST_CUES, ' ')
+		.replace(/[$£€]/g, ' ')
+		.replace(/\s+/g, ' ')
+		// Lifting a field out of the middle of a comma-separated sentence leaves
+		// the commas that framed it — "lunch, Chipotle, 12" blanks down to
+		// "lunch, ,". Close the empty slots up before the item is read off.
+		.replace(/\s*,(?:\s*,)*\s*/g, ', ')
+		.replace(/^[\s,]+|[\s,]+$/g, '')
+		.trim();
 
 	// Peel leading filler words ("i bought a", "spent on", …) one at a time.
 	let prev: string;

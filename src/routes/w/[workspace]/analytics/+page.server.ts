@@ -33,7 +33,7 @@ import {
 } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
 import { setBudget } from '$lib/server/repo/budgets';
-import { bucketFlowsInPeriod, lifetimeSaved } from '$lib/server/repo/buckets';
+import { bucketFlowsInPeriod, lifetimeSaved, totalSaved } from '$lib/server/repo/buckets';
 import { listCategories } from '$lib/server/repo/workspaces';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
@@ -320,10 +320,14 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 	// app admits data for.
 	const allTime = yearPeriod({ y: EARLIEST, m: 1, d: 1 });
 	allTime.toExclusive = { y: today.y + 1, m: 1, d: 1 };
-	const [verdicts, earnedMinor, savedMinor] = await Promise.all([
+	const [verdicts, earnedMinor, savedMinor, onHandMinor] = await Promise.all([
 		verdictTotals(db, scope, now),
 		incomeInPeriod(db, ws.id, allTime, ws.timezone, today),
-		lifetimeSaved(db, ws.id)
+		lifetimeSaved(db, ws.id),
+		// What the buckets hold right now, as opposed to what went into them this
+		// period — the line under net position is answering "how much have I got
+		// put by?", which is a balance, not a flow.
+		totalSaved(db, ws.id)
 	]);
 
 	// Budgets that start after the current month — scheduled, not yet in force.
@@ -406,6 +410,7 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		verdicts,
 		earnedMinor,
 		savedMinor,
+		onHandMinor,
 		isOwner: locals.member!.role === 'owner',
 		hasPrev: cfg.hasPrev,
 		hasNext: cfg.hasNext,

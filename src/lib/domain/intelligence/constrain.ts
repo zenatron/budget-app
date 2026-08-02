@@ -45,6 +45,18 @@ function normalize(s: string): string {
 }
 
 /**
+ * A choice may be labelled with its full path — "Food > Groceries" — so the
+ * model can tell nested options apart. Having been shown the path, a model will
+ * often answer with just the leaf, which is a correct answer in a different
+ * shape rather than a miss. `leafOf` recovers it; the caller still requires the
+ * leaf to be unique before accepting, so nothing is guessed between two.
+ */
+function leafOf(label: string): string {
+	const i = label.lastIndexOf('>');
+	return i === -1 ? label : label.slice(i + 1);
+}
+
+/**
  * Reduce a model's raw answer to at most one of `choices`, or null.
  *
  * Accepts, in order of confidence: an exact id, an exact label, then a raw
@@ -63,14 +75,16 @@ export function constrainToChoice(raw: string, choices: Choice[]): string | null
 	if (byId.has(norm)) return byId.get(norm)!;
 	if (byLabel.has(norm)) return byLabel.get(norm)!;
 
+	// The leaf of a path label, when it belongs to exactly one option.
+	const leafHits = choices.filter((c) => normalize(leafOf(c.label)) === norm);
+	if (leafHits.length === 1) return leafHits[0].id;
+
 	// The model wrapped the answer in a sentence ("It's Groceries."). Accept only
-	// if exactly one label appears as a whole-word substring — never guess between
+	// if exactly one choice appears as a whole-word substring — never guess between
 	// two, and never let a label that is a fragment of another win by accident.
 	const hits = choices.filter((c) => {
-		const label = normalize(c.label);
-		if (!label) return false;
-		const re = new RegExp(`(^|\\W)${escapeRegExp(label)}(\\W|$)`);
-		return re.test(norm);
+		const forms = [normalize(c.label), normalize(leafOf(c.label))].filter(Boolean);
+		return forms.some((f) => new RegExp(`(^|\\W)${escapeRegExp(f)}(\\W|$)`).test(norm));
 	});
 	if (hits.length === 1) return hits[0].id;
 
