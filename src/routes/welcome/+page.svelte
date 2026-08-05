@@ -34,7 +34,7 @@
 						style="box-shadow: var(--shadow-card), inset 0 0 0 0.5px var(--hairline)"
 					>
 						<span
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] font-[family-name:var(--font-display)] text-[16px] font-semibold text-white"
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] font-[family-name:var(--font-display)] text-[16px] font-bold text-white"
 							style="background: light-dark(color-mix(in oklab, {color} 80%, black), {color})"
 						>
 							{ws.name.charAt(0)}
@@ -52,7 +52,7 @@
 			<form method="POST" action="?/create" use:submit class="space-y-4">
 				<div class="flex items-start gap-3">
 					<span
-						class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] font-[family-name:var(--font-display)] text-[18px] font-semibold text-white"
+						class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] font-[family-name:var(--font-display)] text-[18px] font-bold text-white"
 						style="background: light-dark(color-mix(in oklab, {selectedColor} 80%, black), {selectedColor})"
 						aria-hidden="true">{(wsName.trim()[0] ?? 'W').toUpperCase()}</span
 					>

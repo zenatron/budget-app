@@ -586,7 +586,7 @@
 				<div class="min-w-0">
 					<p class="section-label">Safe to spend · through {monthEndLabel()}</p>
 					<div
-						class="mt-1 font-[family-name:var(--font-display)] text-[32px] leading-[0.95] font-semibold"
+						class="mt-1 font-[family-name:var(--font-display)] text-[32px] leading-[0.95] font-bold"
 						style="color: {f.freeMinor < 0n ? 'var(--deny)' : 'var(--ink)'}"
 					>
 						<Money minor={f.freeMinor} currency={data.currency} />

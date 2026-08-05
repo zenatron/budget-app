@@ -194,7 +194,7 @@
 					required
 					inputmode="decimal"
 					value={formatMinor(p.requestedAmountMinor, p.currency).replace(/[^0-9.]/g, '')}
-					class="ledger-input num w-full font-[family-name:var(--font-display)] text-[length:var(--fs-mega)] leading-[0.92] font-semibold"
+					class="ledger-input num w-full font-[family-name:var(--font-display)] text-[length:var(--fs-mega)] leading-[0.92] font-bold"
 					style="color: var(--ink)"
 				/>
 				<input
@@ -220,7 +220,7 @@
 				minor={displayAmount}
 				currency={p.currency}
 				block
-				class="mt-3 font-[family-name:var(--font-display)] text-[length:var(--fs-mega)] leading-[0.92] font-semibold"
+				class="mt-3 font-[family-name:var(--font-display)] text-[length:var(--fs-mega)] leading-[0.92] font-bold"
 			/>
 			<button
 				type="button"

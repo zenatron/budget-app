@@ -253,7 +253,7 @@
 					aria-haspopup="menu"
 				>
 					<span
-						class="flex h-7 w-7 items-center justify-center rounded-[8px] font-[family-name:var(--font-display)] text-[15px] font-semibold text-white"
+						class="flex h-7 w-7 items-center justify-center rounded-[8px] font-[family-name:var(--font-display)] text-[15px] font-bold text-white"
 						style="background: light-dark(color-mix(in oklab, var(--ws-accent-base) 80%, black), var(--ws-accent-base))"
 						>{wsName.charAt(0)}</span
 					>
@@ -300,7 +300,7 @@
 									: ''}
 							>
 								<span
-									class="flex h-8 w-8 items-center justify-center rounded-[9px] font-[family-name:var(--font-display)] text-[15px] font-semibold text-white"
+									class="flex h-8 w-8 items-center justify-center rounded-[9px] font-[family-name:var(--font-display)] text-[15px] font-bold text-white"
 									style="background: light-dark(color-mix(in oklab, {wsAccent} 80%, black), {wsAccent})"
 									>{ws.name.charAt(0)}</span
 								>

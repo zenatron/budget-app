@@ -415,7 +415,7 @@
 						minor={data.totalMinor}
 						{currency}
 						block
-						class="font-[family-name:var(--font-display)] text-[24px] leading-none font-semibold"
+						class="font-[family-name:var(--font-display)] text-[24px] leading-none font-bold"
 					/>
 					{#if isMonth && overallPct !== null}
 						<p class="num mt-1 text-[11px]" style="color: var(--ink-3)">

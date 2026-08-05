@@ -196,12 +196,14 @@
 		line-height: 1.02;
 		color: var(--ink);
 	}
+	/* 700, not 600: Atkinson ships 400 and 700 only, so any weight between them
+	   is synthesised by the browser rather than drawn by the typeface. */
 	h1 {
-		font-weight: 600;
+		font-weight: 700;
 		font-size: var(--fs-h1);
 	}
 	h2 {
-		font-weight: 600;
+		font-weight: 700;
 		font-size: var(--fs-h2);
 	}
 

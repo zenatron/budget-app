@@ -427,7 +427,7 @@
 				<span class="section-label">Amount</span>
 				<div class="mt-3 flex items-center justify-center">
 					<span
-						class="font-[family-name:var(--font-display)] text-[34px] font-semibold"
+						class="font-[family-name:var(--font-display)] text-[34px] font-bold"
 						style="color: var(--ink-3)">{symbol}</span
 					>
 					<input
@@ -440,7 +440,7 @@
 						pattern="[0-9]*\.?[0-9]*"
 						placeholder="0"
 						autocomplete="off"
-						class="w-[6ch] border-none bg-transparent p-0 text-center font-[family-name:var(--font-display)] text-[56px] leading-none font-semibold tracking-tight tabular-nums outline-none placeholder:opacity-30"
+						class="w-[6ch] border-none bg-transparent p-0 text-center font-[family-name:var(--font-display)] text-[56px] leading-none font-bold tracking-tight tabular-nums outline-none placeholder:opacity-30"
 						style="color: var(--ink)"
 					/>
 				</div>

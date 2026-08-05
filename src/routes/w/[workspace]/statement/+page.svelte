@@ -148,7 +148,7 @@
 				Monthly Statement
 			</p>
 			<h1
-				class="mt-1 font-[family-name:var(--font-display)] text-[28px] leading-none font-semibold"
+				class="mt-1 font-[family-name:var(--font-display)] text-[28px] leading-none font-bold"
 				style="color: var(--ink)"
 			>
 				{data.workspace.name}
@@ -204,7 +204,7 @@
 						{row.label}
 					</p>
 					<p
-						class="mt-1.5 font-[family-name:var(--font-display)] text-[22px] font-semibold"
+						class="mt-1.5 font-[family-name:var(--font-display)] text-[22px] font-bold"
 						style="color: var(--ink)"
 					>
 						<Money minor={row.minor} {currency} sign={row.sign} />
@@ -220,7 +220,7 @@
 				Net position
 			</p>
 			<p
-				class="mt-1.5 font-[family-name:var(--font-display)] text-[22px] font-semibold"
+				class="mt-1.5 font-[family-name:var(--font-display)] text-[22px] font-bold"
 				style="color: {heroColor}"
 			>
 				<Money minor={s.netMinor} {currency} sign />

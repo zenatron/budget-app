@@ -163,7 +163,7 @@
 			{/if}
 
 			<p
-				class="num mt-1 font-[family-name:var(--font-display)] text-[34px] leading-none font-semibold"
+				class="num mt-1 font-[family-name:var(--font-display)] text-[34px] leading-none font-bold"
 				style="color: var(--ink)"
 			>
 				{chosenAmount ? fmt(chosenAmount.minor) : ''}

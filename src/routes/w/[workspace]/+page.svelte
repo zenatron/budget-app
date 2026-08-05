@@ -83,7 +83,7 @@
 					/>
 				{:else}
 					<div
-						class="flex h-12 w-12 items-center justify-center rounded-full font-[family-name:var(--font-display)] text-[22px] font-semibold text-white"
+						class="flex h-12 w-12 items-center justify-center rounded-full font-[family-name:var(--font-display)] text-[22px] font-bold text-white"
 						style="background: color-mix(in oklab, var(--ws-accent) 80%, black)"
 					>
 						{data.user.displayName.charAt(0)}
