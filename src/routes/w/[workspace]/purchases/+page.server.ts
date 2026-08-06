@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { toDiscretionMode } from '$lib/domain/visibility/discretion';
 import { getDb } from '$lib/server/db';
 import { purchase } from '$lib/server/db/schema';
 import { listLedger } from '$lib/server/repo/ledger';
@@ -93,6 +94,9 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		awaitingConfirmation,
 		sleeping,
 		forecast,
+		// How much of the headline this member wants legible on arrival. Server-side
+		// so a masked number never renders before the client can hide it.
+		safeToSpendDisplay: toDiscretionMode(locals.member!.safeToSpendDisplay),
 		currency: ws.currency
 	};
 };

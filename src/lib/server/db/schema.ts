@@ -155,6 +155,10 @@ export const workspaceMember = pgTable(
 		/** Whether to show bucket activity on the ledger. A display preference, not a
 		 *  permissions control — persisted here so it follows you across devices. */
 		includeLedgerMovements: boolean('include_ledger_movements').notNull().default(false),
+		/** How the Safe to Spend headline reads on the ledger for this member:
+		 *  'shown' | 'masked' | 'off' (see domain/visibility/discretion). Discretion
+		 *  over your own shoulder, not access control — per member, like the above. */
+		safeToSpendDisplay: text('safe_to_spend_display').notNull().default('shown'),
 		joinedAt: timestamp('joined_at', { withTimezone: true }).notNull()
 	},
 	(t) => [uniqueIndex('workspace_member_workspace_user_uq').on(t.workspaceId, t.userId)]

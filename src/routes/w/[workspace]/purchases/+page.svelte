@@ -6,6 +6,8 @@
 		Check,
 		ChevronDown,
 		CircleHelp,
+		Eye,
+		EyeOff,
 		Funnel,
 		Landmark,
 		Lock,
@@ -25,6 +27,7 @@
 	import { goto } from '$app/navigation';
 	import { formatMinor } from '$lib/money-format';
 	import { narrateSafeToSpend } from '$lib/domain/forecast/safe-to-spend';
+	import { maskAmount, type DiscretionMode } from '$lib/domain/visibility/discretion';
 	import { NO_CATEGORY } from '$lib/ledger-filters';
 	import { toastError } from '$lib/toast-state.svelte';
 	let { data } = $props();
@@ -316,7 +319,60 @@
 	// the whole page jump — on PWA the focused search field could be pulled out
 	// from under the user mid-typing.
 	const f = $derived(data.forecast);
-	const showForecast = true;
+
+	/*
+	 * Discretion. The one number on this page that reads across a café from the
+	 * next table, so it's the one you get to turn down: shown, masked until you
+	 * ask, or off entirely (the switch lives in the filter sheet either way, so
+	 * "off" is never a one-way door). Per member and persisted — see
+	 * $lib/domain/visibility/discretion.
+	 */
+	// svelte-ignore state_referenced_locally
+	let display = $state<DiscretionMode>(data.safeToSpendDisplay);
+	let savingDisplay = false;
+	// Reseed from server truth on navigation, but never mid-save — same dance as
+	// Toggle.svelte, so the optimistic value isn't clobbered by a stale prop.
+	$effect(() => {
+		const next = data.safeToSpendDisplay;
+		if (!untrack(() => savingDisplay)) display = next;
+	});
+	// A momentary reveal, deliberately *not* persisted: leaving the ledger and
+	// coming back re-hides the number, which is the whole point of asking for it.
+	let revealed = $state(false);
+	const showForecast = $derived(display !== 'off');
+	const masked = $derived(display === 'masked' && !revealed);
+	/** Formats an amount inside the card, honouring the mask. */
+	const amt = $derived((minor: bigint) =>
+		masked ? maskAmount(formatMinor(minor, data.currency)) : formatMinor(minor, data.currency)
+	);
+
+	const DISPLAY_OPTIONS: { value: DiscretionMode; label: string }[] = [
+		{ value: 'shown', label: 'Shown' },
+		{ value: 'masked', label: 'Hidden until tapped' },
+		{ value: 'off', label: 'Off' }
+	];
+
+	async function setDisplay(next: DiscretionMode) {
+		const prev = display;
+		if (next === prev) return;
+		display = next; // optimistic
+		revealed = false;
+		if (next !== 'shown') showRunway = false;
+		savingDisplay = true;
+		try {
+			const res = await fetch(`/w/${slug}/settings/member-pref`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ pref: 'safeToSpendDisplay', value: next })
+			});
+			if (!res.ok) throw new Error(String(res.status));
+		} catch {
+			display = prev; // revert
+			toastError('Could not save that. Try again.');
+		} finally {
+			savingDisplay = false;
+		}
+	}
 	// The runway waterfall unfolds in place: income minus everything already
 	// spent, promised, and set aside, arriving at the free number above.
 	let showRunway = $state(false);
@@ -576,37 +632,79 @@
 		<!-- Harmony's headline: the money that's actually free this month. Live —
 		     pending reserves it, sleeping releases it, approving commits it. -->
 		<div class="card mb-5 p-4">
-			<button
-				type="button"
-				onclick={() => (showRunway = !showRunway)}
-				class="press -m-1 flex w-full items-start justify-between gap-3 p-1 text-left"
-				aria-expanded={showRunway}
-				aria-label={showRunway ? 'Hide the runway' : 'Show how this is calculated'}
-			>
-				<div class="min-w-0">
-					<p class="section-label">Safe to spend · through {monthEndLabel()}</p>
-					<div
-						class="mt-1 font-[family-name:var(--font-display)] text-[32px] leading-[0.95] font-bold"
-						style="color: {f.freeMinor < 0n ? 'var(--deny)' : 'var(--ink)'}"
-					>
-						<Money minor={f.freeMinor} currency={data.currency} />
+			<div class="flex items-start justify-between gap-2">
+				<button
+					type="button"
+					onclick={() => (masked ? (revealed = true) : (showRunway = !showRunway))}
+					class="press -m-1 flex min-w-0 flex-1 items-start justify-between gap-3 p-1 text-left"
+					aria-expanded={masked ? undefined : showRunway}
+					aria-label={masked
+						? 'Reveal the amount'
+						: showRunway
+							? 'Hide the runway'
+							: 'Show how this is calculated'}
+				>
+					<div class="min-w-0">
+						<p class="section-label">Safe to spend · through {monthEndLabel()}</p>
+						<div
+							class="mt-1 font-[family-name:var(--font-display)] text-[32px] leading-[0.95] font-bold"
+							style="color: {masked
+								? 'var(--ink-3)'
+								: f.freeMinor < 0n
+									? 'var(--deny)'
+									: 'var(--ink)'}"
+						>
+							<!-- Colour goes neutral under the mask too: red would say "you're
+							     under" as loudly as the digits would. -->
+							<Money minor={f.freeMinor} currency={data.currency} {masked} />
+						</div>
 					</div>
-				</div>
-				<ChevronDown
-					class="mt-0.5 h-5 w-5 shrink-0 transition-transform duration-200 {showRunway
-						? 'rotate-180'
-						: ''}"
-					style="color: var(--ink-3)"
-				/>
-			</button>
-			<!-- Harmony's read: always present, the story above the numbers. -->
-			<p
-				class="mt-1.5 flex items-start gap-1.5 text-[13px] leading-snug"
-				style="color: {narrationColor}"
-			>
-				<Sparkles class="mt-[3px] h-3.5 w-3.5 shrink-0" />
-				<span>{narration.text}</span>
-			</p>
+					{#if !masked}
+						<ChevronDown
+							class="mt-0.5 h-5 w-5 shrink-0 transition-transform duration-200 {showRunway
+								? 'rotate-180'
+								: ''}"
+							style="color: var(--ink-3)"
+						/>
+					{/if}
+				</button>
+				{#if display === 'masked'}
+					<!-- The banking-app eye: reveal for as long as you're looking, no
+					     longer. Never persisted — see `revealed`. -->
+					<button
+						type="button"
+						onclick={() => {
+							revealed = !revealed;
+							if (!revealed) showRunway = false;
+						}}
+						class="press -m-1 shrink-0 p-1"
+						aria-pressed={revealed}
+						aria-label={revealed ? 'Hide the amount' : 'Reveal the amount'}
+					>
+						{#if revealed}
+							<EyeOff class="h-5 w-5" style="color: var(--ink-3)" />
+						{:else}
+							<Eye class="h-5 w-5" style="color: var(--ink-3)" />
+						{/if}
+					</button>
+				{/if}
+			</div>
+			<!-- Harmony's read: always present, the story above the numbers — except
+			     under the mask, where the story *is* the number in words, and its
+			     tone colour gives the answer away on its own. -->
+			{#if masked}
+				<p class="mt-1.5 text-[13px] leading-snug" style="color: var(--ink-3)">
+					Hidden — tap to reveal
+				</p>
+			{:else}
+				<p
+					class="mt-1.5 flex items-start gap-1.5 text-[13px] leading-snug"
+					style="color: {narrationColor}"
+				>
+					<Sparkles class="mt-[3px] h-3.5 w-3.5 shrink-0" />
+					<span>{narration.text}</span>
+				</p>
+			{/if}
 			{#if showRunway}
 				<!-- The runway: how income becomes the free number, line by line. -->
 				<div
@@ -660,19 +758,18 @@
 			{/if}
 			{#if !showRunway}
 				<p class="mt-1.5 text-[13px]" style="color: var(--ink-3)">
-					<span class="num">{formatMinor(f.breakdown.upcomingBillsMinor, data.currency)}</span>
+					<span class="num">{amt(f.breakdown.upcomingBillsMinor)}</span>
 					bills ·
-					<span class="num">{formatMinor(f.breakdown.savingsMinor, data.currency)}</span> saved{f
-						.breakdown.cashCommittedMinor > 0n
-						? ` · ${formatMinor(f.breakdown.cashCommittedMinor, data.currency)} approved`
+					<span class="num">{amt(f.breakdown.savingsMinor)}</span> saved{f.breakdown
+						.cashCommittedMinor > 0n
+						? ` · ${amt(f.breakdown.cashCommittedMinor)} approved`
 						: ''} this month
 				</p>
 				{#if f.breakdown.sleepingMinor > 0n}
 					<p class="mt-1 flex items-center gap-1.5 text-[13px]" style="color: var(--seal)">
 						<Moon class="h-3.5 w-3.5" />
 						<span
-							><span class="num">{formatMinor(f.breakdown.sleepingMinor, data.currency)}</span> sleeping
-							on the horizon</span
+							><span class="num">{amt(f.breakdown.sleepingMinor)}</span> sleeping on the horizon</span
 						>
 					</p>
 				{/if}
@@ -880,6 +977,29 @@
 								class="press chip-btn"
 								style={category === NO_CATEGORY ? SELECTED : UNSELECTED}>Other</button
 							>
+						</div>
+					</div>
+
+					<!-- Safe to Spend discretion. It sits with the other "how I read this
+					     page" preferences rather than in Settings: it's the switch you
+					     reach for *while* someone is sitting beside you. -->
+					<div class="h-px" style="background: var(--hairline)"></div>
+					<div>
+						<span class="block text-[15px]" style="color: var(--ink)">Safe to spend</span>
+						<span class="mb-2 block text-[13px]" style="color: var(--ink-3)"
+							>How the headline reads on this ledger</span
+						>
+						<div class="flex flex-wrap gap-2" role="radiogroup" aria-label="Safe to spend display">
+							{#each DISPLAY_OPTIONS as opt (opt.value)}
+								{@const on = display === opt.value}
+								<button
+									onclick={() => setDisplay(opt.value)}
+									role="radio"
+									aria-checked={on}
+									class="press chip-btn"
+									style={on ? SELECTED : UNSELECTED}>{opt.label}</button
+								>
+							{/each}
 						</div>
 					</div>
 

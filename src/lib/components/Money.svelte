@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { maskAmount } from '$lib/domain/visibility/discretion';
 	import { formatMinor } from '$lib/money-format';
 
 	let {
@@ -6,12 +7,15 @@
 		currency,
 		sign = false,
 		block = false,
+		/** Blank the digits — discretion, not secrecy. See domain/visibility/discretion. */
+		masked = false,
 		class: cls = ''
 	}: {
 		minor: bigint;
 		currency: string;
 		sign?: boolean;
 		block?: boolean;
+		masked?: boolean;
 		class?: string;
 	} = $props();
 
@@ -24,7 +28,9 @@
 	let text = $derived.by(() => {
 		const body = formatMinor(minor < 0n ? -minor : minor, currency);
 		const prefix = minor < 0n ? '−' : sign ? '+' : '';
-		return prefix + body;
+		// The sign goes with the digits when masked: a leading − would announce
+		// "you're under", which is exactly what the mask is meant to withhold.
+		return masked ? maskAmount(body) : prefix + body;
 	});
 	let chars = $derived([...text]);
 
@@ -43,8 +49,16 @@
 	}
 </script>
 
-<span class="num {cls}" style="overflow:hidden;display:{block ? 'block' : 'inline-flex'}">
+<span
+	class="num {cls}"
+	style="overflow:hidden;display:{block ? 'block' : 'inline-flex'}"
+	aria-hidden={masked ? 'true' : undefined}
+>
 	{#each chars as c, i (i + ':' + c)}
 		<span in:roll={{ i }} style="display:inline-block;white-space:pre">{c}</span>
 	{/each}
 </span>
+{#if masked}
+	<!-- Bullets read as noise to a screen reader; say what's actually there. -->
+	<span class="sr-only">Amount hidden</span>
+{/if}
