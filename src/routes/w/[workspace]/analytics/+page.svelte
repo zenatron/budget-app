@@ -601,25 +601,25 @@
 					<span class="text-[13px] font-medium" style="color: var(--approve)">In</span>
 					<Money minor={data.incomeMinor} {currency} sign class="text-[16px] font-semibold" />
 				</div>
-				<!--
-					The rule under Out is what separates cash flow from bucket flow. When
-					there's a "From buckets" row it belongs on the cash side of that rule,
-					directly under the Out it adjusts — it is the part of Out that earlier
-					months already paid for, not a saving made this one. So the rule moves
-					down to sit under it instead.
-				-->
-				<div
-					class="flex items-center justify-between px-3.5 py-1.5 {released > 0n ? '' : 'hairline'}"
-				>
+				<div class="flex items-center justify-between px-3.5 py-1.5">
 					<span class="text-[13px] font-medium" style="color: var(--ink-3)">Out</span>
 					<Money minor={-data.totalMinor} {currency} sign class="text-[16px] font-semibold" />
 				</div>
-				{#if released > 0n}
-					<div class="hairline flex items-center justify-between px-3.5 py-1.5">
-						<span class="text-[13px] font-medium" style="color: var(--ink-3)">From buckets</span>
-						<Money minor={released} {currency} sign class="text-[16px] font-semibold" />
-					</div>
-				{/if}
+				<!--
+					The rule under "From buckets" is what separates cash flow from bucket
+					flow: this row sits on the cash side of it, directly under the Out it
+					adjusts — it is the part of Out that earlier months already paid for,
+					not a saving made this one.
+
+					It renders even at zero, the way In and Saved do. Dropping it in months
+					with no bucket charges left this card a row shorter than the Net card
+					beside it, and the leftover height pooled under Saved: the breakdown
+					changed shape month to month over a figure that was simply nothing.
+				-->
+				<div class="hairline flex items-center justify-between px-3.5 py-1.5">
+					<span class="text-[13px] font-medium" style="color: var(--ink-3)">From buckets</span>
+					<Money minor={released} {currency} sign class="text-[16px] font-semibold" />
+				</div>
 				<div class="flex items-center justify-between px-3.5 py-1.5">
 					<span class="text-[13px] font-medium" style="color: var(--seal)">Saved</span>
 					<Money minor={-savings} {currency} sign class="text-[16px] font-semibold" />
