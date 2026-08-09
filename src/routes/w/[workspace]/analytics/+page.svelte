@@ -3,7 +3,7 @@
 	import { tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { money } from '$lib/actions/money';
-	import { formatMinor } from '$lib/money-format';
+	import { formatMinor, splitCurrencyMinor, tooWideForSymbol } from '$lib/money-format';
 	import { formatPct } from '$lib/format';
 	import Money from '$lib/components/Money.svelte';
 	import CategoryRing from '$lib/components/CategoryRing.svelte';
@@ -252,27 +252,62 @@
 			tone: 'var(--approve)',
 			hint: 'Total spent'
 		},
-		{ label: 'Saved', minor: data.savedMinor, tone: 'var(--seal)', hint: 'Set aside' },
-		{
-			label: 'Refunded',
-			minor: data.verdicts.refundedMinor,
-			tone: 'var(--info)',
-			hint: 'Came back'
-		},
-		{ label: 'Denied', minor: data.verdicts.deniedMinor, tone: 'var(--deny)', hint: 'Turned down' },
-		{
-			label: 'Cancelled',
-			minor: data.verdicts.cancelledMinor,
-			tone: 'var(--ink-3)',
-			hint: 'Voided'
-		},
-		{
-			label: 'Let go',
-			minor: data.verdicts.letGoMinor,
-			tone: 'var(--seal)',
-			hint: 'Slept on, then passed'
-		}
+		{ label: 'Saved', minor: data.savedMinor, tone: 'var(--seal)', hint: 'Set aside' }
 	]);
+
+	/*
+	 * The four verdicts, paired: money that came back, then money that never
+	 * left. Each pair shares a card and a rule, which is what marks them as a
+	 * pair — set side by side they'd just read as more tiles.
+	 *
+	 * They stack rather than sit two-across because the figure is what breaks
+	 * first here. A third of the row already only just holds six figures at
+	 * 16px tabular; a quarter of it would break at four. Stacked, each figure
+	 * gets half the row — more room than the money tiles above have.
+	 */
+	const lifetimePairs = $derived([
+		[
+			{
+				label: 'Refunded',
+				minor: data.verdicts.refundedMinor,
+				tone: 'var(--info)',
+				hint: 'Came back'
+			},
+			{
+				label: 'Cancelled',
+				minor: data.verdicts.cancelledMinor,
+				tone: 'var(--ink-3)',
+				hint: 'Voided'
+			}
+		],
+		[
+			{
+				label: 'Denied',
+				minor: data.verdicts.deniedMinor,
+				tone: 'var(--deny)',
+				hint: 'Turned down'
+			},
+			{
+				label: 'Let go',
+				minor: data.verdicts.letGoMinor,
+				tone: 'var(--seal)',
+				hint: 'Slept on, then passed'
+			}
+		]
+	]);
+
+	/*
+	 * Past ten million a lifetime figure overruns its card. These are ledger
+	 * totals, so rounding or abbreviating them is out — instead the currency
+	 * symbol moves up into the label ("EARNED $"), where there's slack, and out
+	 * of the number, where there isn't. A hundred million would overrun again,
+	 * but that's a workspace with other problems.
+	 */
+	function figure(minor: bigint): { symbol: string; digits: string } {
+		return tooWideForSymbol(minor, currency)
+			? splitCurrencyMinor(minor, currency)
+			: { symbol: '', digits: formatMinor(minor, currency) };
+	}
 
 	function pctOf(part: bigint, whole: bigint): number {
 		if (whole === 0n) return 0;
@@ -921,17 +956,41 @@
 		<p class="section-label mb-2 px-1">Lifetime</p>
 		<div class="grid grid-cols-3 gap-2">
 			{#each lifetimeStats as stat (stat.label)}
+				{@const fig = figure(stat.minor)}
 				<div class="card p-3.5">
 					<p
 						class="text-[11px] font-semibold tracking-[0.08em] uppercase"
 						style="color: {stat.tone}"
 					>
-						{stat.label}
+						{stat.label}{fig.symbol ? ` ${fig.symbol}` : ''}
 					</p>
 					<p class="num mt-1.5 text-[16px] font-semibold" style="color: var(--ink)">
-						{formatMinor(stat.minor, currency)}
+						{fig.digits}
 					</p>
 					<p class="mt-0.5 text-[11px] leading-tight" style="color: var(--ink-3)">{stat.hint}</p>
+				</div>
+			{/each}
+		</div>
+		<div class="mt-2 grid grid-cols-2 gap-2">
+			{#each lifetimePairs as pair (pair[0].label)}
+				<div class="card">
+					{#each pair as stat, i (stat.label)}
+						{@const fig = figure(stat.minor)}
+						<div class="p-3.5 {i === 0 ? 'hairline' : ''}">
+							<p
+								class="text-[11px] font-semibold tracking-[0.08em] uppercase"
+								style="color: {stat.tone}"
+							>
+								{stat.label}{fig.symbol ? ` ${fig.symbol}` : ''}
+							</p>
+							<p class="num mt-1.5 text-[16px] font-semibold" style="color: var(--ink)">
+								{fig.digits}
+							</p>
+							<p class="mt-0.5 text-[11px] leading-tight" style="color: var(--ink-3)">
+								{stat.hint}
+							</p>
+						</div>
+					{/each}
 				</div>
 			{/each}
 		</div>
