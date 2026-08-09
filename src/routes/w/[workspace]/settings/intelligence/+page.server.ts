@@ -4,6 +4,7 @@ import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
 import { workspace } from '$lib/server/db/schema';
 import { getLlmAssist, type AssistConfig } from '$lib/infra/llm';
+import { listModels } from '$lib/infra/llm/model-catalog';
 import { getEnv } from '$lib/server/env';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -91,7 +92,9 @@ export const actions: Actions = {
 	test: async ({ locals, request }) => {
 		if (locals.member!.role !== 'owner')
 			error(403, 'Only the owner can test intelligence settings');
-		const parsed = v.safeParse(ConfigSchema, Object.fromEntries(await request.formData()));
+		const fields = Object.fromEntries(await request.formData());
+		const refresh = fields.refresh === 'true';
+		const parsed = v.safeParse(ConfigSchema, fields);
 		if (!parsed.success) return fail(400, { error: parsed.issues[0].message });
 		const out = parsed.output;
 		if (out.mode === 'off')
@@ -103,8 +106,13 @@ export const actions: Actions = {
 		if (bad) return fail(400, { error: bad });
 
 		// For local Ollama, the connection test is the model list itself: if we can
-		// reach /api/tags, the endpoint is good and we can offer the models in a
-		// dropdown. The user hasn't picked a model yet at this step.
+		// reach /api/tags, the endpoint is good and we can offer the models with
+		// what each one can do. The user hasn't picked a model yet at this step.
+		//
+		// `refresh` is the user saying "I just pulled something" — it drops the
+		// cached capabilities for this endpoint so they're established again.
+		// Without it a repeat test re-lists but asks about nothing, which is the
+		// point of caching against each model's own stamp.
 		if (out.mode === 'local') {
 			let base: string;
 			try {
@@ -114,24 +122,16 @@ export const actions: Actions = {
 				return { test: { ok: false, detail: 'Endpoint is not a valid URL' } };
 			}
 			try {
-				const res = await fetch(`${base}/api/tags`, { headers: { Accept: 'application/json' } });
-				if (!res.ok) {
-					return {
-						test: {
-							ok: false,
-							detail: `Could not list models (${res.status}).`
-						}
-					};
-				}
-				const data = (await res.json()) as { models?: { name: string }[] };
-				const models = (data.models ?? [])
-					.map((m) => m.name)
-					.filter((name): name is string => typeof name === 'string' && name.length > 0)
-					.sort();
+				const { models, capabilitiesUnavailable } = await listModels(base, { refresh });
 				return {
 					test: {
 						ok: true,
-						detail: models.length > 0 ? 'Connected.' : 'Connected, but no models found.',
+						detail:
+							models.length === 0
+								? 'Connected, but no models found.'
+								: capabilitiesUnavailable
+									? 'Connected. This Ollama is too old to report what its models can do.'
+									: 'Connected.',
 						models
 					}
 				};

@@ -6,6 +6,7 @@
 		ChevronLeft,
 		Check,
 		CircleAlert,
+		RefreshCw,
 		ScanEye,
 		ScanLine,
 		ShieldCheck,
@@ -40,6 +41,19 @@
 
 	const testResult = $derived(form && 'test' in form ? form.test : null);
 	const availableModels = $derived(testResult?.models ?? []);
+
+	/*
+	 * Chip colours carry meaning rather than decorating: vision is the one people
+	 * are hunting for when they scan this list, so it gets the accent, and the
+	 * rest sit back in the neutral ink. Anything Ollama reports that we don't
+	 * recognise still renders — it just renders quietly.
+	 */
+	function capTone(cap: string): string {
+		if (cap === 'vision') return 'var(--ws-accent)';
+		if (cap === 'tools') return 'var(--info)';
+		if (cap === 'thinking') return 'var(--seal)';
+		return 'var(--ink-3)';
+	}
 </script>
 
 <div class="mx-auto max-w-lg space-y-4">
@@ -221,18 +235,62 @@
 				<div>
 					<label class="section-label" for="model">Model</label>
 					{#if mode === 'local' && availableModels.length > 0}
-						<select
-							id="model"
-							name="model"
-							bind:value={model}
-							disabled={!owner}
-							class="field mt-1 font-mono text-[15px]"
+						<!--
+							A list rather than a <select>: an <option> can only hold text, and
+							what a model can do is the thing you're choosing on. The chips are
+							shown only where Ollama positively said so — an older server
+							reports nothing, and nothing is what we draw, because an empty
+							row would read as "this model can't", which is a different and
+							wrong claim.
+						-->
+						<div
+							class="card mt-1 max-h-[19rem] overflow-y-auto"
+							role="radiogroup"
+							aria-label="Model"
 						>
-							<option value="" disabled selected={!model}>Select a model</option>
-							{#each availableModels as m (m)}
-								<option value={m} selected={m === model}>{m}</option>
+							{#each availableModels as m, i (m.name)}
+								<label
+									class="press flex cursor-pointer items-start gap-2.5 p-3 {i > 0 ? 'rule' : ''}"
+									style="background: {model === m.name
+										? 'color-mix(in oklab, var(--ws-accent) 8%, transparent)'
+										: 'transparent'}"
+								>
+									<input
+										type="radio"
+										name="model"
+										value={m.name}
+										checked={model === m.name}
+										onchange={() => (model = m.name)}
+										disabled={!owner}
+										class="mt-0.5 shrink-0"
+									/>
+									<span class="min-w-0 flex-1">
+										<span class="block font-mono text-[14px] break-all" style="color: var(--ink)">
+											{m.name}
+										</span>
+										{#if m.parameterSize || m.quantization}
+											<span class="mt-0.5 block text-[11px]" style="color: var(--ink-3)">
+												{[m.parameterSize, m.quantization].filter(Boolean).join(' · ')}
+											</span>
+										{/if}
+										{#if m.capabilities && m.capabilities.length > 0}
+											<span class="mt-1.5 flex flex-wrap gap-1">
+												{#each m.capabilities as cap (cap)}
+													<span
+														class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.04em]"
+														style="background: color-mix(in oklab, {capTone(
+															cap
+														)} 14%, var(--surface)); color: {capTone(cap)}"
+													>
+														{cap}
+													</span>
+												{/each}
+											</span>
+										{/if}
+									</span>
+								</label>
 							{/each}
-						</select>
+						</div>
 					{:else}
 						<input
 							id="model"
@@ -278,11 +336,28 @@
 			{/if}
 
 			{#if owner}
-				<div class="flex items-center gap-2 pt-1">
+				<!--
+					Connect reuses whatever it already knows about each model, keyed on
+					the model's own timestamp, so a repeat connect is one request.
+					Refresh is for the case that can't be detected from here — you just
+					pulled or replaced a model — and drops what's cached for this
+					endpoint. Hence two buttons rather than one that always refetches.
+				-->
+				<div class="flex flex-wrap items-center gap-2 pt-1">
 					<button class="btn btn-accent px-4 py-2 text-[14px]">Save</button>
 					{#if mode !== 'off'}
 						<button formaction="?/test" class="btn btn-ghost px-4 py-2 text-[14px]">
 							{mode === 'local' ? 'Connect' : 'Test connection'}
+						</button>
+					{/if}
+					{#if mode === 'local' && availableModels.length > 0}
+						<button
+							formaction="?/test"
+							name="refresh"
+							value="true"
+							class="btn btn-ghost inline-flex items-center gap-1.5 px-4 py-2 text-[14px]"
+						>
+							<RefreshCw class="h-3.5 w-3.5" /> Refresh models
 						</button>
 					{/if}
 				</div>
