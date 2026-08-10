@@ -665,7 +665,13 @@
 				run: it costs a slow round trip, and it only ever fills fields you have
 				left blank, so it can't overwrite something you typed.
 			-->
-			{#if photoFile && data.vision.allowed}
+			<!--
+				A contextual offer, not a second front door: you attached a photo, so
+				reading it is one tap away. The door itself is "Read a bill or receipt"
+				above, which takes a PDF or a photo. Gated on the same workspace switch
+				as that card — one capability, one setting.
+			-->
+			{#if photoFile && data.billImportEnabled && data.vision.allowed}
 				<div class="row" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
 					<button
 						type="button"

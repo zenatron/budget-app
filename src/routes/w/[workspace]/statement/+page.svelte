@@ -529,6 +529,34 @@
 		{/if}
 	</section>
 
+	<!--
+		Reconcile's real home.
+		
+		It used to be reachable only from Settings, which is where you go to change
+		how something behaves — not where you go to do a month's work. And an
+		icon-only link in the header (still there, for anyone who has learned it)
+		is not a feature anyone finds. This sheet says what Ledger thinks happened
+		this month; checking that against the bank is the obvious next question, so
+		it gets asked here, in words, at the point the question occurs to you.
+	-->
+	<a href="/w/{slug}/reconcile" class="press screen-only card mt-8 flex items-center gap-3.5 p-4">
+		<span
+			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+		>
+			<FileCheck class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+		</span>
+		<span class="min-w-0 flex-1">
+			<span class="block text-[15px] font-medium" style="color: var(--ink)">
+				Check this against your bank
+			</span>
+			<span class="mt-0.5 block text-[13px] leading-snug" style="color: var(--ink-3)">
+				Import {data.label}'s statement and tick off what cleared. Nothing is created or changed.
+			</span>
+		</span>
+		<ChevronRight class="h-4 w-4 shrink-0" style="color: var(--ink-4)" />
+	</a>
+
 	<!-- Fine print -->
 	<footer
 		class="mt-8 border-t pt-4 text-[11px] leading-relaxed"

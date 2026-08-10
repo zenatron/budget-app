@@ -46,7 +46,11 @@
 	 * and not taken. See `scanned` in the markup.
 	 */
 	let scanned: ReadPdfResult | null = $state(null);
+	/** A photographed bill or receipt, waiting on the same offer a scan gets. */
+	let photo = $state<File | null>(null);
 	let reading = $state(false);
+	/** Whether a photo can be offered at all — decides the file picker's reach. */
+	const visionOn = $derived(vision.allowed);
 	let result: ReadPdfResult | null = $state(null);
 	let chosenAmount: MoneyCandidate | null = $state(null);
 	let chosenPage = $state(1);
@@ -64,6 +68,24 @@
 		if (!file) return;
 
 		reset();
+
+		/*
+		 * A photo, not a document. Nobody checks whether their bank sent a PDF or
+		 * their phone took a JPEG before wanting the amount filled in, so this door
+		 * takes either and works out which it is. There is no text layer to try, so
+		 * it goes straight to the same read a scanned page gets.
+		 */
+		if (file.type.startsWith('image/')) {
+			if (!vision.allowed) {
+				error = vision.reason
+					? `That's a photo, so there's no text to read. ${vision.reason}`
+					: "That's a photo, so there's no text to read. You can still enter the amount yourself.";
+				return;
+			}
+			photo = file;
+			return;
+		}
+
 		busy = true;
 		try {
 			const { readPdf } = await import('$lib/bill/read-pdf');
@@ -126,14 +148,22 @@
 	 * to the person — which is still better than the empty form this replaces.
 	 */
 	async function readScan() {
-		if (!scanned) return;
+		if (!scanned && !photo) return;
 		reading = true;
 		error = null;
 		try {
-			const blob = await scanned.renderPage(1);
+			// A rendered page from a scanned PDF, or the photo as taken. The read is
+			// the same either way; only the wording differs, because "receipt" and
+			// "bill" have different characteristic misreads.
+			const blob = photo ?? (await scanned!.renderPage(1));
 			const body = new FormData();
-			body.append('image', new File([blob], 'bill-p1.webp', { type: 'image/webp' }));
-			body.append('kind', 'bill');
+			body.append(
+				'image',
+				new File([blob], photo ? photo.name : 'bill-p1.webp', {
+					type: blob.type || 'image/webp'
+				})
+			);
+			body.append('kind', photo ? 'receipt' : 'bill');
 			const res = await fetch(`/w/${slug}/read-image`, { method: 'POST', body });
 			if (!res.ok) throw new Error(String(res.status));
 			const { read } = (await res.json()) as {
@@ -143,7 +173,9 @@
 				error = "Couldn't make out this bill. Enter the amount yourself?";
 				return;
 			}
-			const image = new File([blob], 'bill-p1.webp', { type: 'image/webp' });
+			const image = new File([blob], photo ? photo.name : 'bill-p1.webp', {
+				type: blob.type || 'image/webp'
+			});
 			onapply({
 				amount: read.totalMinor ? major(Number(read.totalMinor)) : '',
 				vendor: read.vendor,
@@ -162,6 +194,7 @@
 		result = null;
 		scanned?.dispose();
 		scanned = null;
+		photo = null;
 		reading = false;
 		chosenAmount = null;
 		chosenPage = 1;
@@ -176,7 +209,7 @@
 </script>
 
 <div class="card overflow-hidden">
-	{#if scanned}
+	{#if scanned || photo}
 		<!--
 			A scan, and a model that might be able to look at it. Stated as an offer
 			with its cost attached, because the read is genuinely slow and can come
@@ -233,7 +266,7 @@
 			<span class="min-w-0 flex-1">
 				<span class="flex flex-wrap items-center gap-x-2 gap-y-1">
 					<span class="text-[15px] font-medium" style="color: var(--ink)">
-						{busy ? 'Reading the bill…' : 'Read a bill'}
+						{busy ? 'Reading it…' : 'Read a bill or receipt'}
 					</span>
 					<span
 						class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
@@ -242,7 +275,11 @@
 					>
 				</span>
 				<span class="mt-0.5 block text-[13px]" style="color: var(--ink-3)">
-					{busy ? 'This can take a moment' : 'Fills in the amount from a PDF'}
+					{busy
+						? 'This can take a moment'
+						: visionOn
+							? 'A PDF or a photo — fills in the amount'
+							: 'Fills in the amount from a PDF'}
 				</span>
 			</span>
 			{#if !busy}
@@ -250,7 +287,9 @@
 			{/if}
 			<input
 				type="file"
-				accept="application/pdf,.pdf"
+				accept={visionOn
+					? 'application/pdf,.pdf,image/jpeg,image/png,image/webp'
+					: 'application/pdf,.pdf'}
 				class="sr-only"
 				disabled={busy}
 				onchange={onPick}
