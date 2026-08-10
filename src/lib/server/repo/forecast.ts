@@ -75,7 +75,8 @@ export async function safeToSpend(db: Db, scope: ForecastScope, now: Date): Prom
 			savingsMinor,
 			reservedMinor: flows.reservedMinor,
 			sleepingMinor: flows.sleepingMinor,
-			budgetRemainingMinor
+			budgetRemainingMinor: budgetRemainingMinor?.minor ?? null,
+			budgetRemainingKind: budgetRemainingMinor?.kind ?? null
 		},
 		period
 	);
@@ -217,15 +218,25 @@ async function budgetRemaining(
 	scope: ForecastScope,
 	period: ReturnType<typeof monthPeriod>,
 	now: Date
-): Promise<bigint | null> {
+): Promise<{ minor: bigint; kind: 'overall' | 'categories' } | null> {
 	const lines = await budgetVsActual(db, scope, period, now);
 	if (lines.length === 0) return null;
 	const overall = lines.find((l) => l.categoryId === null);
-	if (overall) return overall.budgetMinor - overall.actualMinor; // may be negative: over the plan
-	return lines.reduce((a, l) => {
-		const room = l.budgetMinor - l.actualMinor;
-		return a + (room > 0n ? room : 0n);
-	}, 0n);
+	// One ceiling for everything. May be negative: over the plan.
+	if (overall) return { minor: overall.budgetMinor - overall.actualMinor, kind: 'overall' };
+	/*
+	 * No overall budget, so this is the headroom left across the category budgets
+	 * — each floored at zero, because being £50 under on groceries does not buy
+	 * you £50 more of anything else. That flooring is why the two cases need
+	 * different words: this figure is a sum of separate allowances, not one pot.
+	 */
+	return {
+		minor: lines.reduce((a, l) => {
+			const room = l.budgetMinor - l.actualMinor;
+			return a + (room > 0n ? room : 0n);
+		}, 0n),
+		kind: 'categories'
+	};
 }
 
 /** Seal-aware, cash-only (bucket-charged excluded) purchase flows for the viewer. */

@@ -756,7 +756,17 @@
 					{/if}
 					{#if f.breakdown.budgetRemainingMinor !== null}
 						<div class="mt-1 flex items-center justify-between" style="color: var(--ink-3)">
-							<span>Left in your budget</span>
+							<!--
+								Two different figures wear this row. With an overall budget it is
+								one ceiling; without one it is the headroom summed across separate
+								category allowances, which you cannot move money between. Calling
+								both "your budget" flattened that.
+							-->
+							<span>
+								{f.breakdown.budgetRemainingKind === 'categories'
+									? 'Left across budgets'
+									: 'Left in your budget'}
+							</span>
 							<span
 								class="num"
 								style="color: {f.breakdown.budgetRemainingMinor < 0n

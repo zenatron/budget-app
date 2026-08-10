@@ -26,6 +26,7 @@ function breakdown(over: Partial<SafeToSpendBreakdown> = {}): SafeToSpendBreakdo
 		reservedMinor: 0n,
 		sleepingMinor: 0n,
 		budgetRemainingMinor: null,
+		budgetRemainingKind: null,
 		...over
 	};
 }
@@ -187,5 +188,48 @@ describe('sumRecurringInWindow', () => {
 		expect(sumRecurringInWindow(daily, usd, { y: 2026, m: 8, d: 1 }, { y: 2026, m: 7, d: 1 })).toBe(
 			0n
 		);
+	});
+});
+
+describe('narration follows the shape of the budget it measured', () => {
+	// "Your budget" reads as one pot. Without an overall budget the figure is
+	// headroom summed across separate category allowances you can't move money
+	// between, and the singular overstated how freely it could be spent.
+	const withPlan = (kind: 'overall' | 'categories') =>
+		narrateSafeToSpend(
+			computeSafeToSpend(
+				breakdown({
+					incomeMinor: 100000n,
+					budgetRemainingMinor: 20000n,
+					budgetRemainingKind: kind
+				}),
+				JULY
+			),
+			fmt
+		).text;
+
+	it('says "budget" for one overall ceiling', () => {
+		expect(withPlan('overall')).toContain('your budget is the real ceiling');
+	});
+
+	it('says "budgets" when the ceiling is several allowances summed', () => {
+		expect(withPlan('categories')).toContain('your budgets are the real ceiling');
+	});
+
+	it('agrees on number when over the plan too', () => {
+		const over = (kind: 'overall' | 'categories') =>
+			narrateSafeToSpend(
+				computeSafeToSpend(
+					breakdown({
+						incomeMinor: 100000n,
+						budgetRemainingMinor: -5000n,
+						budgetRemainingKind: kind
+					}),
+					JULY
+				),
+				fmt
+			).text;
+		expect(over('overall')).toContain('past your budget');
+		expect(over('categories')).toContain('past your budgets');
 	});
 });

@@ -63,6 +63,13 @@ export interface SafeToSpendBreakdown {
 	sleepingMinor: bigint;
 	/** Discretionary budget left, as a guardrail. Null until wired. */
 	budgetRemainingMinor: bigint | null;
+	/**
+	 * Which kind of budget that figure came from, so the label can be true.
+	 * `overall` is one ceiling; `categories` is the headroom summed across
+	 * separate allowances you can't move money between — a distinction "your
+	 * budget" quietly flattened.
+	 */
+	budgetRemainingKind: 'overall' | 'categories' | null;
 }
 
 /** clear = room to spare · tight = pending would push you over · over = already over. */
@@ -135,18 +142,27 @@ export function narrateSafeToSpend(
 			text: `${fmt(r.freeMinor)} free, though approving everything pending would put you ${fmt(-r.afterReservedMinor)} under.`
 		};
 	}
+	/*
+	 * "Your budget" reads as one pot. When the workspace has no overall budget the
+	 * figure is headroom summed across separate category allowances, and calling
+	 * that a single budget overstates how freely it can be spent. The wording
+	 * follows the shape of what was actually measured.
+	 */
+	const plan = r.breakdown.budgetRemainingKind === 'categories' ? 'your budgets' : 'your budget';
 	// Cash is fine; the budget is what you've overrun.
 	if (r.onPlanMinor !== null && r.onPlanMinor < 0n) {
 		return {
 			tone: 'budget',
-			text: `Cash is fine, but you're ${fmt(-r.onPlanMinor)} past your budget this month.`
+			text: `Cash is fine, but you're ${fmt(-r.onPlanMinor)} past ${plan} this month.`
 		};
 	}
 	// Cash is fine; the budget is the tighter (still-positive) ceiling.
 	if (r.onPlanMinor !== null && r.onPlanMinor < r.freeMinor) {
 		return {
 			tone: 'budget',
-			text: `${fmt(r.freeMinor)} in the bank this month, though your budget is the real ceiling at ${fmt(r.onPlanMinor)}.`
+			text: `${fmt(r.freeMinor)} in the bank this month, though ${plan} ${
+				r.breakdown.budgetRemainingKind === 'categories' ? 'are' : 'is'
+			} the real ceiling at ${fmt(r.onPlanMinor)}.`
 		};
 	}
 	// Room to spare, nothing pressing.
