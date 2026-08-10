@@ -25,10 +25,34 @@
 		}
 	}
 
-	const SCOPES: { id: string; label: string; hint: string }[] = [
-		{ id: 'read', label: 'Read', hint: 'View spending, summaries, and pending items' },
-		{ id: 'write', label: 'Log & request', hint: 'Record purchases and ask for approval' },
-		{ id: 'approve', label: 'Approve', hint: 'Approve, deny, and complete purchases' }
+	/*
+	 * What a token may do, and what is ticked before you decide.
+	 *
+	 * All three used to be ticked, which meant every token minted could approve
+	 * household spending unless someone noticed and unticked it. A default is a
+	 * decision made on the user's behalf, and that is not one to make quietly —
+	 * so approval is now opt-in, and each line says what it really covers rather
+	 * than the friendliest example of it.
+	 */
+	const SCOPES: { id: string; label: string; hint: string; standard: boolean }[] = [
+		{
+			id: 'read',
+			label: 'Read',
+			hint: 'View spending, summaries, buckets and pending items — never change them',
+			standard: true
+		},
+		{
+			id: 'write',
+			label: 'Log & manage',
+			hint: 'Record purchases, and edit buckets, income and recurring plans',
+			standard: true
+		},
+		{
+			id: 'approve',
+			label: 'Approve spending',
+			hint: 'Approve or deny purchases waiting on you. Leave off unless you want an assistant deciding.',
+			standard: false
+		}
 	];
 
 	function fmtDate(iso: string) {
@@ -164,7 +188,7 @@
 								type="checkbox"
 								name="scopes"
 								value={s.id}
-								checked
+								checked={s.standard}
 								class="mt-0.5 h-4 w-4 shrink-0"
 								style="accent-color: var(--ws-accent)"
 							/>

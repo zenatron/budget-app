@@ -7,6 +7,7 @@
  * initiates messages), so the endpoint stays an ordinary POST handler.
  */
 import pkg from '../../../../package.json';
+import { annotationsFor } from './annotations';
 import { TOOLS, TOOLS_BY_NAME, toToolError, type ToolContext } from './tools';
 
 /** The protocol revision we implement; we echo the client's if we recognize it. */
@@ -69,7 +70,10 @@ export async function dispatch(
 			const tools = TOOLS.filter((t) => ctx.authed.scopes.includes(t.scope)).map((t) => ({
 				name: t.name,
 				description: t.description,
-				inputSchema: t.inputSchema
+				inputSchema: t.inputSchema,
+				// What a client needs to decide whether to call this without asking.
+				// See mcp/annotations for why the default leans destructive.
+				annotations: annotationsFor(t)
 			}));
 			return ok(id, { tools });
 		}
