@@ -14,6 +14,7 @@
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { extractBill, type BillExtraction, type TextItem } from '$lib/domain/bill/extract';
 import { extractStatementRows } from '$lib/domain/reconcile/parse-pdf';
+import { classifyDocument, type DocumentShape } from '$lib/domain/bill/classify';
 
 /** Long edge of the rendered page, before the server's own resize. */
 const RENDER_LONG_EDGE = 2000;
@@ -32,10 +33,13 @@ export interface PdfPagePreview {
 export interface ReadPdfResult {
 	pageCount: number;
 	extraction: BillExtraction;
-	/** Transaction-shaped rows found on the page. See the note where it's computed. */
+	/** Transaction-shaped rows found on the page — each one led with a date. */
 	statementRows: number;
-	/** Enough of them that this is a statement, not a bill with line items. */
-	looksLikeStatement: boolean;
+	/**
+	 * What shape this document is. `ambiguous` means both readings hold and the
+	 * caller should ask rather than pick — see domain/bill/classify.
+	 */
+	shape: DocumentShape;
 	/** 1-based page the winning amount was found on, for preselecting. */
 	suggestedPage: number;
 	pages: PdfPagePreview[];
@@ -140,12 +144,12 @@ export async function readPdf(
 	 * why the bill reader used to end at "couldn't find an amount" and leave
 	 * someone holding a document the app can very much read, one screen away.
 	 *
-	 * Rather than a second door in the add screen (a statement adds no purchase,
-	 * so it has nothing to fill the form it would live in), the reader recognises
-	 * the shape and points. The threshold is high enough that a bill with a few
-	 * dated line items doesn't get mistaken for a month of transactions.
+	 * The judgement itself lives in `domain/bill/classify`, where it can be
+	 * tested against the cases that matter — including the short statement a row
+	 * count alone would have misread as a bill.
 	 */
 	const statementRows = extractStatementRows(items).rows.length;
+	const shape = classifyDocument({ bill: extraction, statementRows });
 
 	// Previews for the page picker. Only rendered when there's a choice to make.
 	const pages: PdfPagePreview[] = [];
@@ -162,7 +166,7 @@ export async function readPdf(
 		pageCount: doc.numPages,
 		extraction,
 		statementRows,
-		looksLikeStatement: statementRows >= 8,
+		shape,
 		// The page carrying the figure is the page worth keeping.
 		suggestedPage: extraction.total?.page ?? 1,
 		pages,

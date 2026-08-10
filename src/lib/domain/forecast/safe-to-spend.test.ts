@@ -21,6 +21,7 @@ function breakdown(over: Partial<SafeToSpendBreakdown> = {}): SafeToSpendBreakdo
 		cashSpentMinor: 0n,
 		cashCommittedMinor: 0n,
 		upcomingBillsMinor: 0n,
+		upcomingBillsEstimated: false,
 		savingsMinor: 0n,
 		reservedMinor: 0n,
 		sleepingMinor: 0n,

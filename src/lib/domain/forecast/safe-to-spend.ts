@@ -43,6 +43,17 @@ export interface SafeToSpendBreakdown {
 	cashCommittedMinor: bigint;
 	/** Recurring charges still to land this month — bills you can't dodge. */
 	upcomingBillsMinor: bigint;
+	/**
+	 * True when part of that figure is a *projection* rather than a known charge.
+	 *
+	 * A rule that posts automatically charges what it says it will. One that asks
+	 * you to confirm the price does so because the price moves — a variable
+	 * utility bill — so its contribution here is last month's figure standing in
+	 * for next month's. Safe to Spend is the most load-bearing number in the app,
+	 * and a component of it being a guess is exactly the kind of thing that should
+	 * be said out loud rather than rounded into confidence.
+	 */
+	upcomingBillsEstimated: boolean;
 	/** This month's saving: what has already moved into buckets, plus what is
 	 *  still due to accrue before the month is out. */
 	savingsMinor: bigint;

@@ -198,8 +198,22 @@ export function toLines(items: TextItem[]): Line[] {
 
 /* ── Money ────────────────────────────────────────────────────────────────── */
 
+/*
+ * The grouped alternative requires at least one separator (`+`, not `*`).
+ *
+ * With `*` it matched a bare "1250.00" as "125" — the alternation is ordered, so
+ * the grouped branch won on its first three digits and the plain-number branch
+ * was never tried. A bill printing its total without a thousands separator, which
+ * is completely ordinary, therefore read as a tenth of itself: $1,250.00 became
+ * $125.00. Silently, plausibly, in the *deterministic* reader — the half of this
+ * feature that is supposed to be the trustworthy one.
+ *
+ * Requiring a separator on the grouped branch makes it fail on "1250.00", and the
+ * plain branch then takes the whole number. "1,250.00" and "1.234,56" still take
+ * the grouped branch, which is the only thing it was ever for.
+ */
 const MONEY_RE =
-	/(?:(R\$|[$£€¥₹₽₺])\s*)?(\d{1,3}(?:[.,\u00a0\s]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?:\s*(USD|EUR|GBP|JPY|CAD|AUD|CHF|INR|BRL|SEK|NOK|DKK))?/gi;
+	/(?:(R\$|[$£€¥₹₽₺])\s*)?(\d{1,3}(?:[.,\u00a0\s]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?:\s*(USD|EUR|GBP|JPY|CAD|AUD|CHF|INR|BRL|SEK|NOK|DKK))?/gi;
 
 /**
  * Parse a number that might be written 1,234.56 or 1.234,56.

@@ -12,7 +12,7 @@
 	 * photo input, so the upload goes through the same hardened image pipeline as
 	 * a photographed receipt — nothing on the server had to learn about PDFs.
 	 */
-	import { ChevronRight, Sparkles } from '@lucide/svelte';
+	import { Check, ChevronRight, Sparkles } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { handOff } from '$lib/reconcile/handoff.svelte';
@@ -50,8 +50,13 @@
 	let scanned: ReadPdfResult | null = $state(null);
 	/** A photographed bill or receipt, waiting on the same offer a scan gets. */
 	let photo = $state<File | null>(null);
-	/** A statement brought to the bill door — offered a lift rather than an error. */
-	let statement = $state<{ file: File; rows: number } | null>(null);
+	/**
+	 * A statement brought to the bill door — offered a lift rather than an error.
+	 * `ambiguous` means both readings held: the page has dated rows *and* a figure
+	 * that says "pay this", so both doors are offered rather than one being picked
+	 * on the person's behalf.
+	 */
+	let statement = $state<{ file: File; rows: number; ambiguous: boolean } | null>(null);
 	let reading = $state(false);
 	/** Whether a photo can be offered at all — decides the file picker's reach. */
 	const visionOn = $derived(vision.allowed);
@@ -112,12 +117,30 @@
 					: "This PDF is a scan, so there's no text to read. You can still enter the amount yourself.";
 				return;
 			}
-			if (r.looksLikeStatement) {
+			if (r.shape === 'statement') {
 				// A list of transactions, not a bill. There is no single amount to
 				// find, and saying "couldn't find an amount" would be true and
 				// useless — the app reads these very well, one screen over.
 				r.dispose();
-				statement = { file, rows: r.statementRows };
+				statement = { file, rows: r.statementRows, ambiguous: false };
+				return;
+			}
+			if (r.shape === 'ambiguous') {
+				/*
+				 * Dated rows and a figure asking to be paid. An itemised invoice and a
+				 * two-line statement look the same from here, and guessing wrong in
+				 * the bill direction is the expensive one — it would prefill a
+				 * purchase with what might be an account balance. So both doors are
+				 * offered, and the bill result is kept so neither costs a re-read.
+				 */
+				statement = { file, rows: r.statementRows, ambiguous: true };
+				if (r.extraction.total) {
+					result = r;
+					chosenAmount = r.extraction.total;
+					chosenPage = r.suggestedPage;
+				} else {
+					r.dispose();
+				}
 				return;
 			}
 			if (!r.extraction.total) {
@@ -236,16 +259,34 @@
 			you rather than being picked twice.
 		-->
 		<div class="p-4">
-			<p class="section-label">That looks like a statement</p>
+			<p class="section-label">
+				{statement.ambiguous ? 'Which is this?' : 'That looks like a statement'}
+			</p>
 			<p class="mt-2 text-[14px] leading-relaxed" style="color: var(--ink-2)">
-				There are about {statement.rows} transactions in this PDF, so it's a month of spending rather
-				than one bill — there's no single amount to put on a purchase. Reconcile reads it properly and
-				ticks it against what's already recorded.
+				{#if statement.ambiguous}
+					This has {statement.rows}
+					dated {statement.rows === 1 ? 'transaction' : 'transactions'} on it and something that reads
+					as an amount due, so it could be an itemised bill or a short statement. They're handled differently,
+					and guessing wrong would put the wrong figure on a purchase — so which is it?
+				{:else}
+					There {statement.rows === 1 ? 'is' : 'are'}
+					{statement.rows}
+					dated {statement.rows === 1 ? 'transaction' : 'transactions'} in this PDF, so it's a record
+					of spending rather than one bill — there's no single amount to put on a purchase. Reconcile
+					reads it properly and ticks it against what's already recorded.
+				{/if}
 			</p>
 			<div class="mt-3 flex flex-wrap items-center gap-2">
 				<button onclick={toReconcile} class="btn btn-accent px-3.5 py-1.5 text-[13px]">
-					Reconcile it instead
+					{statement.ambiguous ? "It's a statement" : 'Reconcile it instead'}
 				</button>
+				{#if statement.ambiguous && result}
+					<button
+						onclick={() => (statement = null)}
+						class="btn btn-ghost px-3.5 py-1.5 text-[13px]"
+						style="color: var(--ink-2)">It's a bill</button
+					>
+				{/if}
 				<button
 					onclick={reset}
 					class="press text-[13px] underline underline-offset-2"
@@ -399,18 +440,36 @@
 			<!-- Only worth asking when there is a choice; one page needs no picker. -->
 			{#if result.pages.length > 1}
 				<p class="section-label mt-4 mb-1.5">Keep which page</p>
-				<div class="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+				<!--
+					The selected page used to be ringed in `--ink`, which in dark mode is
+					very nearly the colour of the white page it was drawn around — and the
+					ring sat outside the thumbnail where the scroll container clipped it.
+					Two things fix it: the workspace accent, which is never the colour of
+					paper, and an *inset* ring that lands on the thumbnail itself rather
+					than in the gap beside it. The tick is the belt to that braces, for
+					anyone who can't pick the accent out at all.
+				-->
+				<div class="-mx-1 flex gap-2.5 overflow-x-auto px-1 py-1.5">
 					{#each result.pages as pg (pg.pageNumber)}
+						{@const on = chosenPage === pg.pageNumber}
 						<button
 							onclick={() => (chosenPage = pg.pageNumber)}
 							aria-label="Page {pg.pageNumber}"
-							aria-pressed={chosenPage === pg.pageNumber}
-							class="press shrink-0 overflow-hidden rounded-[var(--r-sm)]"
-							style="box-shadow: 0 0 0 {chosenPage === pg.pageNumber
-								? '2px var(--ink)'
-								: '1px var(--hairline)'}"
+							aria-pressed={on}
+							class="press relative shrink-0 overflow-hidden rounded-[var(--r-sm)] transition-shadow"
+							style="box-shadow: {on
+								? 'inset 0 0 0 3px var(--ws-accent), 0 0 0 2px var(--ws-accent)'
+								: 'inset 0 0 0 1px var(--hairline)'}"
 						>
-							<img src={pg.previewUrl} alt="" class="h-[110px] w-auto" />
+							<img src={pg.previewUrl} alt="" class="h-[110px] w-auto {on ? '' : 'opacity-60'}" />
+							{#if on}
+								<span
+									class="absolute right-1 bottom-1 grid h-5 w-5 place-items-center rounded-full"
+									style="background: var(--ws-accent); color: var(--paper)"
+								>
+									<Check class="h-3 w-3" />
+								</span>
+							{/if}
 						</button>
 					{/each}
 				</div>

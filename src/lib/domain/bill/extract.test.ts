@@ -89,6 +89,30 @@ describe('findAmounts', () => {
 		expect(findAmounts(lines)[0].minor).toBe(15000);
 	});
 
+	it.each([
+		// The bug this guards: with `*` on the grouped alternative, the ordered
+		// alternation matched "125" out of "1250.00" and the plain-number branch
+		// never ran. A $1,250 bill printed without a comma — completely ordinary —
+		// read as $125.00. Silently, plausibly, in the deterministic reader.
+		['1250.00', 125000],
+		['2395.25', 239525],
+		['12345.67', 1234567],
+		// The grouped and European forms the separator branch exists for.
+		['1,250.00', 125000],
+		['1.234,56', 123456],
+		// Three digits and under never needed the branch at all.
+		['999.99', 99999],
+		['150.00', 15000]
+	])('reads %s whether or not it carries a thousands separator', (printed, minor) => {
+		const lines = toLines(
+			layout([
+				[50, 100, 'Amount Due'],
+				[300, 100, printed]
+			])
+		);
+		expect(findAmounts(lines)[0].minor).toBe(minor);
+	});
+
 	it('ignores reference numbers', () => {
 		const lines = toLines(
 			layout([

@@ -33,7 +33,7 @@ export async function safeToSpend(db: Db, scope: ForecastScope, now: Date): Prom
 	const period = monthPeriod(today);
 	const { from, to } = periodBoundsUtc(period, scope.timezone);
 
-	const [incomeMinor, upcomingBillsMinor, stillToAccrueMinor, flows, bucket, budgetRemainingMinor] =
+	const [incomeMinor, bills, stillToAccrueMinor, flows, bucket, budgetRemainingMinor] =
 		await Promise.all([
 			monthIncome(db, scope.workspaceId, period, scope.timezone),
 			upcomingBills(db, scope.workspaceId, period, scope.timezone),
@@ -70,7 +70,8 @@ export async function safeToSpend(db: Db, scope: ForecastScope, now: Date): Prom
 			// plain cash going out, so the overdrafted part comes back in here.
 			cashSpentMinor: flows.cashSpentMinor + bucket.overdraftMinor,
 			cashCommittedMinor: flows.cashCommittedMinor,
-			upcomingBillsMinor,
+			upcomingBillsMinor: bills.minor,
+			upcomingBillsEstimated: bills.estimated,
 			savingsMinor,
 			reservedMinor: flows.reservedMinor,
 			sleepingMinor: flows.sleepingMinor,
@@ -119,17 +120,19 @@ async function upcomingBills(
 	workspaceId: string,
 	period: ReturnType<typeof monthPeriod>,
 	tz: string
-): Promise<bigint> {
+): Promise<{ minor: bigint; estimated: boolean }> {
 	const rules = await db
 		.select({
 			amountMinor: recurringRule.amountMinor,
 			rrule: recurringRule.rrule,
-			nextOccurrenceAt: recurringRule.nextOccurrenceAt
+			nextOccurrenceAt: recurringRule.nextOccurrenceAt,
+			autoComplete: recurringRule.autoComplete
 		})
 		.from(recurringRule)
 		.where(and(eq(recurringRule.workspaceId, workspaceId), eq(recurringRule.status, 'active')));
 
 	let total = 0n;
+	let estimated = false;
 	for (const r of rules) {
 		if (!r.nextOccurrenceAt) continue;
 		try {
@@ -137,17 +140,22 @@ async function upcomingBills(
 			// rule's next occurrence, but never before the month itself.
 			const nextCal = calDateInZone(r.nextOccurrenceAt, tz);
 			const fromCal = compareDates(nextCal, period.from) < 0 ? period.from : nextCal;
-			total += sumRecurringInWindow(
+			const part = sumRecurringInWindow(
 				parseRRule(r.rrule),
 				r.amountMinor,
 				fromCal,
 				period.toExclusive
 			);
+			total += part;
+			// Only rules that actually contribute this month can make the figure a
+			// projection — a confirm-at-price rule with nothing due in the window
+			// has no bearing on it.
+			if (part > 0n && !r.autoComplete) estimated = true;
 		} catch {
 			/* malformed rule — skip it, the same way the sweep does */
 		}
 	}
-	return total;
+	return { minor: total, estimated };
 }
 
 /**

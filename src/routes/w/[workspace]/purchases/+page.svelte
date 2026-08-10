@@ -609,9 +609,14 @@
 	</div>
 {/snippet}
 
-{#snippet runwayLine(label: string, minor: bigint, kind: 'add' | 'sub' | 'total')}
+{#snippet runwayLine(label: string, minor: bigint, kind: 'add' | 'sub' | 'total', estimate = false)}
 	<div class="flex items-center justify-between {kind === 'total' ? '' : 'mt-1.5'}">
 		<span style="color: {kind === 'total' ? 'var(--ink)' : 'var(--ink-3)'}">{label}</span>
+		<!--
+			A dotted figure is a projection, not a measurement. Same notation as the
+			calendar, for the same reason and deliberately nowhere else: it only
+			carries meaning while it stays rare.
+		-->
 		<span
 			class="num {kind === 'total' ? 'font-semibold' : ''}"
 			style="color: {kind === 'total'
@@ -620,7 +625,9 @@
 					: 'var(--ink)'
 				: kind === 'add'
 					? 'var(--ink)'
-					: 'var(--ink-3)'}"
+					: 'var(--ink-3)'}; {estimate
+				? 'text-decoration: underline dotted; text-underline-offset: 3px;'
+				: ''}"
 		>
 			{kind === 'add' ? '+' : kind === 'sub' ? '−' : ''}{formatMinor(minor, data.currency)}
 		</span>
@@ -713,7 +720,12 @@
 					transition:slide={{ duration: 220 }}
 				>
 					{@render runwayLine('Income', f.breakdown.incomeMinor, 'add')}
-					{@render runwayLine('Recurring', f.breakdown.upcomingBillsMinor, 'sub')}
+					{@render runwayLine(
+						'Recurring',
+						f.breakdown.upcomingBillsMinor,
+						'sub',
+						f.breakdown.upcomingBillsEstimated
+					)}
 					{@render runwayLine('Saved', f.breakdown.savingsMinor, 'sub')}
 					{@render runwayLine('Approved', f.breakdown.cashCommittedMinor, 'sub')}
 					{@render runwayLine('Spent', f.breakdown.cashSpentMinor, 'sub')}
@@ -753,6 +765,13 @@
 								>{formatMinor(f.breakdown.budgetRemainingMinor, data.currency)}</span
 							>
 						</div>
+					{/if}
+					{#if f.breakdown.upcomingBillsEstimated}
+						<!-- Said once, under the figures, rather than on the row itself. -->
+						<p class="mt-2.5 text-[12px] leading-relaxed" style="color: var(--ink-3)">
+							The dotted figure is an estimate — some of those bills ask you to confirm the real
+							price, so it's what they came to last time.
+						</p>
 					{/if}
 				</div>
 			{/if}
