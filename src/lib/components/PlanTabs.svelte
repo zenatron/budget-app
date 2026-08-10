@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { CalendarDays } from '@lucide/svelte';
 
 	/**
 	 * Sub-navigation for the Plan tab. Recurring charges and buckets are both
@@ -19,7 +20,12 @@
 	];
 </script>
 
-<div class="mb-4 flex justify-center">
+<!--
+	The pill stays centred; the calendar sits beside it rather than in it. A third
+	tab would have said the calendar is a sibling of Recurring and Buckets, and it
+	isn't — it's a view *across* both, which is why it reads as an action.
+-->
+<div class="relative mb-4 flex justify-center">
 	<div class="inline-flex rounded-[12px] p-1" style="background: var(--surface-2)" role="tablist">
 		{#each items as item (item.key)}
 			{@const active = current === item.key}
@@ -39,4 +45,13 @@
 			</a>
 		{/each}
 	</div>
+	<a
+		href="/w/{slug}/calendar"
+		class="press absolute top-1/2 right-0 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full"
+		style="color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--hairline)"
+		aria-label="Month calendar"
+		title="What's coming, by day"
+	>
+		<CalendarDays class="h-4 w-4" />
+	</a>
 </div>

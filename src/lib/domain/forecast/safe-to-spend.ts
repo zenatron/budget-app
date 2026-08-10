@@ -183,14 +183,33 @@ export function sumRecurringInWindow(
 	fromInclusive: CalDate,
 	toExclusive: CalDate
 ): bigint {
-	if (compareDates(fromInclusive, toExclusive) >= 0) return 0n;
-	let total = 0n;
+	return BigInt(occurrencesInWindow(rec, fromInclusive, toExclusive).length) * amountMinor;
+}
+
+/**
+ * The dates a recurrence lands on in [fromInclusive, toExclusive).
+ *
+ * The expansion itself, which `sumRecurringInWindow` used to keep to itself. A
+ * calendar wants the days rather than the total, and having both read the same
+ * walk is the point: a month whose figures and whose grid disagreed about when
+ * a bill falls would be worse than either alone.
+ *
+ * Bounded at 400 iterations so a malformed or absurdly dense rule can't spin —
+ * comfortably more than a daily rule produces in any window a caller asks for.
+ */
+export function occurrencesInWindow(
+	rec: Recurrence,
+	fromInclusive: CalDate,
+	toExclusive: CalDate
+): CalDate[] {
+	if (compareDates(fromInclusive, toExclusive) >= 0) return [];
+	const out: CalDate[] = [];
 	let cursor = addDays(fromInclusive, -1); // nextOccurrence is strictly-after, so back up one
 	for (let i = 0; i < 400; i++) {
 		const occ = nextOccurrence(rec, cursor);
 		if (compareDates(occ, toExclusive) >= 0) break;
-		total += amountMinor;
+		out.push(occ);
 		cursor = occ;
 	}
-	return total;
+	return out;
 }
