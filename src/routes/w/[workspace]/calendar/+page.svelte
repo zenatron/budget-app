@@ -35,15 +35,20 @@
 	const blanks = $derived(Array.from({ length: data.month.leadingBlanks }, (_, i) => i));
 
 	/**
-	 * Rounded to the whole unit, and never to nothing. A £0.40 charge shown as
-	 * "0" reads as free; anything under a unit rounds up to 1 so a cell never
-	 * claims a cost isn't there.
+	 * Rounded to the whole unit, half up — add half a unit, then truncate. Integer
+	 * division alone floors, so £12.60 was showing as £12: a cell that reads low
+	 * every time, which for a glance-first figure is the wrong direction to be
+	 * wrong in.
+	 *
+	 * The one case that needs a word: an amount under half a unit rounds to zero,
+	 * and "£0" on a highlighted day reads as "nothing happened". It shows "<1"
+	 * instead — still true, and it doesn't claim the day is free.
 	 */
 	function whole(minor: bigint): string {
 		const abs = minor < 0n ? -minor : minor;
 		if (abs === 0n) return '0';
-		const units = abs / 100n;
-		return String(units === 0n ? 1n : units);
+		const units = (abs + 50n) / 100n;
+		return units === 0n ? '<1' : String(units);
 	}
 
 	const symbol = $derived(
@@ -78,14 +83,14 @@
 		<div class="flex shrink-0 items-center gap-1">
 			<a
 				href="?m={data.month.prev}"
-				class="press grid h-9 w-9 place-items-center rounded-full"
-				style="color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--hairline)"
+				class="press flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-sm)]"
+				style="color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--hairline); background: var(--surface)"
 				aria-label="Previous month"><ChevronLeft class="h-4 w-4" /></a
 			>
 			<a
 				href="?m={data.month.next}"
-				class="press grid h-9 w-9 place-items-center rounded-full"
-				style="color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--hairline)"
+				class="press flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-sm)]"
+				style="color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--hairline); background: var(--surface)"
 				aria-label="Next month"><ChevronRight class="h-4 w-4" /></a
 			>
 		</div>
@@ -203,7 +208,15 @@
 		use:modal
 		transition:scale={{ start: 0.96, duration: 170 }}
 	>
-		<div class="card-lg overflow-hidden" style="box-shadow: var(--shadow-float)">
+		<!--
+			`card-lg` is a border-radius and nothing else — every other sheet in the
+			app pairs it with an explicit surface. Without one the scrim showed
+			straight through, which read as a translucent panel nothing else here has.
+		-->
+		<div
+			class="card-lg overflow-hidden"
+			style="box-shadow: var(--shadow-float); background: var(--surface)"
+		>
 			<div class="flex items-center justify-between px-5 pt-4 pb-2">
 				<h2 class="font-[family-name:var(--font-display)] text-[20px]" style="color: var(--ink)">
 					{data.month.label.split(' ')[0]}

@@ -47,11 +47,11 @@
 	</div>
 	<a
 		href="/w/{slug}/calendar"
-		class="press absolute top-1/2 right-0 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full"
-		style="color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--hairline)"
+		class="press absolute top-1/2 right-0 flex h-[38px] w-[38px] -translate-y-1/2 items-center justify-center rounded-[var(--r-sm)]"
+		style="box-shadow: inset 0 0 0 1px var(--hairline); background: var(--surface)"
 		aria-label="Month calendar"
 		title="What's coming, by day"
 	>
-		<CalendarDays class="h-4 w-4" />
+		<CalendarDays class="h-4 w-4" style="color: var(--ink-3)" />
 	</a>
 </div>
