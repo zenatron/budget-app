@@ -15,12 +15,11 @@ import {
 } from '$lib/domain/analytics/period';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { calDateInZone } from '$lib/domain/time/zoned';
-import { parse, type ParsedIntent, type TimePeriod } from '$lib/intelligence/parser';
-import { outOfBriefingScope } from '$lib/domain/intelligence/briefing-scope';
+import { parse, type TimePeriod } from '$lib/intelligence/parser';
+import { answerAsk, askOutcomeToWire, ASK_FALLBACK } from '$lib/application/ask';
 import { formatPct } from '$lib/format';
 import { getLlmAssist } from '$lib/infra/llm';
 import { briefingField } from '$lib/infra/llm/prompt';
-import type { ParsedAction } from '$lib/ports/llm-assist';
 import type { WorkspaceRow } from '$lib/server/repo/workspaces';
 import type { RequestHandler } from './$types';
 
@@ -44,149 +43,6 @@ function assertSameOrigin(request: Request): void {
 	const allowed = new URL(getEnv().PUBLIC_ORIGIN).origin;
 	if (origin !== allowed && origin !== new URL(request.url).origin) {
 		error(403, 'Cross-origin request rejected');
-	}
-}
-
-function stripControlChars(s: string): string {
-	return s
-		.split('')
-		.filter((c) => {
-			const code = c.charCodeAt(0);
-			return code > 0x1f && code !== 0x7f;
-		})
-		.join('');
-}
-
-/** Strip control characters, collapse whitespace, and cap length for a label. */
-function safeName(raw: string, maxLen = 120): string | null {
-	const cleaned = stripControlChars(raw).replace(/\s+/g, ' ').trim();
-	if (!cleaned) return null;
-	return cleaned.length > maxLen ? cleaned.slice(0, maxLen).trim() : cleaned;
-}
-
-/** -1 means "last day of the month"; otherwise clamp to 1-28. */
-function normalizeDay(d: number): number {
-	if (d === -1) return 28;
-	return Math.min(Math.max(d, 1), 28);
-}
-
-function moneyFromNumber(amount: number, currency: string): Money | null {
-	if (!Number.isFinite(amount) || amount <= 0) return null;
-	try {
-		return Money.fromDecimal(String(amount), currency);
-	} catch {
-		return null;
-	}
-}
-
-/**
- * Build a response that asks the user to confirm before anything is written.
- * The LLM (or deterministic parser) only ever *prepares* an action here; it
- * never executes one.
- */
-function buildActionResponse(
-	action: ParsedAction,
-	ws: WorkspaceRow,
-	query: string
-): { intent: string; answer: string; describe?: string; propose?: unknown } | null {
-	const currency = ws.currency;
-
-	if (action.intent === 'log_purchase') {
-		return {
-			intent: 'log_purchase',
-			answer: 'I’ll open the add screen with what you said. You can edit before saving.',
-			describe: query
-		};
-	}
-
-	if (action.intent === 'navigate') {
-		return {
-			intent: 'navigate',
-			answer: `Open ${action.target}`,
-			propose: { intent: 'navigate', target: action.target, label: action.target }
-		};
-	}
-
-	if (action.intent === 'create_bucket') {
-		const name = safeName(action.name);
-		const amount = moneyFromNumber(action.amount, currency);
-		if (!name) {
-			return { intent: 'create_bucket', answer: 'I need a name for the bucket.' };
-		}
-		if (!amount) {
-			return { intent: 'create_bucket', answer: 'I need a positive amount for the bucket.' };
-		}
-		const day = normalizeDay(action.dayOfMonth);
-		return {
-			intent: 'propose',
-			answer: `Create bucket “${name}” — ${amount.format()}/mo on day ${day}`,
-			propose: {
-				intent: 'create_bucket',
-				name,
-				amount: action.amount,
-				amountMinor: amount.minor.toString(),
-				dayOfMonth: day,
-				currency
-			}
-		};
-	}
-
-	if (action.intent === 'create_income') {
-		const source = safeName(action.source);
-		const amount = moneyFromNumber(action.amount, currency);
-		if (!source) {
-			return { intent: 'create_income', answer: 'I need a source for the income.' };
-		}
-		if (!amount) {
-			return { intent: 'create_income', answer: 'I need a positive amount for the income.' };
-		}
-		const day = normalizeDay(action.dayOfMonth);
-		const cadence = action.monthly ? 'monthly' : 'once';
-		return {
-			intent: 'propose',
-			answer: `Add income “${source}” — ${amount.format()} ${cadence}${action.monthly ? ` on day ${day}` : ''}`,
-			propose: {
-				intent: 'create_income',
-				source,
-				amount: action.amount,
-				amountMinor: amount.minor.toString(),
-				monthly: action.monthly,
-				dayOfMonth: day,
-				currency
-			}
-		};
-	}
-
-	return null;
-}
-
-/**
- * Convert the deterministic parser's output into the same closed action shape
- * the LLM uses, so both paths share the same proposal/confirmation flow.
- */
-function deterministicAction(parsed: ParsedIntent): ParsedAction | null {
-	switch (parsed.intent) {
-		case 'create_bucket':
-			return {
-				intent: 'create_bucket',
-				name: parsed.name,
-				amount: parsed.amount,
-				dayOfMonth: parsed.dayOfMonth
-			};
-		case 'create_income':
-			return {
-				intent: 'create_income',
-				source: parsed.source,
-				amount: parsed.amount,
-				monthly: parsed.cadence === 'monthly',
-				dayOfMonth: parsed.dayOfMonth
-			};
-		case 'navigate':
-			return { intent: 'navigate', target: parsed.target };
-		case 'log_purchase':
-			return { intent: 'log_purchase' };
-		default:
-			return null;
 	}
 }
 
@@ -273,16 +129,8 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	const now = systemClock.now();
 	const today = calDateInZone(now, scope.timezone);
 
-	// First, try the deterministic parser for anything it already understands.
-	const action = deterministicAction(parsed);
-	if (action) {
-		const response = buildActionResponse(action, ws, query);
-		if (response) return jsonSafe(response);
-	}
-
-	// The optional model, shared by the two things it can help with below: turning
-	// a stumped command into a safe action, and — failing that — answering a
-	// free-text question. Absent by default, in which case both paths no-op.
+	// The optional model. Absent by default, in which case every path below is
+	// exactly what it would have been with no model at all.
 	const assist = getLlmAssist({
 		aiMode: ws.aiMode,
 		aiEndpoint: ws.aiEndpoint,
@@ -290,16 +138,18 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		aiApiKey: ws.aiApiKey
 	});
 
-	// If the deterministic parser is stumped and an LLM is configured, let the
-	// model extract a safe, constructive action. It is still only preparing; the
-	// response below always asks the user to confirm before writing.
-	if (parsed.intent === 'unknown' && assist.available) {
-		const guessed = await assist.parseCommand({ query });
-		if (guessed && guessed.intent !== 'unknown') {
-			const response = buildActionResponse(guessed, ws, query);
-			if (response) return jsonSafe(response);
-		}
-	}
+	/*
+	 * Everything except the three data-backed intents is decided in
+	 * `application/ask`: deterministic parser first, then a constrained model
+	 * command, then the out-of-scope refusal, then narration. A null back means
+	 * this is one of those data intents, answered from the repositories below.
+	 * The briefing is a thunk so it is only built on the one path that needs it.
+	 */
+	const outcome = await answerAsk(
+		{ assist, briefing: () => buildBriefing(db, scope, ws, now, today), currency, today },
+		{ query, parsed }
+	);
+	if (outcome) return jsonSafe(askOutcomeToWire(outcome));
 
 	if (parsed.intent === 'spending_query') {
 		const period = timeToPeriod(parsed.period);
@@ -374,49 +224,8 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		});
 	}
 
-	/*
-	 * Nothing deterministic matched. Before reaching for the model, check whether
-	 * the briefing could contain the answer at all — it spans this month and last
-	 * month, so a question about March or 2024 is unanswerable from it no matter
-	 * how well the model behaves. Settling that here rather than asking the model
-	 * to own up to it means the refusal is a fact about our data instead of a
-	 * hoped-for property of a small local model, and it reads the same whether the
-	 * assist is on, off, or timing out.
-	 */
-	const lastMonth = previousMonthPeriod(today);
-	const outOfScope = outOfBriefingScope(query, {
-		months: [
-			{ y: today.y, m: today.m },
-			{ y: lastMonth.from.y, m: lastMonth.from.m }
-		],
-		today: { y: today.y, m: today.m }
-	});
-	if (outOfScope) {
-		return jsonSafe({
-			intent: 'unknown',
-			raw: query,
-			answer:
-				`I only keep this month and last month close to hand, so I can't answer that for ${outOfScope.mention}. ` +
-				(outOfScope.suggest === 'ledger'
-					? 'The Ledger tab has it day by day.'
-					: 'The Analytics tab goes back further.')
-		});
-	}
-
-	// In scope, so let Harmony answer in plain language — but only over the real
-	// figures the core computes below, never numbers it invents. This is the path
-	// that makes the palette feel intelligent for anything phrased outside the
-	// parser's grammar ("am I spending more than last month?").
-	if (assist.available) {
-		const briefing = await buildBriefing(db, scope, ws, now, today);
-		const answer = await assist.answerQuestion({ query, briefing });
-		if (answer) return jsonSafe({ intent: 'answer', answer });
-	}
-
-	return jsonSafe({
-		intent: 'unknown',
-		raw: query,
-		answer:
-			'I couldn\'t understand that. Try a question like "how much did I spend on groceries last month?" or a command like "create a travel bucket of 500/mo".'
-	});
+	// `answerAsk` covers every remaining intent, so this is unreachable — but the
+	// three branches above are the only thing telling TypeScript so, and the
+	// deterministic reply is the right thing to send if that ever stops holding.
+	return jsonSafe({ intent: 'unknown', raw: query, answer: ASK_FALLBACK });
 };

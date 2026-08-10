@@ -9,6 +9,7 @@ import {
 	unignoreLine,
 	unlinkMatch
 } from '$lib/application/reconcile';
+import { getLlmAssist } from '$lib/infra/llm';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import type { Actions, PageServerLoad } from './$types';
@@ -44,13 +45,27 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 	return {
 		currency: ws.currency,
+		/*
+		 * Whether to offer "Help me find this" at all. `assist.available` is the
+		 * real gate everywhere in this app — not a workspace flag — and it is false
+		 * whenever the layer is off or misconfigured, which is the default. With it
+		 * false the review screen is exactly what it was: a shortlist, a search, and
+		 * a person.
+		 */
+		assistAvailable: getLlmAssist({
+			aiMode: ws.aiMode,
+			aiEndpoint: ws.aiEndpoint,
+			aiModel: ws.aiModel,
+			aiApiKey: ws.aiApiKey
+		}).available,
 		import: {
 			id: imp.id,
 			filename: imp.filename,
 			createdAt: imp.createdAt.toISOString(),
 			lineCount: imp.lineCount,
 			periodStart: imp.periodStart?.toISOString() ?? null,
-			periodEnd: imp.periodEnd?.toISOString() ?? null
+			periodEnd: imp.periodEnd?.toISOString() ?? null,
+			modelRead: imp.modelRead
 		},
 		lines: lines.map((l) => ({
 			id: l.id,
@@ -60,6 +75,14 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			rawDescription: l.rawDescription,
 			matchState: l.matchState,
 			matchReason: l.matchReason,
+			suggestions: l.suggestions.map((p) => ({
+				id: p.id,
+				itemName: p.itemName,
+				merchantName: p.merchantName,
+				categoryIcon: p.categoryIcon,
+				completedAt: p.completedAt?.toISOString() ?? null,
+				amountMinor: p.amountMinor
+			})),
 			purchase: l.purchase
 				? {
 						id: l.purchase.id,

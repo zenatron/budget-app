@@ -23,8 +23,9 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	const value = body?.value === true;
 
 	const updates: Partial<typeof workspace.$inferInsert> = {};
-	if (flag === 'intelligenceEnabled') updates.intelligenceEnabled = value;
-	else if (flag === 'billImportEnabled') updates.billImportEnabled = value;
+	// `intelligenceEnabled` is deliberately absent: the column is read by nothing,
+	// so accepting a write here would let a switch report a change it didn't make.
+	if (flag === 'billImportEnabled') updates.billImportEnabled = value;
 	else if (flag === 'bucketChargesSkipApproval') updates.bucketChargesSkipApproval = value;
 	else if (flag === 'keepStatementFiles') updates.keepStatementFiles = value;
 	else if (flag === 'safeToSpendAlertsEnabled') updates.safeToSpendAlertsEnabled = value;

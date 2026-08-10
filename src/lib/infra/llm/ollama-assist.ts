@@ -5,9 +5,16 @@ import {
 	baseUrl,
 	choiceMessages,
 	fetchWithTimeout,
+	type ChatMessage,
 	labelMessages,
+	ollamaImageMessages,
 	parseCommandMessages,
-	sanitizeAnswer
+	parseTranscription,
+	parseTranscriptionRows,
+	readFieldsMessages,
+	readRowsMessages,
+	sanitizeAnswer,
+	VISION_TIMEOUT_MS
 } from './prompt';
 import { parseActionJson } from './parse-action';
 
@@ -48,6 +55,40 @@ export function ollamaAssist(cfg: { endpoint: string; model: string }): LlmAssis
 		}
 	}
 
+	/**
+	 * Vision goes through its own request rather than `complete`: the image rides
+	 * on the message as base64, `format: 'json'` is always on, and the bound is
+	 * the longer one — a 2000px page on a local box is not a 15-second job.
+	 */
+	async function transcribe(
+		messages: ChatMessage[],
+		image: { data: Uint8Array; mediaType: string }
+	): Promise<string | null> {
+		try {
+			const res = await fetchWithTimeout(
+				`${base}/api/chat`,
+				{
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({
+						model: cfg.model,
+						messages: ollamaImageMessages(messages, image),
+						stream: false,
+						format: 'json',
+						options: { temperature: 0 }
+					})
+				},
+				VISION_TIMEOUT_MS
+			);
+			if (!res.ok) return null;
+			const data = await res.json();
+			const content = data?.message?.content;
+			return typeof content === 'string' ? content : null;
+		} catch {
+			return null;
+		}
+	}
+
 	return {
 		available: true,
 		describe: () => ({ mode: 'local', endpoint: base, model: cfg.model }),
@@ -81,6 +122,14 @@ export function ollamaAssist(cfg: { endpoint: string; model: string }): LlmAssis
 			// Plain prose, not JSON — narration wants sentences, not a schema.
 			const raw = await complete(answerQuestionMessages(query, briefing));
 			return raw === null ? null : sanitizeAnswer(raw);
+		},
+		async readFields(req) {
+			const raw = await transcribe(readFieldsMessages(req), req.image);
+			return raw === null ? null : parseTranscription(raw);
+		},
+		async readRows(req) {
+			const raw = await transcribe(readRowsMessages(req), req.image);
+			return raw === null ? null : parseTranscriptionRows(raw, req.maxRows);
 		}
 	};
 }

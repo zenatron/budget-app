@@ -5,7 +5,7 @@
 	import { modal } from '$lib/actions/modal';
 	import { formatMinor } from '$lib/money-format';
 	import { fade, scale } from 'svelte/transition';
-	import { Check, ChevronLeft, EyeOff, Link2, Plus, Undo2, X } from '@lucide/svelte';
+	import { Check, ChevronLeft, EyeOff, Link2, Plus, Sparkles, Undo2, X } from '@lucide/svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -14,6 +14,21 @@
 	/** The line whose "link by hand" picker is open, if any. */
 	let linking = $state<string | null>(null);
 	let linkQuery = $state('');
+
+	/*
+	 * "Help me find this": the optional model's only role in reconciliation.
+	 *
+	 * It reads the bank's shorthand — the thing the deterministic matcher can't,
+	 * because a descriptor shares no whole words with "flat white" — and picks one
+	 * of the candidates we already computed. What it produces is a *highlight in a
+	 * list the person is reading anyway*. Nothing is written, nothing is
+	 * preselected into a form, and the Link button below is still the only thing
+	 * that links. A wrong answer costs a glance.
+	 */
+	let asking = $state<string | null>(null);
+	let suggestedId = $state<string | null>(null);
+	/** Shown when the model was asked and declined, so the button isn't a no-op. */
+	let suggestMissed = $state(false);
 
 	const lines = $derived(data.lines);
 	const currency = $derived(data.currency);
@@ -51,22 +66,57 @@
 			: data.import.filename
 	);
 
-	/** Candidates narrowed by the picker's search box, best-dated first. */
+	/**
+	 * Candidates narrowed by the picker's search box, best-dated first — except
+	 * that a model's suggestion floats to the top so it doesn't have to be hunted
+	 * for. It is only ever moved and labelled, never auto-selected: the list is
+	 * still the whole list, in the same order, with one row lifted out of it.
+	 */
 	const linkCandidates = $derived.by(() => {
 		const q = linkQuery.trim().toLowerCase();
 		const all = [...data.candidates].sort((a, b) => b.completedAt.localeCompare(a.completedAt));
-		if (!q) return all.slice(0, 40);
-		return all
-			.filter(
-				(c) =>
-					c.itemName.toLowerCase().includes(q) || (c.merchantName ?? '').toLowerCase().includes(q)
-			)
-			.slice(0, 40);
+		const matching = !q
+			? all
+			: all.filter(
+					(c) =>
+						c.itemName.toLowerCase().includes(q) || (c.merchantName ?? '').toLowerCase().includes(q)
+				);
+		const lifted = suggestedId ? matching.filter((c) => c.id === suggestedId) : [];
+		return [...lifted, ...matching.filter((c) => c.id !== suggestedId)].slice(0, 40);
 	});
 
 	function openLinker(lineId: string) {
 		linking = lineId;
 		linkQuery = '';
+		suggestedId = null;
+		suggestMissed = false;
+	}
+
+	/**
+	 * Ask the model, then open the picker either way. Opening regardless is the
+	 * point: the button promises help finding a purchase, and a full searchable
+	 * list is help even when the model had nothing to say. Any failure — off,
+	 * offline, timed out, abstained — lands in the same place as a miss.
+	 */
+	async function askForHelp(lineId: string) {
+		asking = lineId;
+		let picked: string | null = null;
+		try {
+			const res = await fetch(`/w/${slug}/reconcile/${data.import.id}/suggest`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ lineId })
+			});
+			if (res.ok) picked = ((await res.json()) as { purchaseId: string | null }).purchaseId;
+		} catch {
+			// Nothing to report: the picker below is the fallback, and it's the same
+			// picker the "Link a purchase" button opens.
+		}
+		asking = null;
+		linking = lineId;
+		linkQuery = '';
+		suggestedId = picked;
+		suggestMissed = picked === null;
 	}
 
 	/**
@@ -177,6 +227,53 @@
 				</form>
 			</div>
 		{:else}
+			<!--
+				The matcher wouldn't claim this line, but it did rank what was in range
+				— close on amount and date, just not decisively enough to auto-match,
+				or beaten to its purchase by a stronger line. That ranking used to be
+				thrown away and the person got a blank search box for a question we had
+				already half-answered.
+
+				So it is offered here, best first, as a shortlist rather than a verdict:
+				"Did you mean" states plainly that this is a question, each row is one
+				tap to link, and the full search below stays exactly where it was for
+				when the answer isn't in the list. No model is involved — this is the
+				same deterministic scoring that produced the matches above.
+			-->
+			{#if l.suggestions.length > 0}
+				<p class="mt-2.5 text-[13px]" style="color: var(--ink-3)">Did you mean</p>
+				<div class="mt-1 flex flex-col gap-1.5">
+					{#each l.suggestions as s (s.id)}
+						<form method="POST" action="?/link" use:submit={{ success: 'Linked' }} class="contents">
+							<input type="hidden" name="lineId" value={l.id} />
+							<input type="hidden" name="purchaseId" value={s.id} />
+							<button
+								class="press flex w-full items-center gap-2 rounded-[10px] px-2.5 py-2 text-left"
+								style="background: var(--surface-2)"
+							>
+								{#if s.categoryIcon}<span class="shrink-0">{s.categoryIcon}</span>{/if}
+								<span class="min-w-0 flex-1">
+									<span class="block truncate text-[14px]" style="color: var(--ink-2)">
+										{s.itemName}{s.merchantName ? ` · ${s.merchantName}` : ''}
+									</span>
+									{#if s.completedAt}
+										<span class="num mt-0.5 block text-[12px]" style="color: var(--ink-4)">
+											{fmtDay(s.completedAt)}
+										</span>
+									{/if}
+								</span>
+								<span class="num shrink-0 text-[14px]" style="color: var(--ink-3)">
+									{formatMinor(s.amountMinor, l.currency)}
+								</span>
+								<span class="shrink-0 text-[12px] font-medium" style="color: var(--accent)">
+									Link
+								</span>
+							</button>
+						</form>
+					{/each}
+				</div>
+			{/if}
+
 			<!-- Nothing here matches it. Three honest answers: it's this purchase,
 			     it was never recorded, or it isn't a purchase at all. -->
 			<div class="mt-2.5 flex flex-wrap items-center gap-2">
@@ -187,6 +284,19 @@
 				>
 					<Link2 class="h-3.5 w-3.5" /> Link a purchase
 				</button>
+				{#if data.assistAvailable}
+					<!-- Offered only where it can help: a line with nothing on it, and
+					     only when an assist is actually configured. -->
+					<button
+						onclick={() => askForHelp(l.id)}
+						disabled={asking !== null}
+						class="btn btn-ghost px-3.5 py-1.5 text-[13px]"
+						style="color: var(--ws-accent)"
+					>
+						<Sparkles class="h-3.5 w-3.5" />
+						{asking === l.id ? 'Looking…' : 'Help me find this'}
+					</button>
+				{/if}
 				<a
 					href="/w/{slug}/purchases/new?describe={encodeURIComponent(describeFor(l))}"
 					class="btn btn-ghost px-3.5 py-1.5 text-[13px]"
@@ -232,6 +342,26 @@
 			{/if}
 		</p>
 	</div>
+
+	<!--
+		A standing notice, not a one-time toast. These figures were transcribed from
+		a picture by a model, and every judgement on this screen — is this the right
+		purchase, has this really cleared — is made against them. That is worth
+		saying on the screen where the judgements happen, for as long as they are
+		being made.
+	-->
+	{#if data.import.modelRead}
+		<div
+			class="card mt-4 flex items-start gap-2.5 p-3.5 text-[13px] leading-relaxed"
+			style="background: color-mix(in oklab, var(--pending) 12%, var(--surface)); color: var(--ink-2)"
+		>
+			<Sparkles class="mt-0.5 h-4 w-4 shrink-0" style="color: var(--pending)" />
+			<span>
+				Read from a picture of this statement, not from its text. Check each amount against the
+				statement before you clear it.
+			</span>
+		</div>
+	{/if}
 
 	{#if form?.error}
 		<div
@@ -314,6 +444,24 @@
 					<span class="sr-only">Search purchases</span>
 					<input bind:value={linkQuery} placeholder="Search purchases…" class="field text-[16px]" />
 				</label>
+				<!--
+					Say plainly which of the two happened. A model that declined is far
+					more common than one that guessed wrong, and silence after tapping
+					"Help me find this" reads as a broken button rather than an honest
+					"I don't know" — which is the answer we actually want it giving.
+				-->
+				{#if suggestedId}
+					<p class="mt-2 flex items-start gap-1.5 text-[12.5px]" style="color: var(--ws-accent)">
+						<Sparkles class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+						<span style="color: var(--ink-3)">
+							A guess is at the top. Check it against the statement line before you link it.
+						</span>
+					</p>
+				{:else if suggestMissed}
+					<p class="mt-2 text-[12.5px]" style="color: var(--ink-3)">
+						Nothing recognisable in that line — here's everything in the period.
+					</p>
+				{/if}
 			</div>
 			<div class="h-px" style="background: var(--hairline)"></div>
 
@@ -340,9 +488,17 @@
 									: 'hairline'}"
 							>
 								<span class="min-w-0 flex-1">
-									<span class="block truncate text-[15px]" style="color: var(--ink)"
-										>{c.itemName}</span
-									>
+									<span class="flex items-center gap-1.5">
+										<span class="truncate text-[15px]" style="color: var(--ink)">{c.itemName}</span>
+										{#if c.id === suggestedId}
+											<!-- Labelled, not styled-as-chosen: this row is a question. -->
+											<span
+												class="chip shrink-0"
+												style="color: var(--ws-accent); background: color-mix(in oklab, var(--ws-accent) 14%, transparent)"
+												>Guess</span
+											>
+										{/if}
+									</span>
 									<span class="mt-0.5 block truncate text-[13px]" style="color: var(--ink-3)">
 										{c.merchantName ? `${c.merchantName} · ` : ''}{fmtDay(c.completedAt)}
 									</span>

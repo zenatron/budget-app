@@ -20,16 +20,33 @@
 	let {
 		currency,
 		dayFirst = false,
+		vision = { allowed: false, reason: '' },
+		slug,
 		onapply
 	}: {
 		currency: string;
 		/** Workspace convention for 03/04/2026. */
 		dayFirst?: boolean;
+		/**
+		 * Whether a scan can be offered to the model, decided on the server — see
+		 * `server/vision-gate`. `certain: false` means we never established what the
+		 * model can do and are trying anyway, which the copy below admits to rather
+		 * than promising something it may not deliver.
+		 */
+		vision?: { allowed: true; certain: boolean } | { allowed: false; reason: string };
+		slug: string;
 		onapply: (v: { amount: string; vendor: string | null; image: File | null }) => void;
 	} = $props();
 
 	let busy = $state(false);
 	let error: string | null = $state(null);
+	/**
+	 * A scan we've read the pages of but have no text for. Held here rather than
+	 * acted on: reading it costs a model call and up to a minute, so it is offered
+	 * and not taken. See `scanned` in the markup.
+	 */
+	let scanned: ReadPdfResult | null = $state(null);
+	let reading = $state(false);
 	let result: ReadPdfResult | null = $state(null);
 	let chosenAmount: MoneyCandidate | null = $state(null);
 	let chosenPage = $state(1);
@@ -52,9 +69,21 @@
 			const { readPdf } = await import('$lib/bill/read-pdf');
 			const r = await readPdf(file, { dayFirst });
 			if (r.extraction.isScanned) {
+				/*
+				 * No text layer — this is a photograph of a page. The deterministic
+				 * extractor has nothing to work with, and this used to be where the
+				 * feature stopped. But the page image is already rendered, so if a
+				 * model that can look at it is configured, offer that instead of a
+				 * dead end. Still an offer: the read is slow and it is theirs to spend.
+				 */
+				if (vision.allowed) {
+					scanned = r;
+					return;
+				}
 				r.dispose();
-				error =
-					"This PDF is a scan, so there's no text to read. You can still enter the amount yourself.";
+				error = vision.reason
+					? `This PDF is a scan, so there's no text to read. ${vision.reason}`
+					: "This PDF is a scan, so there's no text to read. You can still enter the amount yourself.";
 				return;
 			}
 			if (!r.extraction.total) {
@@ -90,20 +119,103 @@
 		}
 	}
 
+	/**
+	 * Send the first page to the model and prefill from whatever survives the
+	 * app's own parsers. A field that didn't survive is simply absent, so a bill
+	 * whose total reads and whose date doesn't lands the total and leaves the rest
+	 * to the person — which is still better than the empty form this replaces.
+	 */
+	async function readScan() {
+		if (!scanned) return;
+		reading = true;
+		error = null;
+		try {
+			const blob = await scanned.renderPage(1);
+			const body = new FormData();
+			body.append('image', new File([blob], 'bill-p1.webp', { type: 'image/webp' }));
+			body.append('kind', 'bill');
+			const res = await fetch(`/w/${slug}/read-image`, { method: 'POST', body });
+			if (!res.ok) throw new Error(String(res.status));
+			const { read } = (await res.json()) as {
+				read: { totalMinor: string | null; vendor: string | null; dueDate: string | null } | null;
+			};
+			if (!read || (!read.totalMinor && !read.vendor)) {
+				error = "Couldn't make out this bill. Enter the amount yourself?";
+				return;
+			}
+			const image = new File([blob], 'bill-p1.webp', { type: 'image/webp' });
+			onapply({
+				amount: read.totalMinor ? major(Number(read.totalMinor)) : '',
+				vendor: read.vendor,
+				image
+			});
+			reset();
+		} catch {
+			error = "Couldn't read that scan.";
+		} finally {
+			reading = false;
+		}
+	}
+
 	function reset() {
 		result?.dispose();
 		result = null;
+		scanned?.dispose();
+		scanned = null;
+		reading = false;
 		chosenAmount = null;
 		chosenPage = 1;
 		error = null;
 		busy = false;
 	}
 
-	onDestroy(() => result?.dispose());
+	onDestroy(() => {
+		result?.dispose();
+		scanned?.dispose();
+	});
 </script>
 
 <div class="card overflow-hidden">
-	{#if !result}
+	{#if scanned}
+		<!--
+			A scan, and a model that might be able to look at it. Stated as an offer
+			with its cost attached, because the read is genuinely slow and can come
+			back with nothing — and because "we couldn't establish what your model
+			does" is a real answer we'd rather admit than paper over.
+		-->
+		<div class="p-4">
+			<p class="section-label">A scanned bill</p>
+			<p class="mt-2 text-[14px] leading-relaxed" style="color: var(--ink-2)">
+				There's no text in this PDF to read, so it's a picture of a page. Harmony can look at it and
+				try to make out the amount — that takes a moment, and it's a guess you'll confirm before
+				anything moves.
+			</p>
+			{#if vision.allowed && !vision.certain}
+				<p class="mt-2 text-[12.5px] leading-relaxed" style="color: var(--ink-3)">
+					We couldn't tell whether your model reads images. If it can't, you'll see its own error
+					and nothing will have changed.
+				</p>
+			{/if}
+			<div class="mt-3 flex flex-wrap items-center gap-2">
+				<button
+					onclick={readScan}
+					disabled={reading}
+					class="btn btn-accent px-3.5 py-1.5 text-[13px]"
+				>
+					<Sparkles class="h-3.5 w-3.5" />
+					{reading ? 'Looking at it…' : 'Have a look'}
+				</button>
+				<button
+					onclick={reset}
+					class="press text-[13px] underline underline-offset-2"
+					style="color: var(--ink-3)">I'll type it</button
+				>
+			</div>
+			{#if error}
+				<p class="mt-2 text-[13px]" style="color: var(--ink-3)">{error}</p>
+			{/if}
+		</div>
+	{:else if !result}
 		<!--
 			An action, not a field. The rows in the form below are things you fill in
 			and are styled as such — placeholder-grey with the label doing the asking.

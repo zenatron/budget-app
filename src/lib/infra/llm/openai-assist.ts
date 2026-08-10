@@ -5,9 +5,16 @@ import {
 	baseUrl,
 	choiceMessages,
 	fetchWithTimeout,
+	type ChatMessage,
 	labelMessages,
+	openaiImageMessages,
 	parseCommandMessages,
-	sanitizeAnswer
+	parseTranscription,
+	parseTranscriptionRows,
+	readFieldsMessages,
+	readRowsMessages,
+	sanitizeAnswer,
+	VISION_TIMEOUT_MS
 } from './prompt';
 import { parseActionJson } from './parse-action';
 
@@ -47,6 +54,39 @@ export function openaiAssist(cfg: {
 		}
 	}
 
+	/**
+	 * Vision over the content-parts shape. No `response_format` is requested:
+	 * plenty of OpenAI-compatible servers reject an unknown one outright, and
+	 * `parseTranscription` already digs the object out of whatever comes back —
+	 * which is the more portable place to be strict.
+	 */
+	async function transcribe(
+		messages: ChatMessage[],
+		image: { data: Uint8Array; mediaType: string }
+	): Promise<string | null> {
+		try {
+			const res = await fetchWithTimeout(
+				`${base}/v1/chat/completions`,
+				{
+					method: 'POST',
+					headers: authHeaders,
+					body: JSON.stringify({
+						model: cfg.model,
+						messages: openaiImageMessages(messages, image),
+						temperature: 0
+					})
+				},
+				VISION_TIMEOUT_MS
+			);
+			if (!res.ok) return null;
+			const data = await res.json();
+			const content = data?.choices?.[0]?.message?.content;
+			return typeof content === 'string' ? content : null;
+		} catch {
+			return null;
+		}
+	}
+
 	return {
 		available: true,
 		describe: () => ({ mode: 'external', endpoint: base, model: cfg.model }),
@@ -75,6 +115,14 @@ export function openaiAssist(cfg: {
 		async answerQuestion({ query, briefing }) {
 			const raw = await complete(answerQuestionMessages(query, briefing));
 			return raw === null ? null : sanitizeAnswer(raw);
+		},
+		async readFields(req) {
+			const raw = await transcribe(readFieldsMessages(req), req.image);
+			return raw === null ? null : parseTranscription(raw);
+		},
+		async readRows(req) {
+			const raw = await transcribe(readRowsMessages(req), req.image);
+			return raw === null ? null : parseTranscriptionRows(raw, req.maxRows);
 		}
 	};
 }

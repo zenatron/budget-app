@@ -91,9 +91,13 @@ export const workspace = pgTable('workspace', {
 	billImportEnabled: boolean('bill_import_enabled').notNull().default(false),
 	/** Alpha: barcode scanning. Off until a product-lookup API is wired up. */
 	barcodeEnabled: boolean('barcode_enabled').notNull().default(false),
-	/** Alpha: the intelligence surface — the ask palette and periodic summaries.
-	 *  Now defaults to true; deterministic Harmony is always on, only the optional
-	 *  LLM assist is toggled. Kept as a column so it can be gated again in future. */
+	/** Reserved, and deliberately **read by nothing**. Deterministic Harmony is
+	 *  always on and the optional LLM assist is gated by `aiMode` alone, so this
+	 *  column decides nothing today. It is kept — rather than dropped — so the
+	 *  surface can be gated again without a migration, but nothing may branch on
+	 *  it until something also writes it: a flag that is written and never read
+	 *  is a trap for the next reader of this schema, which is why the settings
+	 *  endpoint no longer accepts it. */
 	intelligenceEnabled: boolean('intelligence_enabled').notNull().default(true),
 	/** Whether Harmony's deterministic Safe-to-Spend alerts are sent. Workspace-wide. */
 	safeToSpendAlertsEnabled: boolean('safe_to_spend_alerts_enabled').notNull().default(true),
@@ -521,6 +525,20 @@ export const statementImport = pgTable(
 		lineCount: integer('line_count').notNull(),
 		matchedCount: integer('matched_count').notNull(),
 		status: text('status').notNull().default('reviewing'),
+		/**
+		 * True when these lines came off a *picture* of a statement that a model
+		 * transcribed, rather than off text the app read itself.
+		 *
+		 * It is carried for two reasons, and only one of them exists yet. The one
+		 * that does: the review screen says so, on every screen, so nobody ticks a
+		 * match off transcribed evidence without knowing that's what it is. The one
+		 * that doesn't yet: reconciliation cannot currently create a ledger entry,
+		 * but the day something can turn a bank line into a purchase, that feature
+		 * must refuse a model-read import — it would be the first path putting a
+		 * model-derived amount into the ledger directly. This column is what that
+		 * guard will be written against.
+		 */
+		modelRead: boolean('model_read').notNull().default(false),
 		contentHash: text('content_hash').notNull(),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull()
 	},
@@ -546,6 +564,19 @@ export const statementLine = pgTable(
 		matchState: statementLineMatchState('match_state').notNull().default('unmatched'),
 		matchedPurchaseId: uuid('matched_purchase_id').references(() => purchase.id),
 		matchReason: text('match_reason'),
+		/**
+		 * Purchase ids the matcher ranked for this line but would not claim, best
+		 * first. The ranking is computed at import for every line and used to be
+		 * discarded, which left an ambiguous line facing a blank search box even
+		 * though we already knew the two or three purchases it was probably about.
+		 *
+		 * Deliberately *just ids*, and deliberately not a foreign key: this is a
+		 * hint, not a relationship. Nothing reads it without re-checking each id
+		 * against the seal-filtered purchase rows, so a stale or invisible id
+		 * simply doesn't render. Empty for a matched line, and for a line with
+		 * nothing in range at all.
+		 */
+		suggestedPurchaseIds: jsonb('suggested_purchase_ids').notNull().default([]).$type<string[]>(),
 		dedupHash: text('dedup_hash').notNull()
 	},
 	(t) => [

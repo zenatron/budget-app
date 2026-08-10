@@ -92,6 +92,13 @@ export async function importStatement(
 		 * recorded about where the import came from.
 		 */
 		format?: 'csv' | 'pdf';
+		/**
+		 * True when the rows were transcribed off a *picture* of a statement by a
+		 * model, rather than read off text. Recorded on the import so the review
+		 * screen can say so on every line — see the column's note in schema.ts for
+		 * the second, not-yet-needed reason it is carried.
+		 */
+		modelRead?: boolean;
 	}
 ): Promise<ImportResult> {
 	if (input.csv.length > MAX_CSV_BYTES) {
@@ -189,6 +196,7 @@ export async function importStatement(
 			lineCount: lines.length,
 			matchedCount,
 			status: 'reviewing',
+			modelRead: input.modelRead === true,
 			contentHash,
 			createdAt: now
 		});
@@ -219,6 +227,10 @@ export async function importStatement(
 				matchState: isPrivate ? ('private' as const) : p.state,
 				matchedPurchaseId: p.purchaseId,
 				matchReason: isPrivate ? null : p.reason,
+				// The ranking the matcher already produced. Dropped for a `private`
+				// line by the same rule as `matchReason`: that state says "accounted
+				// for" without saying by what, and a shortlist would say by what.
+				suggestedPurchaseIds: isPrivate ? [] : p.suggestions.map((s) => s.purchaseId),
 				dedupHash: sha256(n === 0 ? key : `${key}#${n}`)
 			};
 		});

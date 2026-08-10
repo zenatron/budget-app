@@ -187,6 +187,195 @@ export function answerQuestionMessages(query: string, briefing: string): ChatMes
 export const ASSIST_TIMEOUT_MS = 15_000;
 
 /**
+ * Vision gets its own, longer bound. 15s is a sane ceiling for a few hundred
+ * tokens of text; it is not remotely enough for a 2000px page on a local box,
+ * where the image alone is thousands of tokens before the model starts
+ * answering. Timing out a call that would have worked is the same failure as a
+ * wrong answer from the user's side — they get nothing and type it themselves —
+ * so the bound has to fit the work.
+ */
+export const VISION_TIMEOUT_MS = 90_000;
+
+/**
+ * The shared instruction for both image readers. Three rules, each earning its
+ * place:
+ *
+ * - **Copy, don't compute.** The model is a transcriber here. The moment it
+ *   totals a column or converts a currency it is doing arithmetic nobody
+ *   checked, and the app has a deterministic core precisely so that it doesn't
+ *   have to trust that.
+ * - **Every value is a string, exactly as printed.** This is the contract the
+ *   whole safety story rests on: what comes back is glyphs, and our own parsers
+ *   decide whether they are money. See `domain/intelligence/read-fields`.
+ * - **Empty rather than guessed.** A field it cannot see must come back empty.
+ *   An invented plausible figure is the one failure that survives review, so the
+ *   prompt spends its words making abstention the easy answer.
+ */
+const TRANSCRIBER_RULES =
+	'You transcribe values from an image of a document. You are not an analyst.\n' +
+	'Rules:\n' +
+	'- Copy what is printed. Never add up, convert, estimate, or infer a value.\n' +
+	'- Every value must be a JSON string, written exactly as it appears on the page, ' +
+	'including its separators and any currency symbol.\n' +
+	'- If a value is not clearly visible, use an empty string. Never guess.\n' +
+	'- Reply with only the JSON. No explanation, no markdown, no code fences.';
+
+export function readFieldsMessages(req: {
+	instruction: string;
+	fields: { key: string; description: string }[];
+}): ChatMessage[] {
+	const shape = req.fields.map((f) => `  "${f.key}": "<${f.description}>"`).join(',\n');
+	return [
+		{ role: 'system', content: TRANSCRIBER_RULES },
+		{
+			role: 'user',
+			content:
+				`${req.instruction}\n\n` +
+				`Reply with exactly this JSON object, filling in the values:\n{\n${shape}\n}`
+		}
+	];
+}
+
+export function readRowsMessages(req: {
+	instruction: string;
+	columns: { key: string; description: string }[];
+	maxRows: number;
+}): ChatMessage[] {
+	const shape = req.columns.map((c) => `"${c.key}": "<${c.description}>"`).join(', ');
+	return [
+		{ role: 'system', content: TRANSCRIBER_RULES },
+		{
+			role: 'user',
+			content:
+				`${req.instruction}\n\n` +
+				`Reply with a JSON object of the form {"rows": [ { ${shape} } ]}.\n` +
+				`One entry per row visible in the image, in the order they appear, ` +
+				`at most ${req.maxRows}. If there are no rows, reply {"rows": []}.`
+		}
+	];
+}
+
+/**
+ * Base64 for a data payload, chunked so a multi-megabyte page render doesn't
+ * blow the argument limit on `String.fromCharCode(...)`.
+ */
+export function toBase64(data: Uint8Array): string {
+	let binary = '';
+	const CHUNK = 0x8000;
+	for (let i = 0; i < data.length; i += CHUNK) {
+		binary += String.fromCharCode(...data.subarray(i, i + CHUNK));
+	}
+	return btoa(binary);
+}
+
+/**
+ * The two wire shapes for an image, which is the only place the providers
+ * genuinely differ: Ollama takes bare base64 in an `images` array on the
+ * message, OpenAI-compatible takes a data URI inside a content-parts array.
+ */
+export function ollamaImageMessages(
+	messages: ChatMessage[],
+	image: { data: Uint8Array; mediaType: string }
+): { role: string; content: string; images?: string[] }[] {
+	const b64 = toBase64(image.data);
+	return messages.map((m, i) =>
+		// The image rides on the user turn, which is the last one and the one
+		// carrying the question about it.
+		i === messages.length - 1 && m.role === 'user'
+			? { role: m.role, content: m.content, images: [b64] }
+			: { role: m.role, content: m.content }
+	);
+}
+
+export function openaiImageMessages(
+	messages: ChatMessage[],
+	image: { data: Uint8Array; mediaType: string }
+): { role: string; content: unknown }[] {
+	const url = `data:${image.mediaType};base64,${toBase64(image.data)}`;
+	return messages.map((m, i) =>
+		i === messages.length - 1 && m.role === 'user'
+			? {
+					role: m.role,
+					content: [
+						{ type: 'text', text: m.content },
+						{ type: 'image_url', image_url: { url } }
+					]
+				}
+			: { role: m.role, content: m.content }
+	);
+}
+
+/**
+ * Read the transcription out of a model's reply, or null.
+ *
+ * Tolerant about the wrapping — a fenced block, or prose either side of the
+ * object, is a formatting slip rather than a bad answer — and completely
+ * intolerant about the contents: every value must already be a string, or the
+ * key is dropped. A model that returns `{"total": 1240.5}` has done arithmetic
+ * on a number we never saw, and a float is exactly the shape our parsers exist
+ * to avoid trusting. Numbers therefore never survive this function.
+ */
+export function parseTranscription(raw: string): Record<string, string> | null {
+	const obj = firstJsonObject(raw);
+	if (!obj) return null;
+	return stringsOnly(obj);
+}
+
+export function parseTranscriptionRows(
+	raw: string,
+	maxRows: number
+): Record<string, string>[] | null {
+	const obj = firstJsonObject(raw);
+	if (!obj) return null;
+	const rows = (obj as { rows?: unknown }).rows;
+	if (!Array.isArray(rows)) return null;
+	return rows
+		.filter((r): r is Record<string, unknown> => !!r && typeof r === 'object' && !Array.isArray(r))
+		.slice(0, maxRows)
+		.map(stringsOnly);
+}
+
+function stringsOnly(obj: Record<string, unknown>): Record<string, string> {
+	const out: Record<string, string> = {};
+	for (const [k, v] of Object.entries(obj)) {
+		if (typeof v === 'string') out[k] = v;
+	}
+	return out;
+}
+
+/** The first balanced `{…}` in a reply, parsed, or null. */
+function firstJsonObject(raw: string): Record<string, unknown> | null {
+	const start = raw.indexOf('{');
+	if (start === -1) return null;
+	let depth = 0;
+	let inString = false;
+	let escaped = false;
+	for (let i = start; i < raw.length; i++) {
+		const ch = raw[i];
+		if (inString) {
+			if (escaped) escaped = false;
+			else if (ch === '\\') escaped = true;
+			else if (ch === '"') inString = false;
+			continue;
+		}
+		if (ch === '"') inString = true;
+		else if (ch === '{') depth++;
+		else if (ch === '}') {
+			depth--;
+			if (depth === 0) {
+				try {
+					const parsed = JSON.parse(raw.slice(start, i + 1));
+					return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+				} catch {
+					return null;
+				}
+			}
+		}
+	}
+	return null;
+}
+
+/**
  * Bound and clean a narrated answer. The model is trusted to phrase, not to be
  * unbounded: strip control characters, collapse runs of whitespace, and cap the
  * length so a runaway generation can't flood the palette. Returns null for an

@@ -85,6 +85,51 @@ export async function processUpload(input: Uint8Array): Promise<ProcessedImage> 
 		throw new ImageValidationError('Could not decode this image');
 	}
 }
+/**
+ * Re-encode an image to JPEG for a model to look at.
+ *
+ * Not cosmetic, and not optional. **Ollama does not decode WebP** — and the
+ * failure is silent: the image is dropped from the request and the model,
+ * handed a bill-shaped question with no bill, answers from its priors. It
+ * invents a plausible vendor and a plausible total. That is the single worst
+ * outcome this whole layer is built to prevent, and it cannot be detected
+ * downstream, because a confabulated invoice looks exactly like a real one.
+ *
+ * WebP is the right format for storage and for the browser, so `read-pdf` keeps
+ * rendering it and the attached page is unchanged. This converts on the way to
+ * the model only, at the one point every image passes through, so no caller has
+ * to remember. JPEG rather than PNG because a photographed page is a photograph:
+ * a fifth of the bytes at the same legibility, and bytes are tokens here.
+ *
+ * The long edge stays generous — small print is the whole reason to be reading
+ * this at all, and downsampling a page until the model can't read the decimals
+ * would defeat the exercise more quietly than failing would.
+ */
+const MODEL_EDGE = 2000;
+const MODEL_QUALITY = 88;
+
+export async function toModelImage(
+	input: Uint8Array
+): Promise<{ data: Uint8Array; mediaType: 'image/jpeg' }> {
+	if (sniffFormat(input) === null) {
+		throw new ImageValidationError('Not a supported image (JPEG, PNG, or WebP)');
+	}
+	try {
+		const out = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })
+			.rotate()
+			.resize(MODEL_EDGE, MODEL_EDGE, { fit: 'inside', withoutEnlargement: true })
+			// Pages are transparent where nothing is drawn; flattened onto black by
+			// default, a bill becomes an unreadable rectangle.
+			.flatten({ background: '#ffffff' })
+			.jpeg({ quality: MODEL_QUALITY })
+			.toBuffer();
+		return { data: out, mediaType: 'image/jpeg' };
+	} catch (e) {
+		if (e instanceof ImageValidationError) throw e;
+		throw new ImageValidationError('Could not decode this image');
+	}
+}
+
 /** Max bytes for a user-uploaded avatar (10 MB). */
 export const MAX_AVATAR_BYTES = 10 * 1024 * 1024;
 const AVATAR_EDGE = 256;

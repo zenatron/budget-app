@@ -18,6 +18,7 @@ import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { getNotifier } from '$lib/server/notify';
+import { visionGate } from '$lib/server/vision-gate';
 import { getEnv } from '$lib/server/env';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -42,7 +43,18 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		listAccounts(db, locals.workspace!.id)
 	]);
 	const env = getEnv();
+	/*
+	 * Whether to offer reading a *scanned* bill — the one thing the deterministic
+	 * extractor can't do, because a scan has no text layer. Resolved on the server
+	 * because it needs the model catalog, and it carries its own refusal wording
+	 * so the UI never has to invent one. See domain/intelligence/capability-gate
+	 * for why "we couldn't establish it" fails open rather than closed.
+	 */
+	const vision = locals.workspace!.billImportEnabled
+		? await visionGate(locals.workspace!)
+		: { allowed: false as const, reason: 'Bill import is off for this workspace.' };
 	return {
+		vision,
 		categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
 		// Members the purchase could be hidden from (everyone active but me).
 		sealableMembers: members

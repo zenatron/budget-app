@@ -12,6 +12,7 @@ import { createAccount, listAccounts } from '$lib/server/repo/accounts';
 import { rateLimitOk } from '$lib/server/rate-limit';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
+import { visionGate } from '$lib/server/vision-gate';
 import type { Actions, PageServerLoad } from './$types';
 
 const deps = { clock: systemClock, ids: uuidv7 };
@@ -22,8 +23,15 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	void params.workspace;
 	const db = getDb();
 	const ws = locals.workspace!;
-	const [imports, accounts] = await Promise.all([listImports(db, ws.id), listAccounts(db, ws.id)]);
-	return { currency: ws.currency, imports, accounts };
+	const [imports, accounts, vision] = await Promise.all([
+		listImports(db, ws.id),
+		listAccounts(db, ws.id),
+		// Only consulted for a PDF with no text layer. Carries its own refusal
+		// wording, so the UI never invents one — see domain/intelligence/capability-gate
+		// for why "we couldn't establish it" fails open rather than closed.
+		visionGate(ws)
+	]);
+	return { currency: ws.currency, imports, accounts, vision };
 };
 
 /**
@@ -88,6 +96,14 @@ export const actions: Actions = {
 			return fail(400, { error: 'That file is too large to import.' });
 		}
 		const accountId = await accountFrom(form, locals.workspace!.id);
+		/*
+		 * Only ever true on the scanned path, which renders pages in the browser,
+		 * has them transcribed, shows a person the result, and posts the rows they
+		 * accepted. Anded with `format === 'pdf'` so a hand-rolled POST can't mark a
+		 * plain CSV as model-read — the marking is a warning, and a warning that can
+		 * be set on a file that didn't earn it is noise.
+		 */
+		const modelRead = form.get('modelRead') === 'true' && format === 'pdf';
 
 		/*
 		 * Column mapping. Auto-detection handles the common exports; when it
@@ -116,6 +132,7 @@ export const actions: Actions = {
 				needsMapping: true,
 				filename,
 				accountId,
+				modelRead,
 				headers: headerOf(csv),
 				csv,
 				error: "Couldn't work out which columns are which. Point them out below."
@@ -134,7 +151,8 @@ export const actions: Actions = {
 					currency: locals.workspace!.currency,
 					map: explicit,
 					accountId,
-					format
+					format,
+					modelRead
 				}
 			);
 			importId = result.importId;
@@ -153,6 +171,9 @@ export const actions: Actions = {
 		if (!csv) return fail(400, { error: 'That file is no longer available. Choose it again.' });
 		const accountId = await accountFrom(form, locals.workspace!.id);
 		const format = form.get('format') === 'pdf' ? ('pdf' as const) : ('csv' as const);
+		// Only ever true for the scanned path, which posts its rows from the client
+		// after a person has looked at them.
+		const modelRead = form.get('modelRead') === 'true' && format === 'pdf';
 
 		let importId: string;
 		try {
@@ -172,7 +193,8 @@ export const actions: Actions = {
 						dateOrder: (form.get('dateOrder') as 'MDY' | 'DMY' | 'YMD') || 'MDY'
 					},
 					accountId,
-					format
+					format,
+					modelRead
 				}
 			);
 			importId = result.importId;

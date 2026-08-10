@@ -225,6 +225,62 @@
 		photoInput.files = dt.files;
 		if (photoPreview) URL.revokeObjectURL(photoPreview);
 		photoPreview = URL.createObjectURL(file);
+		photoFile = file;
+		readError = '';
+	}
+
+	/*
+	 * Reading the attached photo as a receipt.
+	 *
+	 * Offered, never automatic. Most photos attached here are evidence rather
+	 * than a question — a picture of the thing bought, or a receipt for someone
+	 * else's benefit — and a model call that fires on every attachment would
+	 * spend a slow round trip on all of them to help some. It also stays out of
+	 * the way of the form: the amount you typed is not overwritten, so tapping it
+	 * after filling the form in can only add what's missing.
+	 */
+	let photoFile: File | null = $state(null);
+	let readingPhoto = $state(false);
+	let readError = $state('');
+
+	async function readPhoto() {
+		if (!photoFile || readingPhoto) return;
+		readingPhoto = true;
+		readError = '';
+		try {
+			const body = new FormData();
+			body.append('image', photoFile);
+			body.append('kind', 'receipt');
+			const res = await fetch(`/w/${slug}/read-image`, { method: 'POST', body });
+			if (!res.ok) {
+				readError = "Couldn't read that photo just now.";
+				return;
+			}
+			const { read } = (await res.json()) as {
+				read: { totalMinor: string | null; vendor: string | null; dueDate: string | null } | null;
+			};
+			if (!read || (!read.totalMinor && !read.vendor)) {
+				readError = "Couldn't make out a total on that. Fill it in below?";
+				return;
+			}
+			// Only ever fills a blank. Nothing you typed is overwritten by a guess.
+			if (read.totalMinor && !amount) amount = (Number(read.totalMinor) / 100).toFixed(2);
+			if (read.vendor && !merchantName) merchantName = read.vendor;
+			if (read.vendor && !itemName) itemName = read.vendor;
+			/*
+			 * The date needs its own rule. Every other field starts blank, so
+			 * "only fill a blank" protects what you typed — but `spentAt` is seeded
+			 * with today the moment the form knows the workspace timezone, so it is
+			 * never blank and the read date would never land. Yet a receipt for
+			 * something bought last Tuesday is exactly the case worth reading.
+			 * Untouched-and-still-today counts as blank; a date you picked does not.
+			 */
+			if (read.dueDate && spentAt === todayIso) spentAt = read.dueDate;
+		} catch {
+			readError = "Couldn't read that photo just now.";
+		} finally {
+			readingPhoto = false;
+		}
 	}
 
 	function applyBill(v: { amount: string; vendor: string | null; image: File | null }) {
@@ -308,6 +364,8 @@
 		const file = (e.currentTarget as HTMLInputElement).files?.[0];
 		if (photoPreview) URL.revokeObjectURL(photoPreview);
 		photoPreview = file ? URL.createObjectURL(file) : null;
+		photoFile = file ?? null;
+		readError = '';
 	}
 
 	onDestroy(() => {
@@ -356,7 +414,13 @@
 	{/if}
 
 	{#if data.billImportEnabled}
-		<BillImport currency={data.workspace.currency} dayFirst={data.dayFirst} onapply={applyBill} />
+		<BillImport
+			currency={data.workspace.currency}
+			dayFirst={data.dayFirst}
+			vision={data.vision}
+			slug={data.workspace.slug}
+			onapply={applyBill}
+		/>
 	{/if}
 
 	<form
@@ -596,6 +660,28 @@
 					onchange={onPhoto}
 				/>
 			</label>
+			<!--
+				A photo is usually evidence, sometimes a question. Offered rather than
+				run: it costs a slow round trip, and it only ever fills fields you have
+				left blank, so it can't overwrite something you typed.
+			-->
+			{#if photoFile && data.vision.allowed}
+				<div class="row" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
+					<button
+						type="button"
+						onclick={readPhoto}
+						disabled={readingPhoto}
+						class="press flex items-center gap-2 text-[15px]"
+						style="color: var(--ws-accent)"
+					>
+						<Sparkles class="h-4 w-4" />
+						{readingPhoto ? 'Reading the receipt…' : 'Read this receipt'}
+					</button>
+					{#if readError}
+						<span class="ml-auto text-[13px]" style="color: var(--ink-3)">{readError}</span>
+					{/if}
+				</div>
+			{/if}
 			<div class="row" style="box-shadow: inset 0 0.5px 0 var(--hairline); align-items: flex-start">
 				<Clock class="mt-0.5 h-5 w-5" style="color: var(--ink-3)" />
 				<textarea

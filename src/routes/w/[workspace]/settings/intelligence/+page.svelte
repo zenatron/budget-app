@@ -315,6 +315,12 @@
 							class="field mt-1 font-mono text-[15px]"
 						/>
 					</div>
+					<p class="text-[12.5px] leading-relaxed" style="color: var(--ink-3)">
+						No capability chips here: an OpenAI-compatible endpoint lists model names and nothing
+						more, so we never learn what yours can do. We don't guess — features that need something
+						specific are offered anyway, and if the model can't do it you'll see your provider's own
+						error rather than ours.
+					</p>
 				{/if}
 			{/if}
 

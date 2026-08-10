@@ -41,6 +41,17 @@ export interface AssistProvider {
 	model: string | null;
 }
 
+/**
+ * An image to read. Raw bytes plus a declared type — never a path, a URL, or a
+ * data URI the caller assembled, so an adapter can't be talked into fetching
+ * something. The three types are what `infra/images/process` already normalises
+ * to and what `read-pdf` already renders.
+ */
+export interface ImageInput {
+	data: Uint8Array;
+	mediaType: 'image/webp' | 'image/jpeg' | 'image/png';
+}
+
 export interface LlmAssist {
 	/** False whenever the layer is off or misconfigured — callers gate on this. */
 	readonly available: boolean;
@@ -92,4 +103,45 @@ export interface LlmAssist {
 	 * falls back to its deterministic "I couldn't understand that" reply.
 	 */
 	answerQuestion(req: { query: string; briefing: string }): Promise<string | null>;
+
+	/**
+	 * Read caller-named fields off an image. Values come back as **raw strings**.
+	 *
+	 * There is deliberately no `describeImage()` here. One open-ended "tell me
+	 * about this picture" would be an escape hatch: the model would be allowed to
+	 * say anything about anything, and the app would have no way to check it. So
+	 * vision is only ever reachable through this method and `readRows`, which
+	 * keep the model in the one role it can safely hold on a page of numbers — a
+	 * *transcriber*, whose output the app then parses.
+	 *
+	 * **The load-bearing rule is that every value is a string, and the app parses
+	 * it.** Money goes through `parseAmount`, dates through this app's own date
+	 * parsing, text through `sanitizeLabel` — see `domain/intelligence/read-fields`,
+	 * which is where the real safety lives. The model never hands the app a number
+	 * the app treats as a number; it hands it glyphs, and our parser decides
+	 * whether those glyphs are money. A model that answers "twelve dollars" or
+	 * "1,2,3.4.5" therefore produces *nothing*, not a wrong figure.
+	 *
+	 * Null on anything that isn't a usable object: off, unreachable, timed out,
+	 * not a vision model, or prose where JSON was asked for.
+	 */
+	readFields(req: {
+		instruction: string;
+		image: ImageInput;
+		fields: { key: string; description: string }[];
+	}): Promise<Record<string, string> | null>;
+
+	/**
+	 * Read tabular rows off an image, with caller-named columns. Same contract as
+	 * `readFields` in every respect that matters: every cell is a raw string, and
+	 * the app's own parsers decide what any of it means.
+	 *
+	 * `maxRows` bounds the reply — a page of a statement, not a year of one.
+	 */
+	readRows(req: {
+		instruction: string;
+		image: ImageInput;
+		columns: { key: string; description: string }[];
+		maxRows: number;
+	}): Promise<Record<string, string>[] | null>;
 }

@@ -43,6 +43,8 @@ export interface ImportListItem {
 	periodEnd: Date | null;
 	currency: string;
 	importedByName: string;
+	/** Transcribed off a picture by a model. Surfaced everywhere it is listed. */
+	modelRead: boolean;
 }
 
 /** Newest first — you reconcile the statement you just pulled down. */
@@ -73,7 +75,8 @@ export async function listImports(db: Db, workspaceId: string): Promise<ImportLi
 		periodStart: r.imp.periodStart,
 		periodEnd: r.imp.periodEnd,
 		currency: r.imp.currency,
-		importedByName: r.importedByName
+		importedByName: r.importedByName,
+		modelRead: r.imp.modelRead
 	}));
 }
 
@@ -110,6 +113,15 @@ export async function findImportByHash(
 	return row ?? null;
 }
 
+export interface LinePurchaseView {
+	id: string;
+	itemName: string;
+	merchantName: string | null;
+	categoryIcon: string | null;
+	completedAt: Date | null;
+	amountMinor: bigint;
+}
+
 export interface LineView {
 	id: string;
 	postedAt: Date;
@@ -123,14 +135,14 @@ export interface LineView {
 	 * `private` line by construction — that state exists precisely to say
 	 * "accounted for" without saying by what.
 	 */
-	purchase: {
-		id: string;
-		itemName: string;
-		merchantName: string | null;
-		categoryIcon: string | null;
-		completedAt: Date | null;
-		amountMinor: bigint;
-	} | null;
+	purchase: LinePurchaseView | null;
+	/**
+	 * What the matcher ranked but wouldn't claim, best first, resolved through
+	 * the same seal filter as `purchase`. An id that has since been sealed,
+	 * cleared, or deleted simply drops out — the shortlist is a convenience, so
+	 * a short one is fine and a wrong one is not.
+	 */
+	suggestions: LinePurchaseView[];
 }
 
 /** Every line of an import, oldest first — the order a statement is read in. */
@@ -166,6 +178,50 @@ export async function listLines(
 		)
 		.orderBy(asc(statementLine.postedAt), asc(statementLine.id));
 
+	/*
+	 * Resolve every line's shortlist in one further query rather than a join per
+	 * line. It runs through `visibleTo` exactly like the join above, so a
+	 * suggestion the viewer may not see never reaches them — the ids were ranked
+	 * against what the *importer* could see, which is not necessarily this reader.
+	 * A purchase that has since been cleared is dropped too: offering it again is
+	 * how one ends up reconciled twice.
+	 */
+	const wanted = [...new Set(rows.flatMap((r) => r.line.suggestedPurchaseIds ?? []))];
+	const byId = new Map<string, LinePurchaseView>();
+	if (wanted.length > 0) {
+		const suggested = await db
+			.select({
+				id: purchase.id,
+				itemName: purchase.itemName,
+				completedAt: purchase.completedAt,
+				requested: purchase.requestedAmountMinor,
+				final: purchase.finalAmountMinor,
+				merchantName: merchant.name,
+				categoryIcon: category.icon
+			})
+			.from(purchase)
+			.leftJoin(merchant, eq(purchase.merchantId, merchant.id))
+			.leftJoin(category, eq(purchase.categoryId, category.id))
+			.where(
+				and(
+					eq(purchase.workspaceId, scope.workspaceId),
+					inArray(purchase.id, wanted),
+					visibleTo(scope.viewerId, now),
+					sql`${purchase.clearedAt} is null`
+				)
+			);
+		for (const p of suggested) {
+			byId.set(p.id, {
+				id: p.id,
+				itemName: p.itemName,
+				merchantName: p.merchantName,
+				categoryIcon: p.categoryIcon,
+				completedAt: p.completedAt,
+				amountMinor: p.final ?? p.requested
+			});
+		}
+	}
+
 	return rows.map((r) => ({
 		id: r.line.id,
 		postedAt: r.line.postedAt,
@@ -183,7 +239,15 @@ export async function listLines(
 					completedAt: r.pCompletedAt,
 					amountMinor: r.pFinal ?? r.pRequested!
 				}
-			: null
+			: null,
+		// Only where a shortlist can still help: a matched or private line has an
+		// answer already, and rank order is preserved from the matcher.
+		suggestions:
+			r.line.matchState === 'unmatched'
+				? (r.line.suggestedPurchaseIds ?? [])
+						.map((id) => byId.get(id))
+						.filter((p): p is LinePurchaseView => !!p)
+				: []
 	}));
 }
 

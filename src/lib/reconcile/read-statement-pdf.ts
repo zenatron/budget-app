@@ -23,6 +23,25 @@ export interface StatementPdfResult extends PdfExtraction {
 	pageCount: number;
 	/** The rows as a canonical CSV, ready to post. */
 	csv: string;
+	/**
+	 * True when the document carried no usable text at all — a photocopy or a
+	 * photographed statement. The text path has nothing to work with, and this is
+	 * the one case where asking a model to look at the page adds something no
+	 * amount of better parsing could.
+	 */
+	isScanned: boolean;
+	/**
+	 * Render pages to JPEG for a model to read. Only called on the scanned path,
+	 * and only after a person has asked for it: rasterising every page of a
+	 * statement is real work on a phone.
+	 */
+	renderPages: (limit: number) => Promise<File[]>;
+	/**
+	 * Releases the pdf.js worker. The document is deliberately kept open past the
+	 * return so `renderPages` can use it without re-parsing the file, which means
+	 * the caller — not this function — owns the end of its life.
+	 */
+	dispose: () => void;
 }
 
 async function loadPdfjs() {
@@ -32,6 +51,19 @@ async function loadPdfjs() {
 	pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 	return pdfjs;
 }
+
+/** Long edge for a page a model has to read small print off. */
+const RENDER_LONG_EDGE = 2000;
+const RENDER_QUALITY = 0.92;
+
+/**
+ * A page with essentially no text is a picture of a page. The threshold is
+ * deliberately low rather than zero: a scan often carries a stray character or
+ * two of OCR noise, or a text-layer page number stamped on by the scanner, and
+ * treating that as "this document has text" would send a photocopied statement
+ * down a path that can only fail.
+ */
+const SCANNED_TEXT_CHARS = 40;
 
 export async function readStatementPdf(file: File): Promise<StatementPdfResult> {
 	const pdfjs = await loadPdfjs();
@@ -69,14 +101,52 @@ export async function readStatementPdf(file: File): Promise<StatementPdfResult> 
 		}
 
 		const extraction = extractStatementRows(items);
+		const textChars = items.reduce((n, it) => n + it.text.trim().length, 0);
+
+		/**
+		 * Rasterise the first `limit` pages. Kept as a closure over the still-open
+		 * document so the file is parsed once — the alternative is re-reading it
+		 * from the user's disk to render what we have already loaded.
+		 */
+		async function renderPages(limit: number): Promise<File[]> {
+			const out: File[] = [];
+			for (let n = 1; n <= Math.min(doc.numPages, limit); n++) {
+				const page = await doc.getPage(n);
+				const base = page.getViewport({ scale: 1 });
+				const scale = RENDER_LONG_EDGE / Math.max(base.width, base.height);
+				const viewport = page.getViewport({ scale });
+
+				const canvas = document.createElement('canvas');
+				canvas.width = Math.round(viewport.width);
+				canvas.height = Math.round(viewport.height);
+				const ctx = canvas.getContext('2d');
+				if (!ctx) throw new Error('Canvas unavailable');
+				// PDF pages are transparent where nothing is drawn; without this a
+				// statement flattens to a black rectangle.
+				ctx.fillStyle = '#ffffff';
+				ctx.fillRect(0, 0, canvas.width, canvas.height);
+				await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+
+				const blob = await new Promise<Blob | null>((resolve) =>
+					canvas.toBlob(resolve, 'image/jpeg', RENDER_QUALITY)
+				);
+				page.cleanup();
+				if (blob) out.push(new File([blob], `page-${n}.jpg`, { type: 'image/jpeg' }));
+			}
+			return out;
+		}
+
 		return {
 			...extraction,
 			pageCount: doc.numPages,
-			csv: rowsToCsv(extraction.rows)
+			csv: rowsToCsv(extraction.rows),
+			isScanned: textChars < SCANNED_TEXT_CHARS,
+			renderPages,
+			dispose: () => void loadingTask.destroy()
 		};
-	} finally {
-		// The loading task owns the worker; the document's own cleanup would leave
-		// it running.
+	} catch (e) {
+		// Nothing to hand back, so nothing needs the document any more.
 		void loadingTask.destroy();
+		throw e;
 	}
 }

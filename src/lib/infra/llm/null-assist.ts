@@ -15,5 +15,7 @@ export const nullAssist: LlmAssist = {
 	pickChoice: async () => null,
 	cleanLabel: async () => null,
 	parseCommand: async () => null,
-	answerQuestion: async () => null
+	answerQuestion: async () => null,
+	readFields: async () => null,
+	readRows: async () => null
 };
