@@ -219,10 +219,23 @@
 					icon: 'checkmark',
 					title: 'Reconciling a statement',
 					body: [
-						'Export a CSV from your bank and import it under Settings → Reconcile. Ledger reads the date, amount and description columns — naming them yourself if the headers are unfamiliar — and lines each transaction up against what is recorded here.',
+						'Export a CSV or PDF from your bank and import it under Settings → Reconcile. Ledger reads the date, amount and description columns — naming them yourself if the headers are unfamiliar — and lines each transaction up against what is recorded here. A PDF is read on your device: only the three columns are sent, never the document.',
 						'A match is only ever a **suggestion**. Importing never creates, edits or deletes a purchase, and never changes an amount; confirming a match writes one thing, a mark saying this purchase appeared on a statement. Undo is always available, and removing an import releases every mark it made.',
-						'Where two purchases fit a line equally well, Ledger will not guess — it shows both and lets you choose. Lines that were never purchases (fees, transfers) can be set aside, and a line with nothing behind it can be logged as a purchase in one tap.',
+						'Where two purchases fit a line equally well, Ledger will not guess — it shows both and lets you choose. It does show its shortlist, though: a line it could not settle arrives with the two or three purchases it was weighing, each one tap from being linked. Lines that were never purchases (fees, transfers) can be set aside, and a line with nothing behind it can be logged as a purchase in one tap.',
+						'**Help me find this** shows up on a line nothing matched, if you have AI assistance on. A bank descriptor like *SQ \\*BLUE BOTTLE 0042* shares no words with *flat white* — the one gap plain matching can’t close. It picks from the purchases already on screen, never a name it invented, and highlights one. You still press Link.',
 						'Reconciling is seal-aware. A line that belongs to a purchase hidden from you reads *accounted for — hidden from you*: enough that you do not log a duplicate of a gift you are not meant to know about, and nothing more than that.'
+					]
+				},
+				{
+					id: 'pictures',
+					icon: 'sparkle',
+					title: 'Reading a bill, receipt or scan',
+					body: [
+						'Most PDFs carry their text inside them, and Ledger reads that straight off — no AI, and it’s quick. A **scan** is different: it’s a photograph of a page, with no text in it at all. There’s nothing to read without looking at the picture.',
+						'Turn on a model that can see, and Ledger offers to look — at a scanned bill, a photo of a receipt, or a scanned bank statement. You’ll always know when it does: it asks first, and shows you what it made out before anything lands in a field.',
+						'**Nothing it reads is taken on trust.** The model only copies what’s printed; Ledger then reads those characters with the same rules it uses on any other text. Anything it can’t read cleanly is left blank for you to fill in. A misread costs you a bit of typing, never a wrong number.',
+						'A statement gets one extra step. Before importing, Ledger shows you the bank, the account and the period it read off the page and asks whether that’s yours — a glance you can answer instantly, and the app can’t. Those imports stay marked wherever they appear, so you always know which figures were transcribed rather than read.',
+						'If your model can’t read images, Ledger says so and points you at one that can. If it can’t tell — true of most external providers, which don’t publish what their models do — it tries anyway, and you get the provider’s own answer rather than a guess from us.'
 					]
 				},
 				{
@@ -240,7 +253,7 @@
 					icon: 'sparkle',
 					title: 'AI assistance',
 					body: [
-						'Harmony works entirely on plain arithmetic and pattern matching. In Settings → Harmony you can optionally let a language model help with the fuzzy parts: suggesting a category, reading a cryptic bank line into a merchant name, or answering an open-ended question in words over figures the app has already computed.',
+						'Harmony works entirely on plain arithmetic and pattern matching. In Settings → Harmony you can optionally let a language model help with the fuzzy parts: suggesting a category, working out which purchase a cryptic bank line refers to, reading a bill that only exists as a picture, or answering an open-ended question in words over figures the app has already computed.',
 						'It only ever **suggests** or **explains**. It never approves a purchase, moves money, or decides your Safe to Spend; when it answers a question it reads your real figures rather than inventing any; and every suggestion is checked against the app’s own options before you see it, so a bad answer becomes no answer.',
 						'You choose the source. **Local** runs a model on your own machine, so nothing leaves your server. **External** uses an outside API, which means the text you send is processed by a third party. **Off**, the default, keeps everything deterministic and contacts no model at all.'
 					]

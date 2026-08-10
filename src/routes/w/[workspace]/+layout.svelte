@@ -193,6 +193,32 @@
 	);
 
 	/*
+	 * The accent is set on the wrapper below, which is where every workspace
+	 * screen reads it from. A few things live *outside* that wrapper though — the
+	 * navigation progress bar sits in the root layout, above this one — and they
+	 * were quietly falling back to the app's default red whatever the workspace
+	 * was painted. So the same value is mirrored onto the document element, which
+	 * nothing is outside of.
+	 *
+	 * Cleared on the way out, so the marketing page and the error page keep their
+	 * own accent rather than inheriting the last workspace visited.
+	 */
+	$effect(() => {
+		const root = document.documentElement;
+		root.style.setProperty('--ws-accent-base', accent);
+		root.style.setProperty(
+			'--ws-accent',
+			'light-dark(var(--ws-accent-base), color-mix(in oklch, var(--ws-accent-base), white 18%))'
+		);
+		root.style.setProperty('--accent', 'var(--ws-accent)');
+		return () => {
+			root.style.removeProperty('--ws-accent-base');
+			root.style.removeProperty('--ws-accent');
+			root.style.removeProperty('--accent');
+		};
+	});
+
+	/*
 	 * Four destinations either side of the new-purchase button, which sits in the
 	 * middle where a thumb actually reaches.
 	 *

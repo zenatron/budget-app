@@ -61,6 +61,38 @@ PostgreSQL 17 + Drizzle, auth via an external [Pocket ID](https://pocket-id.org)
 - ✅ **Phase 13 — Interaction polish**: navigation progress bar, toast feedback,
   in-flight form state and confirm gates via `use:submit`, Escape-dismissable
   popovers via `use:dismiss`.
+- ✅ **Phase 14 — Reconciliation**: import a bank CSV or PDF and tick it against
+  what is recorded. PDFs are parsed in the browser (pdf.js), so the document
+  never leaves the device — only the date/amount/description columns are posted,
+  rejoining the same `parse-csv` pipeline. Matching is pure and deliberately
+  refuses to guess: a line with two equally good candidates stays unmatched and
+  carries its ranked shortlist for a person to pick from. Importing never
+  creates, edits or deletes a purchase; confirming a match writes `cleared_at`
+  and nothing else. Seal-aware throughout — a line belonging to a concealed
+  purchase reads _accounted for, hidden from you_ and carries no id to follow.
+- ✅ **Phase 15 — Optional assist (LLM as a port)**: a narrow `LlmAssist` port with
+  a null adapter as the default, plus Ollama and OpenAI-compatible adapters. The
+  model is a _fuzzy reducer_, never an approver: it picks from an option set the
+  caller already owns, or transcribes glyphs the app's own parsers then read.
+  Every output crosses `domain/intelligence/constrain` or
+  `domain/intelligence/read-fields` before it counts, so a hallucination becomes
+  _no suggestion_ rather than a wrong one. Nothing it produces is written without
+  a person confirming, and every surface degrades to its deterministic behaviour
+  with the assist off — which is the property the test suite pins down.
+
+  Vision is reachable only through two constrained methods (`readFields`,
+  `readRows`) — never an open-ended `describeImage` — and every value returns as
+  a **string** for `parseAmount`/`findDates`/`sanitizeLabel` to interpret. That
+  buys scanned bills, receipt photos and scanned statements; a figure the app
+  cannot read cleanly becomes an empty field, never a plausible wrong number.
+  Model capability is gated three ways (has it / provably lacks it / never
+  established), failing open on the third because no OpenAI-compatible endpoint
+  publishes what its models can do.
+
+  > **Note for self-hosters:** Ollama does not decode WebP, and fails _silently_
+  > — the image is dropped and the model answers from priors. Images are
+  > therefore re-encoded to JPEG at a single choke point (`toModelImage`) before
+  > any model sees them.
 
 ## Development
 
