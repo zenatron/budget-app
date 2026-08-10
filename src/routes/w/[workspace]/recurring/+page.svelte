@@ -188,12 +188,7 @@
 		<h1 class="text-[28px]">Recurring</h1>
 		<div class="flex items-center gap-2">
 			{#if data.rules.length > 1}
-				<button
-					onclick={openSettings}
-					class="press flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-sm)]"
-					style="box-shadow: inset 0 0 0 1px var(--hairline); background: var(--surface)"
-					aria-label="Sort and group"
-				>
+				<button onclick={openSettings} class="press icon-btn" aria-label="Sort and group">
 					<Funnel class="h-4 w-4" style="color: var(--ink-3)" />
 				</button>
 			{/if}

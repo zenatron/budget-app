@@ -230,6 +230,35 @@
 		border-radius: var(--r-lg);
 	}
 
+	/*
+	 * A secondary action beside a heading — sort, print, reconcile, change month.
+	 *
+	 * There were two answers to this in the app: a 36px circle on the statement
+	 * sheet and a 38px rounded square in Plan, for the same job. Nothing marked
+	 * either as canonical, so picking one meant reading a neighbouring file and
+	 * hoping it was the right neighbour — which is exactly how the calendar
+	 * shipped with a circle sitting next to a square.
+	 *
+	 * The square wins because the circle is already spoken for: 32px circles are
+	 * dismiss and close, throughout. Keeping the shapes apart keeps the roles
+	 * apart — a round button closes something, a square one does something.
+	 *
+	 * Opaque on purpose. A tint mixed with `transparent` composites with whatever
+	 * is behind it, which is invisible on a card and wrong on the header.
+	 */
+	.icon-btn {
+		display: flex;
+		height: 38px;
+		width: 38px;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		border-radius: var(--r-sm);
+		background: var(--surface);
+		box-shadow: inset 0 0 0 1px var(--hairline);
+		color: var(--ink-3);
+	}
+
 	/* Printed-ledger rule */
 	.hairline {
 		box-shadow: inset 0 -1px 0 var(--hairline);

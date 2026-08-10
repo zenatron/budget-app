@@ -164,21 +164,14 @@
 				     reconcile checks it against what the bank says happened. -->
 				<a
 					href="/w/{slug}/reconcile"
-					class="grid h-9 w-9 place-items-center rounded-full"
-					style="color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--hairline)"
+					class="press icon-btn"
 					aria-label="Reconcile against a bank statement"><FileCheck size={16} /></a
 				>
-				<button
-					onclick={printSheet}
-					class="grid h-9 w-9 place-items-center rounded-full"
-					style="color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--hairline)"
-					aria-label="Print this statement"><Printer size={16} /></button
+				<button onclick={printSheet} class="press icon-btn" aria-label="Print this statement"
+					><Printer size={16} /></button
 				>
-				<button
-					onclick={printSheet}
-					class="grid h-9 w-9 place-items-center rounded-full"
-					style="color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--hairline)"
-					aria-label="Save as PDF"><Download size={16} /></button
+				<button onclick={printSheet} class="press icon-btn" aria-label="Save as PDF"
+					><Download size={16} /></button
 				>
 			</div>
 			<p class="mt-1 text-[11px]" style="color: var(--ink-3)">

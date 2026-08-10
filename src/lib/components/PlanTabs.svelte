@@ -47,8 +47,7 @@
 	</div>
 	<a
 		href="/w/{slug}/calendar"
-		class="press absolute top-1/2 right-0 flex h-[38px] w-[38px] -translate-y-1/2 items-center justify-center rounded-[var(--r-sm)]"
-		style="box-shadow: inset 0 0 0 1px var(--hairline); background: var(--surface)"
+		class="press icon-btn absolute top-1/2 right-0 -translate-y-1/2"
 		aria-label="Month calendar"
 		title="What's coming, by day"
 	>

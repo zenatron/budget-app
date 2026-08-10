@@ -81,17 +81,11 @@
 			<h1 class="mt-1 truncate text-[28px]">{data.month.label}</h1>
 		</div>
 		<div class="flex shrink-0 items-center gap-1">
-			<a
-				href="?m={data.month.prev}"
-				class="press flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-sm)]"
-				style="color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--hairline); background: var(--surface)"
-				aria-label="Previous month"><ChevronLeft class="h-4 w-4" /></a
+			<a href="?m={data.month.prev}" class="press icon-btn" aria-label="Previous month"
+				><ChevronLeft class="h-4 w-4" /></a
 			>
-			<a
-				href="?m={data.month.next}"
-				class="press flex h-[38px] w-[38px] items-center justify-center rounded-[var(--r-sm)]"
-				style="color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--hairline); background: var(--surface)"
-				aria-label="Next month"><ChevronRight class="h-4 w-4" /></a
+			<a href="?m={data.month.next}" class="press icon-btn" aria-label="Next month"
+				><ChevronRight class="h-4 w-4" /></a
 			>
 		</div>
 	</div>
