@@ -13,6 +13,7 @@
 
 import type { PDFPageProxy } from 'pdfjs-dist';
 import { extractBill, type BillExtraction, type TextItem } from '$lib/domain/bill/extract';
+import { extractStatementRows } from '$lib/domain/reconcile/parse-pdf';
 
 /** Long edge of the rendered page, before the server's own resize. */
 const RENDER_LONG_EDGE = 2000;
@@ -31,6 +32,10 @@ export interface PdfPagePreview {
 export interface ReadPdfResult {
 	pageCount: number;
 	extraction: BillExtraction;
+	/** Transaction-shaped rows found on the page. See the note where it's computed. */
+	statementRows: number;
+	/** Enough of them that this is a statement, not a bill with line items. */
+	looksLikeStatement: boolean;
 	/** 1-based page the winning amount was found on, for preselecting. */
 	suggestedPage: number;
 	pages: PdfPagePreview[];
@@ -127,6 +132,21 @@ export async function readPdf(
 
 	const extraction = extractBill(items, { dayFirst: opts.dayFirst, metadataTitle });
 
+	/*
+	 * Is this a bill at all, or a statement someone brought to the wrong door?
+	 *
+	 * A bill has one figure that matters. A statement is a list, and the honest
+	 * answer to "what's the amount on this" is that there isn't one — which is
+	 * why the bill reader used to end at "couldn't find an amount" and leave
+	 * someone holding a document the app can very much read, one screen away.
+	 *
+	 * Rather than a second door in the add screen (a statement adds no purchase,
+	 * so it has nothing to fill the form it would live in), the reader recognises
+	 * the shape and points. The threshold is high enough that a bill with a few
+	 * dated line items doesn't get mistaken for a month of transactions.
+	 */
+	const statementRows = extractStatementRows(items).rows.length;
+
 	// Previews for the page picker. Only rendered when there's a choice to make.
 	const pages: PdfPagePreview[] = [];
 	if (doc.numPages > 1) {
@@ -141,6 +161,8 @@ export async function readPdf(
 	return {
 		pageCount: doc.numPages,
 		extraction,
+		statementRows,
+		looksLikeStatement: statementRows >= 8,
 		// The page carrying the figure is the page worth keeping.
 		suggestedPage: extraction.total?.page ?? 1,
 		pages,

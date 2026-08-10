@@ -14,6 +14,8 @@
 	 */
 	import { ChevronRight, Sparkles } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { handOff } from '$lib/reconcile/handoff.svelte';
 	import type { ReadPdfResult } from '$lib/bill/read-pdf';
 	import type { MoneyCandidate } from '$lib/domain/bill/extract';
 
@@ -48,6 +50,8 @@
 	let scanned: ReadPdfResult | null = $state(null);
 	/** A photographed bill or receipt, waiting on the same offer a scan gets. */
 	let photo = $state<File | null>(null);
+	/** A statement brought to the bill door — offered a lift rather than an error. */
+	let statement = $state<{ file: File; rows: number } | null>(null);
 	let reading = $state(false);
 	/** Whether a photo can be offered at all — decides the file picker's reach. */
 	const visionOn = $derived(vision.allowed);
@@ -106,6 +110,14 @@
 				error = vision.reason
 					? `This PDF is a scan, so there's no text to read. ${vision.reason}`
 					: "This PDF is a scan, so there's no text to read. You can still enter the amount yourself.";
+				return;
+			}
+			if (r.looksLikeStatement) {
+				// A list of transactions, not a bill. There is no single amount to
+				// find, and saying "couldn't find an amount" would be true and
+				// useless — the app reads these very well, one screen over.
+				r.dispose();
+				statement = { file, rows: r.statementRows };
 				return;
 			}
 			if (!r.extraction.total) {
@@ -189,12 +201,20 @@
 		}
 	}
 
+	function toReconcile() {
+		if (!statement) return;
+		handOff(statement.file);
+		statement = null;
+		void goto(`/w/${slug}/reconcile`);
+	}
+
 	function reset() {
 		result?.dispose();
 		result = null;
 		scanned?.dispose();
 		scanned = null;
 		photo = null;
+		statement = null;
 		reading = false;
 		chosenAmount = null;
 		chosenPage = 1;
@@ -209,7 +229,31 @@
 </script>
 
 <div class="card overflow-hidden">
-	{#if scanned || photo}
+	{#if statement}
+		<!--
+			Recognised, not rejected. Everything needed to reconcile this is already
+			in the app; it just lives on a different screen, and the file goes with
+			you rather than being picked twice.
+		-->
+		<div class="p-4">
+			<p class="section-label">That looks like a statement</p>
+			<p class="mt-2 text-[14px] leading-relaxed" style="color: var(--ink-2)">
+				There are about {statement.rows} transactions in this PDF, so it's a month of spending rather
+				than one bill — there's no single amount to put on a purchase. Reconcile reads it properly and
+				ticks it against what's already recorded.
+			</p>
+			<div class="mt-3 flex flex-wrap items-center gap-2">
+				<button onclick={toReconcile} class="btn btn-accent px-3.5 py-1.5 text-[13px]">
+					Reconcile it instead
+				</button>
+				<button
+					onclick={reset}
+					class="press text-[13px] underline underline-offset-2"
+					style="color: var(--ink-3)">Cancel</button
+				>
+			</div>
+		</div>
+	{:else if scanned || photo}
 		<!--
 			A scan, and a model that might be able to look at it. Stated as an offer
 			with its cost attached, because the read is genuinely slow and can come

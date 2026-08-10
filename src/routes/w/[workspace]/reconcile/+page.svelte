@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
+	import { takeHandoff } from '$lib/reconcile/handoff.svelte';
 	import { page } from '$app/state';
 	import { submit } from '$lib/actions/submit';
 	import { ChevronLeft, ChevronRight, FileText, Sparkles, Upload } from '@lucide/svelte';
@@ -117,12 +118,27 @@
 		scanning = false;
 	}
 
+	/*
+	 * Arriving from the bill reader, which recognised a statement and sent the
+	 * file along rather than making it be picked twice. Taken once — a reload
+	 * finds nothing and the picker below is the normal way in.
+	 */
+	onMount(() => {
+		const handed = takeHandoff();
+		if (handed) void ingest(handed, null);
+	});
+
 	async function chooseFile(e: Event & { currentTarget: HTMLInputElement }) {
 		// Captured now: `currentTarget` is nulled once the event finishes
 		// dispatching, and everything below this line is after an await.
 		const input = e.currentTarget;
 		const file = input.files?.[0];
 		if (!file) return;
+		await ingest(file, input);
+	}
+
+	/** The one path a statement takes, whether picked here or handed over. */
+	async function ingest(file: File, input: HTMLInputElement | null) {
 		pdfError = '';
 
 		const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
@@ -131,6 +147,15 @@
 			derivedCsv = '';
 			derivedName = '';
 			format = 'csv';
+			// Handed a CSV with no input to carry it: put it in the picker so the
+			// form has something to post.
+			if (!input && uploadForm) {
+				const dt = new DataTransfer();
+				dt.items.add(file);
+				const picker = uploadForm.querySelector<HTMLInputElement>('input[name=statement]');
+				if (picker) picker.files = dt.files;
+			}
+			await tick();
 			uploadForm?.requestSubmit();
 			return;
 		}
@@ -145,7 +170,7 @@
 				if (data.vision.allowed) {
 					scanned = result;
 					scanFile = file;
-					input.value = '';
+					if (input) input.value = '';
 					return;
 				}
 				result.dispose();
@@ -166,7 +191,7 @@
 			format = 'pdf';
 			// The file input still holds the PDF; clear it so the server reads the
 			// extracted rows rather than trying to parse the document as a CSV.
-			input.value = '';
+			if (input) input.value = '';
 			await tick();
 			uploadForm?.requestSubmit();
 		} catch {
