@@ -8,6 +8,9 @@ node_modules
 /.svelte-kit
 /build
 /data/blobs
+# Basemap tiles: disposable third-party imagery keyed by coordinate, with a TTL.
+# Never versioned and never backed up — see the note in the README.
+/data/tiles
 
 # OS
 .DS_Store
