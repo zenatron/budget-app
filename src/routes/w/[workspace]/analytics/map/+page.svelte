@@ -3,6 +3,7 @@
 	import { replaceState } from '$app/navigation';
 	import { ChevronLeft, Maximize2 } from '@lucide/svelte';
 	import { fade, fly } from 'svelte/transition';
+	import Segmented from '$lib/components/Segmented.svelte';
 	import { dismiss } from '$lib/actions/dismiss';
 	import { modal } from '$lib/actions/modal';
 	import { formatMinor } from '$lib/money-format';
@@ -136,6 +137,37 @@
 	 * with any subset of its tiles missing.
 	 */
 	const tiles = $derived(data.tileUrl && ready ? tilesFor(viewport) : []);
+
+	/*
+	 * A tile that didn't arrive, tried again shortly.
+	 *
+	 * The server answers 204 for a square it has neither cached nor budget to
+	 * fetch, which happens in bursts while you sweep through zoom levels. Without
+	 * this the `<img>` stays blank for as long as that view is on screen: settling
+	 * back on it re-renders the same key, so nothing re-requests and the map keeps
+	 * a hole in it. Reloading in place is per-tile and needs no re-render, and the
+	 * attempt cap stops a genuinely missing square retrying forever.
+	 */
+	const RETRY_DELAY_MS = 1200;
+	const MAX_TILE_RETRIES = 3;
+	const tileAttempts = new WeakMap<HTMLImageElement, number>();
+
+	function retryTile(event: Event) {
+		const img = event.currentTarget as HTMLImageElement;
+		const tried = tileAttempts.get(img) ?? 0;
+		if (tried >= MAX_TILE_RETRIES) return;
+		tileAttempts.set(img, tried + 1);
+		const { src } = img;
+		setTimeout(
+			() => {
+				// Only if this element is still on screen showing the same square.
+				if (!img.isConnected || img.src !== src) return;
+				img.src = '';
+				img.src = src;
+			},
+			RETRY_DELAY_MS * (tried + 1)
+		);
+	}
 
 	/*
 	 * The graticule: lines on the round decimal degree, at whatever interval
@@ -476,11 +508,11 @@
 		return `?${q}`;
 	}
 
-	const PERIODS = [
-		{ key: 'day', label: 'Day' },
-		{ key: 'week', label: 'Week' },
-		{ key: 'month', label: 'Month' },
-		{ key: 'year', label: 'Year' }
+	const PERIOD_TABS = [
+		{ value: 'day', label: 'Day', href: '?period=day' },
+		{ value: 'week', label: 'Week', href: '?period=week' },
+		{ value: 'month', label: 'Month', href: '?period=month' },
+		{ value: 'year', label: 'Year', href: '?period=year' }
 	];
 
 	/*
@@ -530,39 +562,22 @@
 	</div>
 
 	<!--
-		The period control, character for character the one on Activity — same
-		container radius and fill, same tab radius, padding, size and weight, same
-		active treatment (raised onto --surface with the card shadow and a hairline
-		ring). It had drifted into a pill with an ink fill, which read as a
-		different control for the same job on the screen next door.
+		Activity's control, now literally the same component. It had drifted into a
+		pill with an ink fill — a different control for the same job on the screen
+		next door.
 
-		`?period=X` alone, as Activity does: it drops month/day/wo, so switching
-		period lands on the current one rather than a stale window, and drops z/c
-		so the new set of pins gets framed fresh.
+		`?period=X` alone, as Activity does: it drops month/day/wo so switching
+		lands on the current window, and drops z/c so the new set of pins is framed
+		fresh.
 	-->
 	<div class="flex justify-center px-4 pb-2">
-		<div
-			class="inline-flex rounded-[10px] p-0.5"
-			style="background: var(--surface-2)"
-			role="tablist"
-		>
-			{#each PERIODS as p (p.key)}
-				{@const active = data.period === p.key}
-				<a
-					href="?period={p.key}"
-					role="tab"
-					aria-selected={active}
-					class="press rounded-[8px] px-3 py-1.5 text-[13px] font-semibold transition-colors"
-					style="color: {active ? 'var(--ink)' : 'var(--ink-3)'}; background: {active
-						? 'var(--surface)'
-						: 'transparent'}; box-shadow: {active
-						? 'var(--shadow-card), inset 0 0 0 0.5px var(--hairline)'
-						: 'none'}"
-				>
-					{p.label}
-				</a>
-			{/each}
-		</div>
+		<Segmented
+			options={PERIOD_TABS}
+			value={data.period}
+			size="sm"
+			fill={false}
+			ariaLabel="Period"
+		/>
 	</div>
 
 	<!-- Also Activity's: 36px round buttons with inline chevrons, a 17px semibold
@@ -675,6 +690,7 @@
 							alt=""
 							draggable="false"
 							decoding="async"
+							onerror={retryTile}
 							style="position:absolute; left:0; top:0; width:{t.size}px; height:{t.size}px; transform: translate3d({t.px}px, {t.py}px, 0)"
 						/>
 					{/each}

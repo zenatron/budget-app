@@ -7,6 +7,7 @@
 	import { formatPct } from '$lib/format';
 	import Money from '$lib/components/Money.svelte';
 	import CategoryRing from '$lib/components/CategoryRing.svelte';
+	import Segmented from '$lib/components/Segmented.svelte';
 	import { ChevronRight, Map as MapIcon, MapPin, X, Sparkles } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { ledgerLink } from '$lib/ledger-filters';
@@ -16,6 +17,15 @@
 	const currency = $derived(data.workspace.currency);
 	const period = $derived(data.period);
 	const isMonth = $derived(period === 'month');
+
+	// `?period=X` alone: it drops month/day/wo so switching lands on the current
+	// window rather than a stale one.
+	const PERIOD_TABS = [
+		{ value: 'day', label: 'Day', href: '?period=day' },
+		{ value: 'week', label: 'Week', href: '?period=week' },
+		{ value: 'month', label: 'Month', href: '?period=month' },
+		{ value: 'year', label: 'Year', href: '?period=year' }
+	];
 
 	/**
 	 * The map opens on whatever window this page is showing, so the two screens
@@ -382,28 +392,7 @@
 	</div>
 
 	<div class="flex justify-center">
-		<div
-			class="inline-flex rounded-[10px] p-0.5"
-			style="background: var(--surface-2)"
-			role="tablist"
-		>
-			{#each ['day', 'week', 'month', 'year'] as p (p)}
-				{@const active = period === p}
-				<a
-					href="?period={p}"
-					role="tab"
-					aria-selected={active}
-					class="press rounded-[8px] px-3 py-1.5 text-[13px] font-semibold transition-colors"
-					style="color: {active ? 'var(--ink)' : 'var(--ink-3)'}; background: {active
-						? 'var(--surface)'
-						: 'transparent'}; box-shadow: {active
-						? 'var(--shadow-card), inset 0 0 0 0.5px var(--hairline)'
-						: 'none'}"
-				>
-					{p === 'day' ? 'Day' : p === 'week' ? 'Week' : p === 'month' ? 'Month' : 'Year'}
-				</a>
-			{/each}
-		</div>
+		<Segmented options={PERIOD_TABS} value={period} size="sm" fill={false} ariaLabel="Period" />
 	</div>
 
 	<!--

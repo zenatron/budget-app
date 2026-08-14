@@ -35,10 +35,21 @@ export const GET: RequestHandler = async ({ locals, params, setHeaders }) => {
 	// upstream URL. See the note in server/tiles.
 	if (!isValidTile(z, x, y)) error(400, 'Not a tile');
 
-	// A screenful is ~30 tiles and a hard pan session a few hundred, so this is
-	// generous for a person and still stops a stuck client becoming a scraper
-	// against a tile server we do not own.
-	if (!rateLimitOk(`tiles:${locals.member!.id}`, 400, 60_000)) {
+	/*
+	 * An abuse guard, not a browsing budget.
+	 *
+	 * This used to be 400/minute counting every request, and twenty seconds of
+	 * zooming around one city hit it — a screenful is ~30 tiles, so that was
+	 * about thirteen view changes. Worse, it counted tiles served straight off
+	 * local disk, which cost the tile server nothing at all; the areas you
+	 * revisit are precisely the ones already cached.
+	 *
+	 * The real ceiling now lives in `server/tiles`, on the upstream fetch, where
+	 * it protects the thing that actually needs protecting. What is left here
+	 * only has to stop a runaway loop, so it sits far above anything a person
+	 * does with two hands.
+	 */
+	if (!rateLimitOk(`tiles:${locals.member!.id}`, 3000, 60_000)) {
 		error(429, 'Too many tiles');
 	}
 

@@ -29,6 +29,52 @@ import type { Env } from '$lib/server/env';
 const TTL_MS = 30 * 86_400_000;
 const FETCH_TIMEOUT_MS = 6000;
 
+/*
+ * Limits on going *upstream*, not on serving tiles.
+ *
+ * The first version limited the route — every tile request, cache hits
+ * included — and 20 seconds of zooming around one city hit it. That was
+ * backwards twice over: a tile served off local disk costs the tile server
+ * nothing, so throttling it protects nobody, and the areas you revisit are
+ * exactly the ones already cached.
+ *
+ * So the ceiling sits here, on the fetch. `UPSTREAM_PER_MIN` is roughly ten
+ * screenfuls of genuinely new ground a minute, which is far more than a person
+ * exploring their own spending covers and still a hard stop on a runaway
+ * client. `MAX_CONCURRENT` matters more for being a good citizen: a screenful
+ * of misses would otherwise open thirty parallel connections at once, and
+ * OSM's usage policy asks for a couple.
+ */
+const UPSTREAM_PER_MIN = 300;
+const MAX_CONCURRENT = 4;
+
+/**
+ * Sliding-window budget. Exported and given its state so the rule can be tested
+ * directly rather than by making three hundred real requests to somebody else's
+ * server to find out whether it holds.
+ *
+ * Mutates `times`: expired entries are dropped and an accepted attempt is
+ * recorded, so a caller keeps one array for the life of the process.
+ */
+export function takeSlot(times: number[], now: number, perMinute: number): boolean {
+	while (times.length > 0 && now - times[0] > 60_000) times.shift();
+	if (times.length >= perMinute) return false;
+	times.push(now);
+	return true;
+}
+
+const upstreamAt: number[] = [];
+let inFlight = 0;
+
+async function waitForConcurrencySlot(): Promise<boolean> {
+	// Bounded wait: a caller that can't get a slot promptly is better off being
+	// told "not now" than queueing behind a stalled fetch.
+	for (let i = 0; i < 40 && inFlight >= MAX_CONCURRENT; i++) {
+		await new Promise((r) => setTimeout(r, 50));
+	}
+	return inFlight < MAX_CONCURRENT;
+}
+
 /** Bounded by MAX_ZOOM, the TTL, and this opportunistic sweep. No cron needed. */
 const SWEEP_EVERY = 500;
 let writesSinceSweep = 0;
@@ -79,6 +125,13 @@ export async function getTile(
 		// Not cached yet.
 	}
 
+	// Past here we would be talking to somebody else's server, so this is where
+	// the ceiling applies. Out of budget: yesterday's copy if we have one, and
+	// otherwise nothing — the map leaves that square blank and carries on.
+	if (!takeSlot(upstreamAt, Date.now(), UPSTREAM_PER_MIN)) return stale;
+	if (!(await waitForConcurrencySlot())) return stale;
+
+	inFlight++;
 	try {
 		/*
 		 * z/x/y are integer-validated above, before they are interpolated. That
@@ -112,6 +165,8 @@ export async function getTile(
 		// Upstream down, timed out, or offline. If we have yesterday's copy, that
 		// is the honest answer; otherwise the map falls back to its graticule.
 		return stale;
+	} finally {
+		inFlight--;
 	}
 }
 

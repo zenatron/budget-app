@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_ZOOM } from '$lib/domain/location/mercator';
-import { isValidTile } from './tiles';
+import { isValidTile, takeSlot } from './tiles';
 
 /*
  * This predicate is the security boundary of the tile proxy. z/x/y are the only
@@ -43,5 +43,38 @@ describe('isValidTile', () => {
 		expect(isValidTile(Number('../..'), 0, 0)).toBe(false);
 		expect(isValidTile(2, Number('0?x=1'), 0)).toBe(false);
 		expect(isValidTile(2, 0, Number('1e999'))).toBe(false);
+	});
+});
+
+/*
+ * The budget that matters is the one on going *upstream*. An earlier version
+ * limited the route instead — every request, tiles served straight off local
+ * disk included — and twenty seconds of zooming around one already-cached city
+ * hit it, throttling requests that cost the tile server nothing.
+ */
+describe('takeSlot', () => {
+	it('allows up to the limit inside the window', () => {
+		const times: number[] = [];
+		for (let i = 0; i < 5; i++) expect(takeSlot(times, 1000 + i, 5)).toBe(true);
+		expect(takeSlot(times, 1005, 5)).toBe(false);
+	});
+
+	it('lets the window roll off', () => {
+		const times: number[] = [];
+		for (let i = 0; i < 3; i++) takeSlot(times, 1000, 3);
+		expect(takeSlot(times, 1000, 3)).toBe(false);
+		// A minute and a millisecond later the earliest attempts have expired.
+		expect(takeSlot(times, 1000 + 60_001, 3)).toBe(true);
+	});
+
+	it('drops expired entries rather than growing forever', () => {
+		const times: number[] = [];
+		for (let i = 0; i < 100; i++) takeSlot(times, i * 1000, 1000);
+		// Only the last minute's worth is retained.
+		expect(times.length).toBeLessThanOrEqual(61);
+	});
+
+	it('refuses everything at a zero budget', () => {
+		expect(takeSlot([], 1000, 0)).toBe(false);
 	});
 });

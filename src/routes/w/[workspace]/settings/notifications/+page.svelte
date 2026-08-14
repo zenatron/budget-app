@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Segmented from '$lib/components/Segmented.svelte';
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
 	import {
@@ -333,23 +334,17 @@
 				Segmented control, not the checkbox matrix: this is a frequency, not a
 				per-channel on/off, and it delivers wherever your other notifications go.
 			-->
-			<div class="inline-flex rounded-[12px] p-1" style="background: var(--surface-2)">
-				{#each [{ v: 'off', l: 'Off' }, { v: 'weekly', l: 'Weekly' }, { v: 'monthly', l: 'Monthly' }] as opt (opt.v)}
-					{@const active = data.summaryCadence === opt.v}
-					<button
-						name="cadence"
-						value={opt.v}
-						class="press rounded-[9px] px-4 py-1.5 text-[14px] font-semibold transition-colors"
-						style="color: {active ? 'var(--ink)' : 'var(--ink-3)'}; background: {active
-							? 'var(--surface)'
-							: 'transparent'}; box-shadow: {active
-							? 'var(--shadow-card), inset 0 0 0 0.5px var(--hairline)'
-							: 'none'}"
-					>
-						{opt.l}
-					</button>
-				{/each}
-			</div>
+			<Segmented
+				options={[
+					{ value: 'off', label: 'Off' },
+					{ value: 'weekly', label: 'Weekly' },
+					{ value: 'monthly', label: 'Monthly' }
+				]}
+				value={data.summaryCadence}
+				submitName="cadence"
+				fill={false}
+				ariaLabel="Summary frequency"
+			/>
 			{#if data.summaryCadence !== 'off'}
 				<p class="mt-2.5 text-[12px]" style="color: var(--ink-3)">
 					Arrives at the start of each {data.summaryCadence === 'weekly' ? 'week' : 'month'}, for

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Segmented from '$lib/components/Segmented.svelte';
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
 	import {
@@ -293,29 +294,12 @@
 		<p class="mt-0.5 mb-3.5 text-[13px]" style="color: var(--ink-3)">
 			Follows your device by default. Saved on this device.
 		</p>
-		<div
-			class="flex gap-1 rounded-[var(--r-md)] p-1"
-			role="radiogroup"
-			aria-label="Theme"
-			style="background: var(--surface-2)"
-		>
-			{#each themeOptions as opt (opt.id)}
-				{@const active = theme.pref === opt.id}
-				<button
-					type="button"
-					role="radio"
-					aria-checked={active}
-					onclick={() => setTheme(opt.id)}
-					class="press flex flex-1 items-center justify-center gap-1.5 rounded-[var(--r-sm)] py-2 text-[13px] font-medium"
-					style={active
-						? 'background: var(--surface); color: var(--ink); box-shadow: var(--shadow-card)'
-						: 'color: var(--ink-3)'}
-				>
-					<opt.icon class="h-4 w-4" />
-					{opt.label}
-				</button>
-			{/each}
-		</div>
+		<Segmented
+			options={themeOptions.map((o) => ({ value: o.id, label: o.label, icon: o.icon }))}
+			value={theme.pref}
+			onselect={(v) => setTheme(v as ThemePref)}
+			ariaLabel="Theme"
+		/>
 	</div>
 
 	{#if data.member.role === 'owner'}

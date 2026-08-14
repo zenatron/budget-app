@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Segmented from '$lib/components/Segmented.svelte';
 	import { page } from '$app/state';
 	import { CalendarDays } from '@lucide/svelte';
 
@@ -26,25 +27,17 @@
 	isn't — it's a view *across* both, which is why it reads as an action.
 -->
 <div class="relative mb-4 flex justify-center">
-	<div class="inline-flex rounded-[12px] p-1" style="background: var(--surface-2)" role="tablist">
-		{#each items as item (item.key)}
-			{@const active = current === item.key}
-			<a
-				href="/w/{slug}/{item.key}"
-				role="tab"
-				aria-selected={active}
-				title={item.hint}
-				class="press rounded-[9px] px-5 py-2 text-[14px] font-semibold transition-colors"
-				style="color: {active ? 'var(--ink)' : 'var(--ink-3)'}; background: {active
-					? 'var(--surface)'
-					: 'transparent'}; box-shadow: {active
-					? 'var(--shadow-card), inset 0 0 0 0.5px var(--hairline)'
-					: 'none'}"
-			>
-				{item.label}
-			</a>
-		{/each}
-	</div>
+	<Segmented
+		options={items.map((i) => ({
+			value: i.key,
+			label: i.label,
+			href: `/w/${slug}/${i.key}`,
+			title: i.hint
+		}))}
+		value={current}
+		fill={false}
+		ariaLabel="Plan section"
+	/>
 	<a
 		href="/w/{slug}/calendar"
 		class="press icon-btn absolute top-1/2 right-0 -translate-y-1/2"
