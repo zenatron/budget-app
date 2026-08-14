@@ -143,9 +143,58 @@
 		if (resolveLink(text)) e.preventDefault();
 	}
 
+	/*
+	 * Typed addresses, when a geocoder is configured.
+	 *
+	 * Never per keystroke. Nominatim's usage policy forbids autocomplete-style
+	 * querying outright and will ban the deployment's IP for it, so a search only
+	 * happens on Enter or on leaving the field — a deliberate act, not a
+	 * side-effect of typing. The adapter enforces one request per second on top
+	 * of this; the two are belt-and-braces.
+	 */
+	let candidates = $state<{ latE3: number; lngE3: number; label: string }[]>([]);
+	let searching = $state(false);
+
+	async function searchPlace() {
+		const q = placeQuery.trim();
+		if (q.length < 3) return;
+		searching = true;
+		candidates = [];
+		try {
+			const res = await fetch(`/w/${slug}/places/search`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ query: q })
+			});
+			const body = res.ok ? await res.json() : { places: [] };
+			candidates = body.places ?? [];
+			if (candidates.length === 0) {
+				placeError = `Nothing found for "${q}". Paste a link from a maps app, or use where you are.`;
+			}
+		} catch {
+			// The endpoint never 5xxs, so this is the browser being offline. Same
+			// answer either way: no candidates, and the other two routes still work.
+			placeError = 'Could not search for that right now.';
+		} finally {
+			searching = false;
+		}
+	}
+
+	function pickCandidate(c: { latE3: number; lngE3: number; label: string }) {
+		// Already rounded by the server; the hidden inputs carry it as-is.
+		place = { latE3: c.latE3, lngE3: c.lngE3, label: c.label, source: 'geocode' };
+		candidates = [];
+		placeQuery = '';
+		placeError = null;
+	}
+
 	function onPlaceCommit() {
 		if (!placeQuery.trim()) return;
 		if (resolveLink(placeQuery)) return;
+		if (data.geocoderEnabled) {
+			void searchPlace();
+			return;
+		}
 		placeError =
 			"That doesn't have a location in it. Paste a link from a maps app, or use where you are.";
 	}
@@ -154,6 +203,7 @@
 		place = null;
 		placeQuery = '';
 		placeError = null;
+		candidates = [];
 	}
 
 	/*
@@ -698,7 +748,9 @@
 								onPlaceCommit();
 							}}
 							maxlength="200"
-							placeholder="Paste a map link"
+							placeholder={data.geocoderEnabled
+								? 'Address, or paste a map link'
+								: 'Paste a map link'}
 							class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:opacity-40"
 							style="color: var(--ink)"
 						/>
@@ -720,7 +772,29 @@
 						</button>
 					{/if}
 				</div>
-				{#if placeError}
+				<!--
+					Keyed on position, deliberately. The list is always replaced whole,
+					so there is no identity to preserve across updates — and keying on
+					the place itself made the render abort outright the first time a
+					provider returned the same row twice. The endpoint dedupes as well;
+					this is the half that doesn't depend on the provider behaving.
+				-->
+				{#each candidates as c, i (i)}
+					<button
+						type="button"
+						onclick={() => pickCandidate(c)}
+						class="row row-tap hairline w-full text-left"
+						style="box-shadow: inset 0 0.5px 0 var(--hairline)"
+					>
+						<Search class="h-4 w-4 shrink-0" style="color: var(--ink-4)" />
+						<span class="min-w-0 flex-1 truncate text-[15px]" style="color: var(--ink-2)">
+							{c.label}
+						</span>
+					</button>
+				{/each}
+				{#if searching}
+					<p class="px-3 pb-2 text-[13px]" style="color: var(--ink-3)">Looking…</p>
+				{:else if placeError}
 					<p class="px-3 pb-2 text-[13px] leading-relaxed" style="color: var(--ink-3)">
 						{placeError}
 					</p>

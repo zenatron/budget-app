@@ -69,6 +69,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		// The whole "Where" row is absent when places are off, rather than present
 		// and inert: an off feature should not leave a field on the form.
 		locationEnabled: locals.workspace!.locationEnabled,
+		// Only offered when a provider is actually configured. Without one the row
+		// still takes a pasted map link and the device's own location, so the
+		// placeholder changes rather than the feature disappearing.
+		geocoderEnabled: !!env.GEOCODER_URL,
 		// Whether to offer the optional category suggestion. Off = deterministic form.
 		aiEnabled: locals.workspace!.aiMode !== 'off',
 		/*
