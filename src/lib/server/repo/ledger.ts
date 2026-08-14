@@ -59,6 +59,17 @@ export interface LedgerOpts {
 	from?: Date;
 	to?: Date;
 	basis?: LedgerBasis;
+	/**
+	 * A geographic window, in millidegrees. The pin is the purchase's own, or
+	 * the vendor's saved default — the same `coalesce` the map projects, so a
+	 * bubble and the list you reach by tapping it hold exactly the same rows.
+	 *
+	 * A bucket movement has no place, so a bbox and `includeMovements` are
+	 * mutually exclusive; `ledgerOptsFromUrl` enforces that, for the same reason
+	 * the spend basis drops movements below — the rows have to sum to the figure
+	 * that was tapped.
+	 */
+	bbox?: { minLatE3: number; minLngE3: number; maxLatE3: number; maxLngE3: number };
 	/** Bucket movements are off unless asked for. */
 	includeMovements?: boolean;
 	limit?: number;
@@ -110,6 +121,12 @@ export async function listLedger(
 	if (opts.uncategorized) purchaseWhere.push(isNull(purchase.categoryId));
 	if (opts.memberId) purchaseWhere.push(eq(purchase.memberId, opts.memberId));
 	if (opts.accountId) purchaseWhere.push(eq(purchase.accountId, opts.accountId));
+	if (opts.bbox) {
+		const lat = sql`coalesce(${purchase.latE3}, ${merchant.latE3})`;
+		const lng = sql`coalesce(${purchase.lngE3}, ${merchant.lngE3})`;
+		purchaseWhere.push(sql`${lat} between ${opts.bbox.minLatE3} and ${opts.bbox.maxLatE3}`);
+		purchaseWhere.push(sql`${lng} between ${opts.bbox.minLngE3} and ${opts.bbox.maxLngE3}`);
+	}
 
 	// On the spend basis a row is dated by when it completed, and only settled
 	// states count — matching analytics exactly. On the activity basis a row is
@@ -155,6 +172,9 @@ export async function listLedger(
 		!opts.uncategorized &&
 		!opts.memberId &&
 		!opts.accountId &&
+		// Nobody stood anywhere to set money aside, so a geographic filter excludes
+		// movements the same way a category filter does — by construction.
+		!opts.bbox &&
 		basis !== 'spend';
 
 	/*

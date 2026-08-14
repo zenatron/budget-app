@@ -80,8 +80,30 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 			const bx = b.kind === 'purchase' ? (b.heldUntil ?? '') : '';
 			return ax.localeCompare(bx);
 		});
+	/*
+	 * What to call the geographic filter in the chip.
+	 *
+	 * Read off the rows the filter actually returned rather than passed down the
+	 * link, so the chip can never name a place the list isn't showing. When the
+	 * window covers several named places — a zoomed-out bubble — it says so
+	 * instead of picking one and implying the rest aren't there.
+	 */
+	let placeLabel: string | null = null;
+	if (opts.bbox) {
+		const names = [
+			...new Set(
+				feed.entries
+					.map((e) => (e.kind === 'purchase' ? (e.merchantName ?? e.placeLabel) : null))
+					.filter((n): n is string => !!n)
+			)
+		];
+		placeLabel =
+			names.length === 1 ? names[0] : names.length > 1 ? `${names.length} places` : 'On the map';
+	}
+
 	return {
 		entries: feed.entries.map((e) => toLedgerView(e, ctx)),
+		placeLabel,
 		categories,
 		members: members
 			.filter((m) => m.member.status === 'active')

@@ -29,6 +29,7 @@ import {
 	memberBreakdown,
 	monthlyTrend,
 	periodTotal,
+	placeBreakdown,
 	verdictTotals
 } from '$lib/server/repo/analytics';
 import { incomeInPeriod } from '$lib/server/repo/income';
@@ -298,7 +299,8 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		periodIncome,
 		prevIncome,
 		periodBuckets,
-		barCats
+		barCats,
+		places
 	] = await Promise.all([
 		periodTotal(db, scope, cfg.queryPeriod, now),
 		periodTotal(db, scope, cfg.prevPeriod, now),
@@ -311,7 +313,10 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		bucketFlowsInPeriod(db, ws.id, cfg.queryPeriod, ws.timezone),
 		period !== 'day'
 			? bucketCategoryTrend(db, scope, cfg.queryPeriod, now, period === 'year' ? 'month' : 'day')
-			: Promise.resolve(new Map())
+			: Promise.resolve(new Map()),
+		// Seal-filtered like every other figure on this page: a purchase this
+		// viewer cannot see contributes no place they can see.
+		ws.locationEnabled ? placeBreakdown(db, scope, cfg.queryPeriod, now, 6) : Promise.resolve([])
 	]);
 
 	// Lifetime, not period-scoped: running totals for the workspace.
@@ -379,6 +384,10 @@ export const load: PageServerLoad = async ({ locals, url, params }) => {
 		overdraftMinor: periodBuckets.overdraftMinor,
 		categories: categories.map((c) => ({ ...c })),
 		members: members.map((m) => ({ ...m })),
+		locationEnabled: ws.locationEnabled,
+		// A section captioned with a single row isn't a section — one pinned
+		// purchase is a fact about that purchase, not a pattern worth a heading.
+		places: places.length >= 2 ? places.map((p) => ({ ...p })) : [],
 		buckets: cfg.buckets.map((b) => {
 			let href: string | null = null;
 			if (period === 'year') href = `?period=month&month=${b.key}`;

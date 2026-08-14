@@ -7,7 +7,7 @@
 	import { formatPct } from '$lib/format';
 	import Money from '$lib/components/Money.svelte';
 	import CategoryRing from '$lib/components/CategoryRing.svelte';
-	import { ChevronRight, X, Sparkles } from '@lucide/svelte';
+	import { ChevronRight, MapPin, X, Sparkles } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { ledgerLink } from '$lib/ledger-filters';
 	let { data } = $props();
@@ -909,6 +909,52 @@
 			</div>
 		{/if}
 	</div>
+
+	<!--
+		By place. Same row shape as By member — a place is a plain fact about where
+		the money went, not a chart, and giving it its own visual language would
+		make it read as more of a claim than it is.
+
+		Only rendered with two or more places: one pinned purchase is a fact about
+		that purchase, not a pattern that deserves a heading. The bbox is the row's
+		own extent, so the ledger it opens holds exactly the rows behind the figure
+		— no more, and none missed.
+	-->
+	{#if data.locationEnabled && data.places.length > 0}
+		<div>
+			<div class="mb-2 flex items-baseline justify-between px-1">
+				<p class="section-label">By place</p>
+				<span class="text-[12px]" style="color: var(--ink-3)">Tap to see purchases</span>
+			</div>
+			<div style="border-top: 0.5px solid var(--hairline)">
+				{#each data.places as pl (pl.key)}
+					<a
+						href={ledgerLink(slug, {
+							from: data.rangeFrom,
+							to: data.rangeTo,
+							bbox: pl.bboxE3
+						})}
+						class="press hairline flex items-baseline justify-between gap-3 py-3.5"
+						aria-label="{pl.label}, {formatMinor(pl.totalMinor, currency)} — see purchases"
+					>
+						<span class="flex min-w-0 items-baseline gap-2">
+							<MapPin class="h-3.5 w-3.5 shrink-0 self-center" style="color: var(--ink-4)" />
+							<span class="truncate text-[15px]" style="color: var(--ink)">{pl.label}</span>
+							<span class="num shrink-0 text-[12px]" style="color: var(--ink-4)">
+								{pl.count}
+							</span>
+						</span>
+						<span class="flex shrink-0 items-baseline gap-1.5">
+							<span class="num text-[15px] font-medium" style="color: var(--ink)"
+								>{formatMinor(pl.totalMinor, currency)}</span
+							>
+							<ChevronRight class="h-3.5 w-3.5 self-center" style="color: var(--ink-4)" />
+						</span>
+					</a>
+				{/each}
+			</div>
+		</div>
+	{/if}
 
 	<div>
 		<div class="mb-2 flex items-baseline justify-between px-1">

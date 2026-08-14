@@ -284,6 +284,8 @@ export interface PurchaseListItem {
 	itemName: string;
 	note: string | null;
 	merchantName: string | null;
+	/** The name given to the pin, when there is one and no vendor named it. */
+	placeLabel: string | null;
 	state: PurchaseRow['state'];
 	amountMinor: bigint;
 	currency: string;
@@ -345,6 +347,7 @@ export async function listPurchases(
 			categoryIcon: category.icon,
 			categoryColor: category.color,
 			merchantName: merchant.name,
+			placeLabel: purchase.placeLabel,
 			thumbBlobId: sql<
 				string | null
 			>`coalesce(${purchaseImage.thumbBlobId}, ${parentImage.thumbBlobId})`,
@@ -415,6 +418,7 @@ export async function listPurchases(
 		itemName: r.p.itemName,
 		note: r.p.note,
 		merchantName: r.merchantName,
+		placeLabel: r.p.placeLabel,
 		state: r.p.state,
 		amountMinor: r.p.finalAmountMinor ?? r.p.requestedAmountMinor,
 		currency: r.p.currency,

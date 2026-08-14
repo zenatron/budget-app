@@ -9,7 +9,7 @@
 
 import { periodBoundsUtc } from '$lib/domain/analytics/period';
 import { addDays, type CalDate } from '$lib/domain/recurrence/rrule';
-import { NO_CATEGORY } from '$lib/ledger-filters';
+import { NO_CATEGORY, parseBboxParam } from '$lib/ledger-filters';
 import type { LedgerBasis, LedgerOpts } from '$lib/server/repo/ledger';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -51,6 +51,16 @@ export function ledgerOptsFromUrl(params: URLSearchParams, timezone: string): Le
 	// in it", so it keeps the default.
 	const basis: LedgerBasis = params.get('basis') === 'spend' ? 'spend' : 'activity';
 
+	/*
+	 * A geographic window, from the map or a "By place" row.
+	 *
+	 * A bucket movement has no place — nobody stood anywhere to set money aside —
+	 * so a bbox forces movements off. Without that, tapping a bubble worth $412
+	 * would land on a list padded with accruals that have nothing to do with it,
+	 * and the rows would not add up to the figure that was tapped.
+	 */
+	const bbox = parseBboxParam(params.get('bbox'));
+
 	return {
 		search: params.get('q') || undefined,
 		categoryId: uncategorized ? undefined : rawCategory || undefined,
@@ -60,6 +70,7 @@ export function ledgerOptsFromUrl(params: URLSearchParams, timezone: string): Le
 		from: bounds?.from,
 		to: bounds?.to,
 		basis,
-		includeMovements: params.get('movements') === '1'
+		bbox: bbox ?? undefined,
+		includeMovements: bbox ? false : params.get('movements') === '1'
 	};
 }

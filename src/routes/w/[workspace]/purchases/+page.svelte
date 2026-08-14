@@ -44,6 +44,7 @@
 	const member = $derived(page.url.searchParams.get('member') ?? '');
 	const from = $derived(page.url.searchParams.get('from') ?? '');
 	const to = $derived(page.url.searchParams.get('to') ?? '');
+	const bbox = $derived(page.url.searchParams.get('bbox') ?? '');
 	const activeQuery = $derived(page.url.searchParams.get('q') ?? '');
 	let showFilter = $state(false);
 
@@ -85,6 +86,18 @@
 					? 'Other'
 					: (data.categories.find((c) => c.id === category)?.name ?? 'Category');
 			out.push({ key: 'category', label: name, clear: { category: '' } });
+		}
+		// Arriving from a bubble on the map or a "By place" row narrows the list
+		// hard — often to three rows out of a month. Without a chip naming it, that
+		// reads as a ledger that lost your data. The server also drops bucket
+		// movements while a bbox is on (nobody stood anywhere to set money aside),
+		// so clearing it puts them back.
+		if (bbox) {
+			out.push({
+				key: 'bbox',
+				label: data.placeLabel ?? 'On the map',
+				clear: { bbox: '' }
+			});
 		}
 		return out;
 	});
