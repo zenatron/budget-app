@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-	INSIDE_R,
 	R_MAX,
 	R_MIN,
 	bubbleRadius,
@@ -194,20 +193,28 @@ describe('bubbleRadius', () => {
 });
 
 describe('placeLabels', () => {
-	const lab = (key: string, x: number, y: number, r: number, amount: number): LaidBubble => ({
+	const lab = (
+		key: string,
+		x: number,
+		y: number,
+		r: number,
+		amount: number,
+		nameText: string | null = null
+	): LaidBubble => ({
 		key,
 		x,
 		y,
 		r,
 		totalMinor: BigInt(amount),
-		text: '$1,204.00'
+		amountText: '$1,204.00',
+		nameText
 	});
 
 	it('keeps the bigger label and drops the one that would collide', () => {
-		// The big bubble's label is set inside it, at y=100. The small one's sits
-		// above its own circle, at y − r − lineH, so 123 puts it right on top of
-		// the big one's box.
-		const kept = placeLabels([lab('big', 100, 100, 40, 5000), lab('small', 104, 123, 10, 100)]);
+		// The big bubble's amount is set inside it, at its centre. The small one's
+		// stacks above its own circle, so a centre ~27px lower puts its text right
+		// on top — and the bigger amount wins the slot.
+		const kept = placeLabels([lab('big', 100, 100, 40, 5000), lab('small', 104, 130, 10, 100)]);
 		expect(kept.has('big')).toBe(true);
 		expect(kept.has('small')).toBe(false);
 	});
@@ -219,7 +226,7 @@ describe('placeLabels', () => {
 
 	it('gives the same answer whatever order the bubbles arrive in', () => {
 		const a = lab('a', 100, 100, 40, 5000);
-		const b = lab('b', 106, 104, 10, 100);
+		const b = lab('b', 106, 130, 10, 100);
 		expect([...placeLabels([a, b])]).toEqual([...placeLabels([b, a])]);
 	});
 
@@ -227,14 +234,25 @@ describe('placeLabels', () => {
 		expect(placeLabels([lab('only', 10, 10, R_MIN, 1)]).has('only')).toBe(true);
 	});
 
-	it('places a big bubble’s label inside it and a small one’s above', () => {
-		// Same centre, different radii: the small one's box sits above the circle,
-		// so it clears a big bubble's inside-label at the same y.
-		const kept = placeLabels([
-			lab('big', 100, 100, INSIDE_R + 5, 5000),
-			lab('small', 100, 100 - INSIDE_R * 3, R_MIN, 100)
-		]);
-		expect(kept.size).toBe(2);
+	it('reserves the name under a big bubble, not just the amount inside it', () => {
+		// The regression this exists to stop: a large bubble's name hangs below
+		// its circle, and reserving only the amount let a neighbour's label print
+		// straight through it.
+		const big = lab('big', 100, 100, 40, 5000, 'Union Square');
+		const under = lab('under', 100, 100 + 40 + 8, R_MIN, 100, 'Ferry Building');
+		expect(placeLabels([big, under]).has('under')).toBe(false);
+
+		// Far enough below to clear it, and both are kept.
+		const clear = lab('clear', 100, 100 + 40 + 60, R_MIN, 100, 'Ferry Building');
+		expect(placeLabels([big, clear]).size).toBe(2);
+	});
+
+	it('reserves width for the longer of the two lines', () => {
+		const short = lab('short', 100, 100, R_MIN, 5000, null);
+		// A long name reaches further sideways than the amount does.
+		const long = lab('long', 100, 300, R_MIN, 4000, 'A very long place name indeed');
+		const near = lab('near', 190, 300, R_MIN, 100, null);
+		expect(placeLabels([short, long, near]).has('near')).toBe(false);
 	});
 
 	it('handles an empty map', () => {

@@ -156,9 +156,12 @@ export interface BBoxE3 {
 
 export interface LocatedPoint {
 	purchaseId: string;
+	/** What was bought — what the sheet lists, since the place is its heading. */
+	itemName: string;
 	latE3: number;
 	lngE3: number;
 	totalMinor: bigint;
+	/** The place: the vendor's name, or whatever the pin was called. */
 	label: string | null;
 	color: string | null;
 	/** True when the pin came from the vendor's default rather than the purchase. */
@@ -192,6 +195,7 @@ export async function locatedSpending(
 	const rows = await db
 		.select({
 			purchaseId: purchase.id,
+			itemName: purchase.itemName,
 			latE3: lat,
 			lngE3: lng,
 			total: sql<string>`${purchase.finalAmountMinor}`,
@@ -222,6 +226,7 @@ export async function locatedSpending(
 		truncated,
 		points: rows.slice(0, MAP_POINT_CAP).map((r) => ({
 			purchaseId: r.purchaseId,
+			itemName: r.itemName,
 			latE3: Number(r.latE3),
 			lngE3: Number(r.lngE3),
 			totalMinor: BigInt(r.total ?? '0'),

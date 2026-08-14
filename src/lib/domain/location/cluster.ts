@@ -201,14 +201,41 @@ export function bubbleRadius(totalMinor: bigint, maxMinor: bigint): number {
 	return R_MIN + (R_MAX - R_MIN) * Math.sqrt(ratio);
 }
 
+export const LABEL_LINE_H = 13;
+
 export interface LaidBubble {
 	key: string;
 	x: number;
 	y: number;
 	r: number;
 	totalMinor: bigint;
-	/** The longest line that will be drawn, for the width estimate. */
-	text: string;
+	/** The amount, as it will be drawn. */
+	amountText: string;
+	/** The place name under it, when there is one. */
+	nameText: string | null;
+}
+
+export interface LabelLayout {
+	/** Baseline offsets from the bubble's centre. */
+	amountDy: number;
+	nameDy: number;
+}
+
+/**
+ * Where a bubble's two lines of text sit, relative to its centre.
+ *
+ * The single definition, used by `placeLabels` to reserve space and by the
+ * renderer to draw. They were separately hand-tuned once, and the two drifted
+ * immediately: a large bubble's name is drawn *below* its circle, while the
+ * reservation only covered the amount *inside* it, so names in a dense cluster
+ * were never collision-checked and printed straight through each other.
+ */
+export function labelLayout(r: number): LabelLayout {
+	return r >= INSIDE_R
+		? // Big enough to hold the amount; the name hangs below the circle.
+			{ amountDy: 4, nameDy: r + LABEL_LINE_H }
+		: // Too small — both lines stack clear above it, amount on top.
+			{ amountDy: -(r + LABEL_LINE_H + 4), nameDy: -(r + 6) };
 }
 
 /**
@@ -218,21 +245,19 @@ export interface LaidBubble {
  * density, which is true and is information. Text overlapping text reads as a
  * bug. So it is greedy by amount: the biggest label is placed first and any
  * later one whose box hits a placed box is simply dropped.
- *
- * The box is computed here, from the same INSIDE_R rule the renderer uses, so
- * the two cannot disagree about where a label sits.
  */
-export function placeLabels(laid: LaidBubble[], charW = 6.2, lineH = 13): Set<string> {
+export function placeLabels(laid: LaidBubble[], charW = 6.2): Set<string> {
 	const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
 	const keep = new Set<string>();
 
 	for (const b of [...laid].sort(byAmountThenKey)) {
-		const w = Math.max(charW * 3, b.text.length * charW);
-		// Inside a big bubble: one line, centred. Above a small one: two stacked
-		// lines (amount over name) sitting clear of the circle.
-		const h = b.r >= INSIDE_R ? lineH : lineH * 2;
-		const cy = b.r >= INSIDE_R ? b.y : b.y - b.r - lineH;
-		const box = { x0: b.x - w / 2, x1: b.x + w / 2, y0: cy - h / 2, y1: cy + h / 2 };
+		const { amountDy, nameDy } = labelLayout(b.r);
+		const widest = Math.max(b.amountText.length, b.nameText?.length ?? 0);
+		const w = Math.max(charW * 3, widest * charW);
+		// The union of both baselines, grown by the line box around each.
+		const top = Math.min(amountDy, b.nameText ? nameDy : amountDy) - LABEL_LINE_H + 2;
+		const bottom = Math.max(amountDy, b.nameText ? nameDy : amountDy) + 3;
+		const box = { x0: b.x - w / 2, x1: b.x + w / 2, y0: b.y + top, y1: b.y + bottom };
 
 		const collides = placed.some(
 			(p) => box.x0 < p.x1 && box.x1 > p.x0 && box.y0 < p.y1 && box.y1 > p.y0

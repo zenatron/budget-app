@@ -7,7 +7,7 @@
 	import { formatPct } from '$lib/format';
 	import Money from '$lib/components/Money.svelte';
 	import CategoryRing from '$lib/components/CategoryRing.svelte';
-	import { ChevronRight, MapPin, X, Sparkles } from '@lucide/svelte';
+	import { ChevronRight, Map as MapIcon, MapPin, X, Sparkles } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { ledgerLink } from '$lib/ledger-filters';
 	let { data } = $props();
@@ -16,6 +16,24 @@
 	const currency = $derived(data.workspace.currency);
 	const period = $derived(data.period);
 	const isMonth = $derived(period === 'month');
+
+	/**
+	 * The map opens on whatever window this page is showing, so the two screens
+	 * are the same view of the same data rather than two features that happen to
+	 * both draw money. Only the period parameters carry across — z and c belong
+	 * to the map and are meaningless here.
+	 */
+	const mapSearch = $derived.by(() => {
+		// A throwaway builder, read once into a string; nothing renders from the
+		// instance, so it has no reason to be reactive.
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
+		const q = new URLSearchParams();
+		for (const k of ['period', 'month', 'year', 'day', 'wo']) {
+			const v = page.url.searchParams.get(k);
+			if (v) q.set(k, v);
+		}
+		return q.size > 0 ? `?${q}` : '';
+	});
 
 	let touchStartX = $state(0);
 	let touchStartY = $state(0);
@@ -341,6 +359,20 @@
 >
 	<div class="flex items-center justify-between px-1 pt-1">
 		<h1 class="text-[28px]">Activity</h1>
+		<!--
+			A 38px square, per the shape rule on .icon-btn: a round button closes
+			something, a square one does something. Only shown once this workspace
+			has pinned anything, so an unused feature never advertises itself.
+
+			A plain link, deliberately without startViewTransition: that slide is the
+			period-stepping gesture's follow-through, and reusing it here would make
+			opening the map read as changing the month.
+		-->
+		{#if data.hasPlaces}
+			<a href="map{mapSearch}" class="icon-btn press" aria-label="Spending map">
+				<MapIcon class="h-[18px] w-[18px]" />
+			</a>
+		{/if}
 	</div>
 
 	<div class="flex justify-center">

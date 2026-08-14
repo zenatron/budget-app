@@ -56,13 +56,24 @@ export interface TilePlacement {
 	/** Where this tile's top-left corner sits in viewport pixels. */
 	px: number;
 	py: number;
+	/** Rendered edge length in pixels. 256 at an integer zoom, scaled between. */
+	size: number;
 }
 
 const clamp = (n: number, lo: number, hi: number) => (n < lo ? lo : n > hi ? hi : n);
 
-/** Tiles across the world at a zoom. Fractional z is rounded — tiles are integers. */
+/**
+ * Tiles across the world at a zoom, fractional and continuous.
+ *
+ * Continuous is the whole reason a pinch feels like a pinch: the projection has
+ * to answer for z = 12.37 as readily as for 13, or the map snaps between whole
+ * zoom levels while the fingers are still moving. Tile *images* only exist at
+ * integer zooms, and `tilesFor` reconciles the two by fetching the nearest
+ * integer level and scaling it — so the bubbles are always drawn at the exact
+ * zoom, and only the basemap under them is ever a scaled approximation.
+ */
 function tilesAcross(z: number): number {
-	return 2 ** Math.round(z);
+	return 2 ** z;
 }
 
 export function lngToTileX(lng: number, z: number): number {
@@ -128,14 +139,21 @@ export function viewportBounds(v: Viewport): BBox {
  * gets a 404 per tile per frame.
  */
 export function tilesFor(v: Viewport): TilePlacement[] {
+	/*
+	 * Tile images exist only at whole zooms, so a fractional viewport fetches the
+	 * nearest level and draws it larger or smaller. Without this a pinch would
+	 * fire a fresh set of tile requests on every animation frame — hundreds of
+	 * them for one gesture, against somebody else's tile server.
+	 */
 	const z = Math.round(clamp(v.z, MIN_ZOOM, MAX_ZOOM));
 	const n = 2 ** z;
+	const size = TILE_SIZE * 2 ** (v.z - z);
 	const o = originOf(v);
 
-	const firstX = Math.floor(o.x / TILE_SIZE);
-	const lastX = Math.floor((o.x + v.width) / TILE_SIZE);
-	const firstY = Math.max(0, Math.floor(o.y / TILE_SIZE));
-	const lastY = Math.min(n - 1, Math.floor((o.y + v.height) / TILE_SIZE));
+	const firstX = Math.floor(o.x / size);
+	const lastX = Math.floor((o.x + v.width) / size);
+	const firstY = Math.max(0, Math.floor(o.y / size));
+	const lastY = Math.min(n - 1, Math.floor((o.y + v.height) / size));
 
 	const out: TilePlacement[] = [];
 	for (let ty = firstY; ty <= lastY; ty++) {
@@ -144,8 +162,9 @@ export function tilesFor(v: Viewport): TilePlacement[] {
 				z,
 				x: ((tx % n) + n) % n,
 				y: ty,
-				px: tx * TILE_SIZE - o.x,
-				py: ty * TILE_SIZE - o.y
+				px: tx * size - o.x,
+				py: ty * size - o.y,
+				size
 			});
 		}
 	}

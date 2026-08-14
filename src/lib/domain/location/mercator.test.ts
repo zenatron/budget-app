@@ -34,6 +34,18 @@ describe('project / unproject', () => {
 		}
 	});
 
+	it('is continuous, so a pinch does not snap between whole zooms', () => {
+		// The projection must answer for 12.37 as readily as for 13, or the map
+		// jumps while the fingers are still moving.
+		const a = project(SF, 12);
+		const b = project(SF, 12.5);
+		const c = project(SF, 13);
+		expect(b.x).toBeGreaterThan(a.x);
+		expect(b.x).toBeLessThan(c.x);
+		// Doubling the scale per zoom level, exactly.
+		expect(c.x / a.x).toBeCloseTo(2, 9);
+	});
+
 	it('increases x eastward and y southward', () => {
 		expect(lngToTileX(10, 5)).toBeGreaterThan(lngToTileX(-10, 5));
 		expect(latToTileY(-10, 5)).toBeGreaterThan(latToTileY(10, 5));
@@ -128,9 +140,42 @@ describe('tilesFor', () => {
 	});
 
 	it('requests integer zooms even mid-pinch', () => {
+		// A fresh tile request per animation frame would be hundreds of requests
+		// for one gesture, against somebody else's tile server.
 		for (const t of tilesFor({ ...phone, z: 12.37 })) {
 			expect(Number.isInteger(t.z)).toBe(true);
 			expect(t.z).toBe(12);
+		}
+	});
+
+	it('scales the nearest level to cover a fractional zoom', () => {
+		// At a whole zoom the tile is drawn at its native size.
+		for (const t of tilesFor({ ...phone, z: 13 })) {
+			expect(t.size).toBeCloseTo(TILE_SIZE, 6);
+		}
+		// Past a whole zoom, the level below it is stretched…
+		for (const t of tilesFor({ ...phone, z: 12.4 })) {
+			expect(t.z).toBe(12);
+			expect(t.size).toBeCloseTo(TILE_SIZE * 2 ** 0.4, 6);
+			expect(t.size).toBeGreaterThan(TILE_SIZE);
+		}
+		// …and short of one, the level above it is shrunk.
+		for (const t of tilesFor({ ...phone, z: 12.6 })) {
+			expect(t.z).toBe(13);
+			expect(t.size).toBeCloseTo(TILE_SIZE * 2 ** -0.4, 6);
+			expect(t.size).toBeLessThan(TILE_SIZE);
+		}
+	});
+
+	it('still covers the viewport at a fractional zoom', () => {
+		for (const z of [12.1, 12.5, 12.9]) {
+			const tiles = tilesFor({ ...phone, z });
+			const right = Math.max(...tiles.map((t) => t.px + t.size));
+			const bottom = Math.max(...tiles.map((t) => t.py + t.size));
+			expect(Math.min(...tiles.map((t) => t.px))).toBeLessThanOrEqual(0);
+			expect(Math.min(...tiles.map((t) => t.py))).toBeLessThanOrEqual(0);
+			expect(right).toBeGreaterThanOrEqual(phone.width);
+			expect(bottom).toBeGreaterThanOrEqual(phone.height);
 		}
 	});
 });
