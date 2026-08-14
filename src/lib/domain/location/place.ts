@@ -91,3 +91,25 @@ export function samePlace(a: PurchasePlace | null, b: PurchasePlace | null): boo
 	// different route is not a change worth writing an audit event for.
 	return a.latE3 === b.latE3 && a.lngE3 === b.lngE3 && a.label === b.label;
 }
+
+/**
+ * A geocoder's answer, shortened to something a person would call the place.
+ *
+ * Nominatim returns the full postal chain — "San Francisco Ferry Building, 1,
+ * The Embarcadero, Financial District, South of Market, San Francisco,
+ * California, 94111, United States" — which is right for choosing between
+ * candidates and useless as a label on a row. The first two components are the
+ * name and its street; everything after is the administrative tail that every
+ * candidate in the same city shares.
+ */
+export function shortenPlaceLabel(label: string, maxLen = 60): string {
+	const parts = label
+		.split(',')
+		.map((p) => p.trim())
+		.filter(Boolean);
+	// A bare house number as the second part ("Ferry Building, 1") says nothing;
+	// take the street after it instead.
+	const head = parts.slice(0, /^\d+[a-z]?$/i.test(parts[1] ?? '') ? 3 : 2);
+	const short = head.join(', ') || label.trim();
+	return short.length > maxLen ? `${short.slice(0, maxLen - 1).trimEnd()}…` : short;
+}

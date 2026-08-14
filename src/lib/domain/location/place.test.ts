@@ -5,6 +5,7 @@ import {
 	placeFromColumns,
 	placeToColumns,
 	samePlace,
+	shortenPlaceLabel,
 	type PurchasePlace
 } from './place';
 
@@ -111,5 +112,40 @@ describe('samePlace', () => {
 		expect(samePlace(null, null)).toBe(true);
 		expect(samePlace(SF, null)).toBe(false);
 		expect(samePlace(null, SF)).toBe(false);
+	});
+});
+
+describe('shortenPlaceLabel', () => {
+	it('keeps the name and its street, drops the administrative tail', () => {
+		expect(
+			shortenPlaceLabel(
+				'Ferry Building, Harry Bridges Plaza, Financial District, South of Market, San Francisco, California, 94111, United States'
+			)
+		).toBe('Ferry Building, Harry Bridges Plaza');
+	});
+
+	it('steps over a bare house number to reach the street', () => {
+		// "San Francisco Ferry Building, 1" names nothing you could find.
+		expect(
+			shortenPlaceLabel(
+				'San Francisco Ferry Building, 1, The Embarcadero, Financial District, San Francisco'
+			)
+		).toBe('San Francisco Ferry Building, 1, The Embarcadero');
+	});
+
+	it('leaves a short label alone', () => {
+		expect(shortenPlaceLabel('Golden Gate Park')).toBe('Golden Gate Park');
+		expect(shortenPlaceLabel('Castro, San Francisco')).toBe('Castro, San Francisco');
+	});
+
+	it('caps anything still too long, with an ellipsis', () => {
+		const long = shortenPlaceLabel(`${'A'.repeat(80)}, Somewhere`);
+		expect(long.length).toBeLessThanOrEqual(60);
+		expect(long.endsWith('…')).toBe(true);
+	});
+
+	it('survives labels with no commas or only whitespace', () => {
+		expect(shortenPlaceLabel('Somewhere')).toBe('Somewhere');
+		expect(shortenPlaceLabel('  ,  ,  ')).toBe(',  ,');
 	});
 });

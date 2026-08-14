@@ -32,7 +32,7 @@
 	import { modal } from '$lib/actions/modal';
 	import { formatCoords, roundToE3 } from '$lib/domain/location/coords';
 	import { parseMapsLink } from '$lib/domain/location/maps-link';
-	import type { PurchasePlace } from '$lib/domain/location/place';
+	import { shortenPlaceLabel, type PurchasePlace } from '$lib/domain/location/place';
 
 	import BillImport from '$lib/components/BillImport.svelte';
 	import BarcodeScanner from '$lib/components/BarcodeScanner.svelte';
@@ -181,8 +181,16 @@
 	}
 
 	function pickCandidate(c: { latE3: number; lngE3: number; label: string }) {
-		// Already rounded by the server; the hidden inputs carry it as-is.
-		place = { latE3: c.latE3, lngE3: c.lngE3, label: c.label, source: 'geocode' };
+		// Already rounded by the server; the hidden inputs carry it as-is. The
+		// label is shortened on the way in: the picker shows the full postal chain
+		// because that is what tells two candidates apart, but the row that ends up
+		// on the purchase wants the name, not the county and the postcode.
+		place = {
+			latE3: c.latE3,
+			lngE3: c.lngE3,
+			label: shortenPlaceLabel(c.label),
+			source: 'geocode'
+		};
 		candidates = [];
 		placeQuery = '';
 		placeError = null;

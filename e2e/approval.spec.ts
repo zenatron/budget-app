@@ -67,15 +67,19 @@ test('approval loop: request → approve → overage re-approval → complete; d
 	// Same hydration race as the policy toggle and invite button: "Deny…" only
 	// reveals the reason field once its handler is attached, and a click that
 	// lands before then is a no-op.
+	//
+	// The button is labelled "Deny", not "Deny…" — the ellipsis went at some
+	// point and the locator didn't follow, so this loop spent its whole 30s
+	// clicking nothing. Trigger and submit are mutually exclusive (`{#if
+	// !showDeny}`), so one exact name addresses whichever is on screen.
 	const reason = alice.getByPlaceholder('Reason (optional)');
+	const deny = alice.getByRole('button', { name: 'Deny', exact: true });
 	await expect(async () => {
-		if (!(await reason.isVisible())) {
-			await alice.getByRole('button', { name: 'Deny…' }).click();
-		}
+		if (!(await reason.isVisible())) await deny.click();
 		await expect(reason).toBeVisible({ timeout: 1000 });
 	}).toPass({ timeout: 30_000 });
 	await reason.fill('audiophile nonsense');
-	await alice.getByRole('button', { name: 'Deny request' }).click();
+	await deny.click();
 	await expect(alice.locator('.chip', { hasText: 'Denied' })).toBeVisible();
 	await expect(alice.getByText(/audiophile nonsense/)).toBeVisible();
 });

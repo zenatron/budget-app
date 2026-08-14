@@ -837,17 +837,27 @@
 						<button
 							type="button"
 							onclick={() => data.can.annotate && openPlaceEdit()}
-							class="edit-row hairline flex w-full items-center justify-between py-3.5"
+							class="edit-row hairline flex w-full items-center justify-between gap-3 py-3.5"
 							disabled={!data.can.annotate}
 						>
-							<span class="text-[16px]" style="color: var(--ink-3)">Where</span>
-							<span class="flex min-w-0 items-center gap-2">
+							<!--
+								`shrink-0` on the label and `min-w-0` the whole way down the right
+								side: without both, a long geocoded name ("…, San Francisco,
+								California, 94111, United States") refuses to shrink, `truncate`
+								never engages, and the text runs out through both edges of the
+								card and straight over the word "Where".
+							-->
+							<span class="shrink-0 text-[16px]" style="color: var(--ink-3)">Where</span>
+							<span class="flex min-w-0 flex-1 items-center justify-end gap-2">
 								{#if p.place}
 									<span class="flex min-w-0 flex-col items-end">
-										<span class="truncate text-[16px] font-medium" style="color: var(--ink)">
+										<span
+											class="w-full truncate text-right text-[16px] font-medium"
+											style="color: var(--ink)"
+										>
 											{p.place.label ?? formatCoords(p.place)}
 										</span>
-										<span class="num text-[12px]" style="color: var(--ink-4)">
+										<span class="num text-[12px] whitespace-nowrap" style="color: var(--ink-4)">
 											{p.place.source === 'merchant'
 												? 'from the vendor’s usual place'
 												: `${formatCoords(p.place)} · ±110 m`}

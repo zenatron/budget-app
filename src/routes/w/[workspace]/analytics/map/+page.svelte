@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { replaceState } from '$app/navigation';
-	import { ChevronLeft, ChevronRight, Maximize2 } from '@lucide/svelte';
+	import { ChevronLeft, Maximize2 } from '@lucide/svelte';
 	import { fade, fly } from 'svelte/transition';
 	import { dismiss } from '$lib/actions/dismiss';
 	import { modal } from '$lib/actions/modal';
@@ -167,6 +167,16 @@
 	const graticule = $derived.by<Graticule>(() => {
 		const empty: Graticule = { lines: [], labels: [] };
 		if (!ready) return empty;
+		/*
+		 * Only when there is no basemap.
+		 *
+		 * Without streets the graticule *is* the map — it is the only thing telling
+		 * you where on Earth a bubble sits. With streets under it, it is a second
+		 * grid over a picture that already answers that question, and it reads as
+		 * pattern rather than as information. The scale bar stays either way, since
+		 * that is the one thing tiles don't state.
+		 */
+		if (data.tileUrl) return empty;
 
 		const b = viewportBounds(viewport);
 		const span = Math.max(b.maxLng - b.minLng, 1e-6);
@@ -519,19 +529,35 @@
 		<span class="section-label">Map</span>
 	</div>
 
-	<!-- The same period control as Activity, reading the same resolver. -->
+	<!--
+		The period control, character for character the one on Activity — same
+		container radius and fill, same tab radius, padding, size and weight, same
+		active treatment (raised onto --surface with the card shadow and a hairline
+		ring). It had drifted into a pill with an ink fill, which read as a
+		different control for the same job on the screen next door.
+
+		`?period=X` alone, as Activity does: it drops month/day/wo, so switching
+		period lands on the current one rather than a stale window, and drops z/c
+		so the new set of pins gets framed fresh.
+	-->
 	<div class="flex justify-center px-4 pb-2">
 		<div
-			class="inline-flex rounded-[var(--r-full)] p-0.5"
-			style="background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--hairline)"
+			class="inline-flex rounded-[10px] p-0.5"
+			style="background: var(--surface-2)"
+			role="tablist"
 		>
 			{#each PERIODS as p (p.key)}
+				{@const active = data.period === p.key}
 				<a
-					href={periodHref({ period: p.key })}
-					class="rounded-[var(--r-full)] px-3.5 py-1 text-[13px] transition-colors"
-					style={data.period === p.key
-						? 'background: var(--ink); color: var(--paper); font-weight: 600'
-						: 'color: var(--ink-3)'}
+					href="?period={p.key}"
+					role="tab"
+					aria-selected={active}
+					class="press rounded-[8px] px-3 py-1.5 text-[13px] font-semibold transition-colors"
+					style="color: {active ? 'var(--ink)' : 'var(--ink-3)'}; background: {active
+						? 'var(--surface)'
+						: 'transparent'}; box-shadow: {active
+						? 'var(--shadow-card), inset 0 0 0 0.5px var(--hairline)'
+						: 'none'}"
 				>
 					{p.label}
 				</a>
@@ -539,26 +565,53 @@
 		</div>
 	</div>
 
-	<div class="mb-2 flex items-center justify-between px-4">
-		<a
-			href={data.hasPrev ? periodHref(stepParams('prev')) : '#'}
-			aria-disabled={!data.hasPrev}
-			aria-label="Previous {data.period}"
-			class="icon-btn press"
-			style={data.hasPrev ? '' : 'opacity: 0.3; pointer-events: none'}
-		>
-			<ChevronLeft class="h-4 w-4" />
-		</a>
-		<span class="num text-[15px] font-medium" style="color: var(--ink)">{data.label}</span>
-		<a
-			href={data.hasNext ? periodHref(stepParams('next')) : '#'}
-			aria-disabled={!data.hasNext}
-			aria-label="Next {data.period}"
-			class="icon-btn press"
-			style={data.hasNext ? '' : 'opacity: 0.3; pointer-events: none'}
-		>
-			<ChevronRight class="h-4 w-4" />
-		</a>
+	<!-- Also Activity's: 36px round buttons with inline chevrons, a 17px semibold
+	     label between them, and an equally sized spacer when a direction has
+	     nowhere to go so the label never shifts. -->
+	<div class="mb-1 flex items-center justify-between gap-1 px-3">
+		{#if data.hasPrev}
+			<a
+				href={periodHref(stepParams('prev'))}
+				class="press flex h-9 w-9 items-center justify-center rounded-full"
+				style="color: var(--ink-3)"
+				aria-label="Previous"
+			>
+				<svg
+					width="18"
+					height="18"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.4"
+					stroke-linecap="round"
+					stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg
+				>
+			</a>
+		{:else}
+			<div class="h-9 w-9"></div>
+		{/if}
+		<span class="text-[17px] font-semibold" style="color: var(--ink)">{data.label}</span>
+		{#if data.hasNext}
+			<a
+				href={periodHref(stepParams('next'))}
+				class="press flex h-9 w-9 items-center justify-center rounded-full"
+				style="color: var(--ink-3)"
+				aria-label="Next"
+			>
+				<svg
+					width="18"
+					height="18"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.4"
+					stroke-linecap="round"
+					stroke-linejoin="round"><path d="M9 18l6-6-6-6" /></svg
+				>
+			</a>
+		{:else}
+			<div class="h-9 w-9"></div>
+		{/if}
 	</div>
 
 	{#if data.points.length === 0}

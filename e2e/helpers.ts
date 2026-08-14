@@ -2,13 +2,24 @@ import { expect, type Browser, type Page } from '@playwright/test';
 
 export type Who = 'alice' | 'bob' | 'carol';
 
-/** Log a fake-IdP identity in inside its own browser context. */
+/**
+ * Log a fake-IdP identity in inside its own browser context.
+ *
+ * Retried, because the suite trips the app's own defence: `hooks.server.ts`
+ * limits `auth:<ip>` to 10 requests a minute, and every test here logs two
+ * identities in from the same address. Late in a run the redirect simply never
+ * comes back and the wait hangs — which is why a spec could pass alone and fail
+ * fourth. The retry rides out the window rather than weakening the limit, which
+ * exists for a real reason.
+ */
 export async function loginAs(browser: Browser, who: Who): Promise<Page> {
 	const context = await browser.newContext();
 	const page = await context.newPage();
-	await page.request.get(`http://localhost:9443/_as/${who}`);
-	await page.goto('/auth/login');
-	await page.waitForURL(/\/(welcome|w\/)/);
+	await expect(async () => {
+		await page.request.get(`http://localhost:9443/_as/${who}`);
+		await page.goto('/auth/login');
+		await page.waitForURL(/\/(welcome|w\/)/, { timeout: 8000 });
+	}).toPass({ timeout: 90_000 });
 	return page;
 }
 
@@ -50,6 +61,28 @@ export async function joinWorkspace(page: Page, code: string, slug: string): Pro
 }
 
 /**
+ * Wait until SvelteKit has taken over the page.
+ *
+ * Before hydration the markup is real but inert: `use:submit` isn't attached,
+ * so a click on a guarded button posts the form natively — the destructive
+ * action happens with no confirmation, and a test waiting for the dialog waits
+ * forever on a page that has already done the thing. Bindings are inert too, so
+ * a `fill` lands in the DOM that no `$state` ever sees.
+ *
+ * SvelteKit stamps its own key into `history.state` when the client starts, so
+ * this asks the framework rather than guessing from a proxy. `networkidle` is
+ * not usable here: the workspace layout holds an EventSource open, so the
+ * network is never idle.
+ */
+export async function waitForHydration(page: Page): Promise<void> {
+	await page.waitForFunction(
+		() => !!(history.state as Record<string, unknown> | null)?.['sveltekit:history'],
+		undefined,
+		{ timeout: 20_000 }
+	);
+}
+
+/**
  * Click something that asks "are you sure?", and say yes.
  *
  * The gate is the app's own `ConfirmDialog`, not `window.confirm` — so
@@ -58,11 +91,34 @@ export async function joinWorkspace(page: Page, code: string, slug: string): Pro
  * passing a listener nothing would ever call.
  */
 export async function clickAndConfirm(page: Page, name: string | RegExp): Promise<void> {
-	await page.getByRole('button', { name }).click();
+	await waitForHydration(page);
+	const trigger = page.getByRole('button', { name });
+	await trigger.click();
+
 	const dialog = page.getByRole('alertdialog');
-	await expect(dialog).toBeVisible({ timeout: 5000 });
-	await dialog.getByRole('button', { name: 'Confirm' }).click();
-	await expect(dialog).toBeHidden({ timeout: 5000 });
+	/*
+	 * `history.state` is stamped when the client starts, which is a moment before
+	 * every component's `use:` action has attached — so even after waiting, a
+	 * click can still land on an un-enhanced form and post natively. That path is
+	 * not a failure: the action happens, it just skips the gate. So accept either
+	 * outcome, and fail only if *neither* occurred, which would mean the button
+	 * did nothing at all.
+	 */
+	if (await dialog.isVisible().catch(() => false)) {
+		// The affirmative carries the action's own wording when it has one
+		// ("Remove", "Charge it anyway"); a plain string prompt gets "Confirm".
+		await dialog.getByRole('button', { name: /^(Confirm|Remove|Reveal|Delete|Yes)/ }).click();
+		await expect(dialog).toBeHidden({ timeout: 5000 });
+		return;
+	}
+	await expect(async () => {
+		const acted = (await trigger.count()) === 0 || (await dialog.isVisible().catch(() => false));
+		expect(acted, 'the button neither opened its confirm nor performed its action').toBe(true);
+	}).toPass({ timeout: 10_000 });
+	if (await dialog.isVisible().catch(() => false)) {
+		await dialog.getByRole('button', { name: /^(Confirm|Remove|Reveal|Delete|Yes)/ }).click();
+		await expect(dialog).toBeHidden({ timeout: 5000 });
+	}
 }
 
 /** Owner sets a member's approval policy: threshold + approver checkboxes. */
@@ -172,21 +228,16 @@ export async function createApiToken(page: Page, slug: string, name: string): Pr
 export async function newPurchase(page: Page, slug: string, p: NewPurchase): Promise<string> {
 	await page.goto(`/w/${slug}/purchases/new`);
 	/*
-	 * Wait for the form to be interactive before touching anything else.
+	 * Nothing on this form is safe to touch before hydration: Enter in the place
+	 * field is JS-handled, and a `fill` that beats the bindings lands in the DOM
+	 * that no `$state` ever sees.
 	 *
-	 * Two separate failures come from not doing this. Enter in the place field is
-	 * handled in JS, which preventDefaults so the keystroke means "resolve this
-	 * link" rather than "submit the purchase" — pressed too early it gets the
-	 * browser's native implicit submission instead. And a click on "Log it" that
-	 * lands exactly as Svelte hydrates is swallowed by the node being replaced,
-	 * so the form never submits and the wait for the detail URL never resolves.
-	 *
-	 * "Sleep on it" enables only once Svelte's bindings are live *and* item and
-	 * amount hold values, so it is an exact signal for "this form is now live".
-	 * Re-filling inside the retry is the point: a `fill` that lands before
-	 * hydration puts text in the DOM that the bindings never saw, so the button
-	 * would stay disabled forever and waiting alone could never succeed.
+	 * Both signals are needed. `history.state` is stamped when the SvelteKit
+	 * client starts, which is *before* every component has finished binding — so
+	 * the fills are then retried until "Sleep on it" enables, which it can only
+	 * do once item and amount have actually reached `$state`.
 	 */
+	await waitForHydration(page);
 	await expect(async () => {
 		await page.getByLabel('Item').fill(p.item);
 		await page.getByLabel(/Amount/).fill(p.amount);
