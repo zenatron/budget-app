@@ -34,6 +34,14 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			error(403, 'Barcode scanning requires BARCODE_LOOKUP_URL to be set in the environment');
 		}
 		updates.barcodeEnabled = value;
+	} else if (flag === 'locationEnabled') {
+		// Deliberately not gated on an environment variable, unlike barcode above.
+		// Barcode scanning without a lookup URL does nothing; places without
+		// MAP_TILE_URL or GEOCODER_URL still give you device capture, offline
+		// map-link parsing, the "By place" breakdown and the whole map — those vars
+		// only add streets and address search. Gating this would put the feature
+		// out of reach of exactly the deployment that wants it most.
+		updates.locationEnabled = value;
 	} else if (flag === 'uniqueCategories') updates.uniqueCategories = value;
 	else error(400, 'Unknown setting');
 

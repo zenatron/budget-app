@@ -46,6 +46,7 @@ function draft(overrides: Partial<Purchase> = {}): Purchase {
 		merchantId: null,
 		heldUntil: null,
 		heldBy: null,
+		place: null,
 		...overrides
 	};
 }
@@ -335,5 +336,39 @@ describe('markRefunded', () => {
 		for (const p of [draft(), pending(), approved(), draft({ state: 'cancelled' })]) {
 			expect(() => markRefunded(p, 'm-requester', NOW)).toThrow(PurchaseStateError);
 		}
+	});
+});
+
+describe('place', () => {
+	const SF = { latE3: 37775, lngE3: -122419, label: 'Ferry Building', source: 'device' as const };
+
+	it('survives every transition untouched', () => {
+		// A place is annotation carried alongside the state machine, never through
+		// it. If a transition ever started rebuilding the aggregate field by field
+		// instead of spreading it, the pin would silently vanish on approval — and
+		// nothing else in the app would notice until a map went empty.
+		const p = draft({ place: SF });
+		expect(requestApproval(p, ['m-approver'], NOW).purchase.place).toEqual(SF);
+		expect(autoApprove(p, NOW, 'approval not required').purchase.place).toEqual(SF);
+		expect(approve(pending({ place: SF }), 'm-approver', NOW).purchase.place).toEqual(SF);
+		expect(deny(pending({ place: SF }), 'm-approver', null, NOW).purchase.place).toEqual(SF);
+		expect(cancel(pending({ place: SF }), 'm-requester', NOW).purchase.place).toEqual(SF);
+		expect(
+			complete(approved({ place: SF }), 'm-requester', { amount: usd(18000), at: NOW }, 10, NOW)
+				.purchase.place
+		).toEqual(SF);
+		expect(markRefunded(completed({ place: SF }), 'm-requester', NOW).purchase.place).toEqual(SF);
+	});
+
+	it('is not something an edit can change', () => {
+		// The edit surface is itemName/amount/category/note. A place moves only
+		// through setPurchasePlace, which audits it on its own.
+		const edited = edit(draft({ place: SF }), 'm-requester', { itemName: 'Speakers' }, NOW);
+		expect(edited.purchase.place).toEqual(SF);
+	});
+
+	it('does not make a purchase without one invalid', () => {
+		expect(draft().place).toBeNull();
+		expect(requestApproval(draft(), ['m-approver'], NOW).purchase.place).toBeNull();
 	});
 });

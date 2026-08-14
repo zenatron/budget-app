@@ -3,6 +3,7 @@ import {
 	type AnyPgColumn,
 	bigint,
 	boolean,
+	check,
 	date,
 	foreignKey,
 	index,
@@ -91,6 +92,14 @@ export const workspace = pgTable('workspace', {
 	billImportEnabled: boolean('bill_import_enabled').notNull().default(false),
 	/** Alpha: barcode scanning. Off until a product-lookup API is wired up. */
 	barcodeEnabled: boolean('barcode_enabled').notNull().default(false),
+	/** Whether a purchase may carry a place, and the spending map is offered.
+	 *  Off by default — a location is the most sensitive thing this app can
+	 *  store, so a workspace opts in before the field exists at all. Unlike
+	 *  `barcodeEnabled` this is **not** gated on an environment variable: with no
+	 *  configuration you still get device capture, offline map-link parsing, the
+	 *  "By place" breakdown and the tile-free map. `MAP_TILE_URL` and
+	 *  `GEOCODER_URL` only add streets and address search. */
+	locationEnabled: boolean('location_enabled').notNull().default(false),
 	/** Reserved, and deliberately **read by nothing**. Deterministic Harmony is
 	 *  always on and the optional LLM assist is gated by `aiMode` alone, so this
 	 *  column decides nothing today. It is kept — rather than dropped — so the
@@ -199,6 +208,29 @@ export const category = pgTable(
 	(t) => [index('category_workspace_idx').on(t.workspaceId)]
 );
 
+/**
+ * Who money was paid to. The UI calls this field **"From"**; it is `merchant`
+ * here, in the repositories, and in the MCP tool arguments, and that difference
+ * is deliberate rather than drift. The form used to label it "Where", which
+ * conflated two questions — *who did you pay* and *where were you* — and the
+ * second one now has its own columns below. Renaming the table would have
+ * broken every existing MCP client to buy nothing, so the label moved and the
+ * schema did not.
+ *
+ * The pin here is where this vendor **usually** is: learned from the first
+ * purchase that carried an observed pin, and used to prefill and to place
+ * historical purchases that were logged from the sofa. It is a default, never
+ * authoritative over a purchase's own pin — a chain is one row here
+ * (`merchant_workspace_normalized_uq` folds on name alone) and many places in
+ * the world, so the Costco in Foster City and the one in South San Francisco
+ * share this row and cannot both live in it.
+ *
+ * **Seal trap.** These rows are workspace-global and carry no seal of their
+ * own. `select * from merchant where lat_e3 is not null` would hand a concealed
+ * viewer the location of a vendor that exists only because of a sealed gift.
+ * Every map query must enter through `purchase` — where `visibleTo` applies —
+ * and join out to here. Never the other way round.
+ */
 export const merchant = pgTable(
 	'merchant',
 	{
@@ -207,9 +239,23 @@ export const merchant = pgTable(
 			.notNull()
 			.references(() => workspace.id),
 		name: text('name').notNull(),
-		normalizedName: text('normalized_name').notNull()
+		normalizedName: text('normalized_name').notNull(),
+		/** Millidegrees — see the note on `purchase.latE3`. */
+		latE3: integer('lat_e3'),
+		lngE3: integer('lng_e3'),
+		/** The address as a person reads it, for the picker and the map sheet. */
+		placeLabel: text('place_label'),
+		/** 'device' | 'geocode' | 'link' — how this default was arrived at. Only
+		 *  an observed pin may teach it; an inherited one must never become one. */
+		locationSource: text('location_source'),
+		locationUpdatedAt: timestamp('location_updated_at', { withTimezone: true })
 	},
-	(t) => [uniqueIndex('merchant_workspace_normalized_uq').on(t.workspaceId, t.normalizedName)]
+	(t) => [
+		uniqueIndex('merchant_workspace_normalized_uq').on(t.workspaceId, t.normalizedName),
+		check('merchant_latlng_paired', sql`(${t.latE3} is null) = (${t.lngE3} is null)`),
+		check('merchant_lat_range', sql`${t.latE3} is null or ${t.latE3} between -90000 and 90000`),
+		check('merchant_lng_range', sql`${t.lngE3} is null or ${t.lngE3} between -180000 and 180000`)
+	]
 );
 
 /**
@@ -260,6 +306,29 @@ export const purchase = pgTable(
 		/** Which card this was paid on. Null until reconciling teaches us, or the
 		 *  person picks one on the form. */
 		accountId: uuid('account_id').references(() => account.id),
+		/**
+		 * Where the money was actually spent, in **millidegrees** — integers, so
+		 * ~110 m is the only precision this column is able to hold.
+		 *
+		 * The rounding is `domain/location/coords.roundToE3`, applied on the device
+		 * before the reading ever enters a form field. It does not depend on the
+		 * client honouring it: millidegrees are also the wire format, so a
+		 * hand-posted request cannot express a doorstep either. A float column
+		 * would have let a later writer store seven decimals without going through
+		 * any of that, and the privacy decision would be gone with nothing left to
+		 * show it had been made.
+		 *
+		 * Null is the norm and always will be: capture is opt-in per purchase and
+		 * never automatic. Falls back to `merchant.lat_e3` on the map only.
+		 */
+		latE3: integer('lat_e3'),
+		lngE3: integer('lng_e3'),
+		/** What the place is called, when the person typed or geocoded one. */
+		placeLabel: text('place_label'),
+		/** 'device' | 'geocode' | 'link' | 'merchant'. 'merchant' means inherited
+		 *  from the vendor's usual place, which the map says out loud rather than
+		 *  implying somebody stood there. */
+		locationSource: text('location_source'),
 		requestedAmountMinor: bigint('requested_amount_minor', { mode: 'bigint' }).notNull(),
 		approvedAmountMinor: bigint('approved_amount_minor', { mode: 'bigint' }),
 		finalAmountMinor: bigint('final_amount_minor', { mode: 'bigint' }),
@@ -308,7 +377,13 @@ export const purchase = pgTable(
 			name: 'purchase_bucket_fk',
 			columns: [t.bucketId],
 			foreignColumns: [bucket.id]
-		})
+		}),
+		// A half-written pin is not a place. Enforced in the database because the
+		// map coalesces the two columns independently, and one of them being null
+		// would put a bubble on the prime meridian.
+		check('purchase_latlng_paired', sql`(${t.latE3} is null) = (${t.lngE3} is null)`),
+		check('purchase_lat_range', sql`${t.latE3} is null or ${t.latE3} between -90000 and 90000`),
+		check('purchase_lng_range', sql`${t.lngE3} is null or ${t.lngE3} between -180000 and 180000`)
 	]
 );
 

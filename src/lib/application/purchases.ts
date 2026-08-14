@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db';
 import {
 	purchase as purchaseTable,
@@ -40,6 +40,13 @@ import {
 	loadPurchase
 } from '$lib/server/repo/purchases';
 import { normalizeMerchantName } from '$lib/domain/purchase/merchant';
+import {
+	isObservedPlace,
+	placeFromColumns,
+	placeToColumns,
+	samePlace,
+	type PurchasePlace
+} from '$lib/domain/location/place';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 import type { Notifier } from '$lib/ports/notifier';
@@ -106,6 +113,65 @@ export interface SubmitPurchaseCmd {
 	bucketId?: string | null;
 	/** The card it was paid on, when known. */
 	accountId?: string | null;
+	/**
+	 * Where it was spent. Always already rounded — callers hand this over having
+	 * been through `roundToE3`, which is the only way a coordinate is allowed to
+	 * reach a column. Omitted means "no pin was offered", which is the normal
+	 * case; the vendor's saved default may then fill in.
+	 */
+	place?: PurchasePlace | null;
+}
+
+/**
+ * Where the two pins meet.
+ *
+ * A purchase's own pin is the fact; a vendor's is a default learned from one.
+ * The rules are asymmetric on purpose:
+ *
+ *  - **Inherit** when no pin was offered and the vendor has one, marked
+ *    `'merchant'` so the map can say the pin came from the vendor's usual place
+ *    rather than implying somebody stood there.
+ *  - **Teach** the vendor from an *observed* pin, and only while the vendor has
+ *    none. Letting an inherited pin write back would launder a guess into a
+ *    fact, and overwriting an existing default would let one trip to a different
+ *    branch move every historical purchase at that vendor.
+ */
+async function reconcilePlaceWithMerchant(
+	tx: Db,
+	offered: PurchasePlace | null,
+	merchantId: string | null,
+	now: Date
+): Promise<PurchasePlace | null> {
+	if (!merchantId) return offered;
+
+	if (!offered) {
+		const [vendor] = await tx
+			.select({
+				latE3: merchant.latE3,
+				lngE3: merchant.lngE3,
+				placeLabel: merchant.placeLabel,
+				locationSource: merchant.locationSource
+			})
+			.from(merchant)
+			.where(eq(merchant.id, merchantId))
+			.limit(1);
+		const learned = vendor ? placeFromColumns(vendor) : null;
+		return learned ? { ...learned, source: 'merchant' } : null;
+	}
+
+	if (isObservedPlace(offered)) {
+		await tx
+			.update(merchant)
+			.set({
+				latE3: offered.latE3,
+				lngE3: offered.lngE3,
+				placeLabel: offered.label,
+				locationSource: offered.source,
+				locationUpdatedAt: now
+			})
+			.where(and(eq(merchant.id, merchantId), isNull(merchant.latE3)));
+	}
+	return offered;
 }
 
 /**
@@ -140,6 +206,12 @@ export async function submitPurchase(
 
 		const merchantId = cmd.merchantName
 			? await findOrCreateMerchant(tx, deps, scope.workspaceId, cmd.merchantName)
+			: null;
+		// Gated on the workspace flag here, not only in the route: this is the one
+		// door every caller goes through, including MCP and recurring materializat-
+		// ion, so a workspace with places off cannot acquire one by any path.
+		const place = ws.locationEnabled
+			? await reconcilePlaceWithMerchant(tx, cmd.place ?? null, merchantId, now)
 			: null;
 
 		const members = await tx
@@ -204,7 +276,8 @@ export async function submitPurchase(
 			merchantId,
 			accountId: cmd.accountId ?? null,
 			heldUntil: null,
-			heldBy: null
+			heldBy: null,
+			place
 		};
 
 		// The bucket carve-out is part of what the policy means, so it is decided
@@ -587,6 +660,82 @@ export async function setPurchaseMerchant(
 			toState: p.state,
 			actorMemberId: scope.memberId,
 			reason: merchantId ? 'merchant updated' : 'merchant cleared',
+			amountSnapshot: null,
+			at: now
+		});
+	});
+}
+
+/**
+ * Set or clear the place, requester-only.
+ *
+ * Like the merchant and unlike the amount, a place is annotation rather than
+ * substance — no approval policy reads it — so it may be changed in any state,
+ * including completed. It is audited either way: a pin is a claim about where
+ * somebody was, and a claim that can be changed silently is worse than one that
+ * can't be changed at all.
+ *
+ * Only the requester, and never an approver: the person who was there is the
+ * only one in a position to say where that was.
+ */
+export async function setPurchasePlace(
+	db: Db,
+	deps: Deps,
+	scope: Scope,
+	purchaseId: string,
+	place: PurchasePlace | null
+) {
+	const now = deps.clock.now();
+	await db.transaction(async (tx) => {
+		const [ws] = await tx
+			.select({ locationEnabled: workspace.locationEnabled })
+			.from(workspace)
+			.where(eq(workspace.id, scope.workspaceId))
+			.limit(1);
+		if (!ws) throw new PurchaseNotFoundError();
+		// Clearing stays available with the flag off, so turning places off never
+		// strands a pin somebody can no longer reach.
+		if (place && !ws.locationEnabled) {
+			throw new PurchaseStateError('Places are turned off for this workspace');
+		}
+
+		const p = await loadPurchase(
+			tx,
+			{ workspaceId: scope.workspaceId, viewerId: scope.memberId },
+			purchaseId,
+			{ forUpdate: true, now }
+		);
+		if (!p) throw new PurchaseNotFoundError();
+		if (p.memberId !== scope.memberId) {
+			throw new PurchaseStateError('Only the requester can change the place');
+		}
+		if (samePlace(place, p.place)) return;
+
+		await tx
+			.update(purchaseTable)
+			.set({ ...placeToColumns(place), updatedAt: now })
+			.where(eq(purchaseTable.id, p.id));
+
+		// Teach the vendor its default from an observed pin, on the same terms as
+		// submitPurchase: only when it has none, and never from an inherited one.
+		if (place && p.merchantId && isObservedPlace(place)) {
+			await tx
+				.update(merchant)
+				.set({
+					latE3: place.latE3,
+					lngE3: place.lngE3,
+					placeLabel: place.label,
+					locationSource: place.source,
+					locationUpdatedAt: now
+				})
+				.where(and(eq(merchant.id, p.merchantId), isNull(merchant.latE3)));
+		}
+
+		await appendEvent(tx, deps.ids, p.id, {
+			fromState: p.state,
+			toState: p.state,
+			actorMemberId: scope.memberId,
+			reason: place ? 'place updated' : 'place cleared',
 			amountSnapshot: null,
 			at: now
 		});

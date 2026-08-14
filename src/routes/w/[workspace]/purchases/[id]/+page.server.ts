@@ -19,8 +19,11 @@ import {
 	recategorizePurchase,
 	refundPurchase,
 	setPurchaseMerchant,
+	setPurchasePlace,
 	unsealPurchase
 } from '$lib/application/purchases';
+import { fromE3, roundToE3 } from '$lib/domain/location/coords';
+import type { PurchasePlace } from '$lib/domain/location/place';
 import {
 	holdPurchase,
 	wakePurchase,
@@ -123,6 +126,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			categoryId: p.categoryId,
 			categoryName: category ? `${category.icon} ${category.name}` : null,
 			merchantName,
+			// Already seal-filtered: loadPurchase applies visibleTo, so a purchase
+			// this viewer cannot see has no pin they can see either.
+			place: p.place,
 			requestedAmountMinor: p.requestedAmount.minor,
 			approvedAmountMinor: p.approvedAmount?.minor ?? null,
 			finalAmountMinor: p.finalAmount?.minor ?? null,
@@ -195,7 +201,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			at: e.at.toISOString()
 		})),
 		categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
-		merchants: merchants.map((m) => m.name)
+		merchants: merchants.map((m) => m.name),
+		locationEnabled: locals.workspace!.locationEnabled
 	};
 };
 
@@ -391,5 +398,39 @@ export const actions: Actions = {
 	category: async ({ locals, params, request }) => {
 		const categoryId = String((await request.formData()).get('categoryId') ?? '') || null;
 		return run(() => recategorizePurchase(getDb(), deps, scopeOf(locals), params.id, categoryId));
+	},
+
+	/**
+	 * Set or clear the place. Validated exactly as on the create form: the wire
+	 * format is integer millidegrees, so a doorstep is not expressible whoever is
+	 * posting, and `roundToE3` rejects anything that isn't a point on Earth.
+	 * Empty coordinates clear the pin — which stays available even with places
+	 * turned off, so switching the feature off never strands a pin nobody can
+	 * reach.
+	 */
+	place: async ({ locals, params, request }) => {
+		const f = await request.formData();
+		const lat = String(f.get('latE3') ?? '').trim();
+		const lng = String(f.get('lngE3') ?? '').trim();
+
+		let place: PurchasePlace | null = null;
+		if (lat && lng) {
+			if (!/^-?\d{1,6}$/.test(lat) || !/^-?\d{1,6}$/.test(lng)) {
+				return fail(400, { error: 'That location is not a place on Earth' });
+			}
+			try {
+				const source = String(f.get('locationSource') ?? '');
+				place = {
+					...roundToE3(fromE3({ latE3: Number(lat), lngE3: Number(lng) })),
+					label: String(f.get('placeLabel') ?? '').trim() || null,
+					// 'merchant' is never accepted from a client: an inherited pin is
+					// something the server works out, not something a form may assert.
+					source: source === 'geocode' || source === 'link' ? source : 'device'
+				};
+			} catch {
+				return fail(400, { error: 'That location is not a place on Earth' });
+			}
+		}
+		return run(() => setPurchasePlace(getDb(), deps, scopeOf(locals), params.id, place));
 	}
 };

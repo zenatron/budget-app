@@ -1,3 +1,4 @@
+import type { PurchasePlace } from '../location/place';
 import { Money } from '../money/money';
 import { isSealed } from '../visibility/seal';
 
@@ -61,6 +62,13 @@ export interface Purchase {
 	heldUntil: Date | null;
 	/** Who put it to sleep — the requester or an approver. */
 	heldBy: string | null;
+	/**
+	 * Where the money was spent, when someone chose to record it. Opt-in, never
+	 * automatic, and pure annotation: no transition, policy, or seal rule reads
+	 * it, so `edit()` leaves it alone and it is changed on its own through
+	 * `setPurchasePlace` in any state.
+	 */
+	place: PurchasePlace | null;
 }
 
 export class PurchaseStateError extends Error {

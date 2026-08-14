@@ -35,6 +35,12 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		billImportEnabled: ws.billImportEnabled,
 		barcodeEnabled: ws.barcodeEnabled,
 		barcodeConfigured: !!env.BARCODE_LOOKUP_URL,
+		locationEnabled: ws.locationEnabled,
+		// Reported separately because they fail separately: a deployment can have
+		// streets and no address search, or the reverse, and the card says which.
+		tileConfigured: !!env.MAP_TILE_URL,
+		tileAttribution: env.MAP_TILE_ATTRIBUTION,
+		geocoderConfigured: !!env.GEOCODER_URL,
 		config: {
 			mode: ws.aiMode,
 			endpoint: ws.aiEndpoint ?? '',

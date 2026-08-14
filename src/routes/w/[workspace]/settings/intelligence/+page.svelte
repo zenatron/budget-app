@@ -6,6 +6,7 @@
 		ChevronLeft,
 		Check,
 		CircleAlert,
+		MapPin,
 		RefreshCw,
 		ScanEye,
 		ScanLine,
@@ -146,6 +147,66 @@
 				label="Toggle scanning a barcode"
 				disabled={!data.barcodeConfigured}
 			/>
+		{/if}
+	</div>
+
+	<!--
+		Places. The copy carries the honest version of what 110 m means on purpose:
+		"rounded" invites people to read "anonymised", and it isn't. Understating it
+		here would be the one place in the app where the interface is less truthful
+		than the thing it describes.
+	-->
+	<div class="card flex items-start justify-between gap-4 p-4">
+		<div>
+			<p class="flex items-center gap-1.5 text-[15px] font-medium" style="color: var(--ink)">
+				<MapPin class="h-4 w-4 shrink-0" style="color: var(--ws-accent)" />
+				Places
+			</p>
+			<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
+				Attach a place to a purchase and see where the money goes on a map. Nothing is ever captured
+				on its own — you tap <strong style="color: var(--ink-2)">Use my location</strong>, type an
+				address, or paste a map link.
+			</p>
+			<p class="mt-2 text-[13px] leading-relaxed" style="color: var(--ink-3)">
+				Pins are rounded to about 110&nbsp;m before they're stored. That's a block, not a doorstep —
+				but it is still enough to recognise a home. Places follow the same seal rules as everything
+				else: a purchase you can't see has no pin you can see.
+			</p>
+			{#if !data.tileConfigured}
+				<p
+					class="mt-2 flex items-start gap-1.5 text-[12px] leading-relaxed"
+					style="color: var(--pending)"
+				>
+					<CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+					<span>
+						No basemap configured. The map still works — it draws your spending on a plotted grid
+						instead of streets. Set <code class="font-mono text-[11px]">MAP_TILE_URL</code> to a raster
+						tile template to add streets. Tiles are fetched by the server and re-served from this origin,
+						so your browser never talks to the tile provider.
+					</span>
+				</p>
+			{:else}
+				<p class="mt-2 text-[12px] leading-relaxed" style="color: var(--ink-4)">
+					Basemap: {data.tileAttribution}
+				</p>
+			{/if}
+			{#if !data.geocoderConfigured}
+				<p
+					class="mt-2 flex items-start gap-1.5 text-[12px] leading-relaxed"
+					style="color: var(--pending)"
+				>
+					<CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+					<span>
+						No address search configured. You can still use your device's location and paste map
+						links — those are read offline and never leave this machine. Set <code
+							class="font-mono text-[11px]">GEOCODER_URL</code
+						> to a Nominatim-compatible endpoint to search addresses; self-host it if you can.
+					</span>
+				</p>
+			{/if}
+		</div>
+		{#if owner}
+			<Toggle on={data.locationEnabled} flag="locationEnabled" label="Toggle places" />
 		{/if}
 	</div>
 

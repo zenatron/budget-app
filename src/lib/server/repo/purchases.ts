@@ -15,6 +15,7 @@ import { Money } from '$lib/domain/money/money';
 import { eligibleApprovers } from '$lib/domain/approval/evaluate';
 import type { ApprovalPolicy } from '$lib/domain/approval/policy';
 import type { Purchase, TransitionEvent } from '$lib/domain/purchase/purchase';
+import { placeFromColumns, placeToColumns } from '$lib/domain/location/place';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 
@@ -84,7 +85,8 @@ function toDomain(row: PurchaseRow, approverMemberIds: string[]): Purchase {
 		approverMemberIds,
 		bucketId: row.bucketId ?? null,
 		heldUntil: row.heldUntil,
-		heldBy: row.heldBy
+		heldBy: row.heldBy,
+		place: placeFromColumns(row)
 	};
 }
 
@@ -206,6 +208,7 @@ export async function insertPurchase(
 		bucketId: p.bucketId,
 		heldUntil: p.heldUntil,
 		heldBy: p.heldBy,
+		...placeToColumns(p.place),
 		createdAt: now,
 		updatedAt: now
 	});

@@ -35,7 +35,46 @@ const EnvSchema = v.object({
 	NTFY_DEFAULT_TOKEN: v.optional(v.string()),
 
 	// Phase 6 — barcode product lookup
-	BARCODE_LOOKUP_URL: v.optional(v.pipe(v.string(), v.url()))
+	BARCODE_LOOKUP_URL: v.optional(v.pipe(v.string(), v.url())),
+
+	/*
+	 * Phase 7 — places.
+	 *
+	 * Every one of these is optional, and the feature is fully usable with none
+	 * of them set: device capture, offline map-link parsing, the "By place"
+	 * breakdown and the map itself all work unconfigured. These only add streets
+	 * and address search.
+	 */
+	/** Nominatim-compatible geocoder base URL. Called by the server, never the
+	 *  browser, so `connect-src 'self'` is untouched. Self-host if you can. */
+	GEOCODER_URL: v.optional(v.pipe(v.string(), v.url())),
+	/** Contact address for the geocoder's User-Agent. The public Nominatim
+	 *  instance requires one and blocks anonymous clients. */
+	GEOCODER_EMAIL: v.optional(v.string()),
+	/**
+	 * Raster tile template, e.g. https://tile.openstreetmap.org/{z}/{x}/{y}.png.
+	 * Fetched server-side and re-served from our own origin, which is what keeps
+	 * both `img-src` and `connect-src` at 'self'.
+	 */
+	MAP_TILE_URL: v.optional(
+		v.pipe(
+			v.string(),
+			v.url(),
+			// Not cosmetic. The tile route interpolates z/x/y into this string; a
+			// template with no placeholders would turn it into a proxy pointed at
+			// one fixed third-party URL, which is not what anyone set this to do.
+			v.check(
+				(u) => u.includes('{z}') && u.includes('{x}') && u.includes('{y}'),
+				'must contain {z}, {x} and {y}'
+			)
+		)
+	),
+	/** Printed under the map. OSM's licence requires visible credit, so this is
+	 *  rendered as a permanent caption rather than hidden behind a tap. */
+	MAP_TILE_ATTRIBUTION: v.optional(v.string(), '© OpenStreetMap contributors'),
+	/** Disposable third-party bytes. Deliberately outside BLOB_DIR so backups
+	 *  don't carry hundreds of megabytes of somebody else's map; safe to delete. */
+	TILE_CACHE_DIR: v.optional(v.pipe(v.string(), v.nonEmpty()), './data/tiles')
 });
 
 export type Env = v.InferOutput<typeof EnvSchema>;

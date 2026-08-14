@@ -15,6 +15,8 @@ import { listCategories, listMembers } from '$lib/server/repo/workspaces';
 import { listBuckets } from '$lib/server/repo/buckets';
 import { listAccounts } from '$lib/server/repo/accounts';
 import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
+import { fromE3, roundToE3 } from '$lib/domain/location/coords';
+import type { PurchasePlace } from '$lib/domain/location/place';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { getNotifier } from '$lib/server/notify';
@@ -64,6 +66,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		billImportEnabled: locals.workspace!.billImportEnabled,
 		barcodeEnabled: locals.workspace!.barcodeEnabled && !!env.BARCODE_LOOKUP_URL,
 		barcodeConfigured: !!env.BARCODE_LOOKUP_URL,
+		// The whole "Where" row is absent when places are off, rather than present
+		// and inert: an off feature should not leave a field on the form.
+		locationEnabled: locals.workspace!.locationEnabled,
 		// Whether to offer the optional category suggestion. Off = deterministic form.
 		aiEnabled: locals.workspace!.aiMode !== 'off',
 		/*
@@ -98,8 +103,44 @@ const FormSchema = v.object({
 	note: v.optional(v.pipe(v.string(), v.maxLength(2000))),
 	intent: v.picklist(['request', 'log']),
 	sealUntil: v.optional(v.string()),
-	spentAt: v.optional(v.string())
+	spentAt: v.optional(v.string()),
+	// Unlike merchantName, the place goes through the schema. A coordinate is a
+	// claim about where somebody physically was, so it gets checked on the way in
+	// rather than trusted because a form said so.
+	latE3: v.optional(v.pipe(v.string(), v.regex(/^-?\d{1,6}$/, 'Bad location'))),
+	lngE3: v.optional(v.pipe(v.string(), v.regex(/^-?\d{1,6}$/, 'Bad location'))),
+	placeLabel: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(160))),
+	locationSource: v.optional(v.picklist(['device', 'geocode', 'link']))
 });
+
+/**
+ * The place, re-derived server-side.
+ *
+ * The precision guarantee is carried by the *wire format*, not by trusting the
+ * client: the form sends integer millidegrees, so there is no way to express a
+ * doorstep in it, and a hand-posted request is bound by the same encoding as
+ * the browser. That is the load-bearing part, and it is why these fields are
+ * `latE3`/`lngE3` rather than a decimal pair.
+ *
+ * `roundToE3` still runs here to do the rest of the job — reject anything that
+ * isn't a point on Earth, and normalise — so nothing reaches the column that
+ * the check constraints would have to catch.
+ *
+ * `'merchant'` is deliberately not an accepted source: an inherited pin is
+ * something the server works out, never something a client may assert.
+ */
+function placeFromForm(
+	f: v.InferOutput<typeof FormSchema>,
+	locationEnabled: boolean
+): PurchasePlace | null {
+	if (!locationEnabled || !f.latE3 || !f.lngE3) return null;
+	const rounded = roundToE3(fromE3({ latE3: Number(f.latE3), lngE3: Number(f.lngE3) }));
+	return {
+		...rounded,
+		label: f.placeLabel || null,
+		source: f.locationSource ?? 'device'
+	};
+}
 
 export const actions: Actions = {
 	default: async ({ locals, request }) => {
@@ -145,6 +186,16 @@ export const actions: Actions = {
 			}
 		}
 
+		let place;
+		try {
+			place = placeFromForm(f, locals.workspace!.locationEnabled);
+		} catch {
+			// roundToE3 throws on anything that isn't a coordinate. The regex above
+			// already caught the shape, so reaching here means a value in range for
+			// six digits but not for the world — refuse it rather than clamp.
+			return fail(400, { error: "That location isn't a place on Earth" });
+		}
+
 		let purchaseId: string;
 		try {
 			const amount = Money.fromDecimal(f.amount, locals.workspace!.currency);
@@ -162,7 +213,8 @@ export const actions: Actions = {
 					seal,
 					merchantName: form.get('merchantName')?.toString()?.trim() || null,
 					bucketId: form.get('bucketId')?.toString()?.trim() || null,
-					accountId: form.get('accountId')?.toString()?.trim() || null
+					accountId: form.get('accountId')?.toString()?.trim() || null,
+					place
 				}
 			));
 		} catch (e) {

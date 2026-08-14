@@ -292,7 +292,12 @@ export async function materializeDueRules(db: Db, deps: Deps): Promise<number> {
 					merchantId: null,
 					accountId: null,
 					heldUntil: null,
-					heldBy: null
+					heldBy: null,
+					// A rule fires on a schedule, not at a shop — nobody was anywhere
+					// when this row appeared. It carries no merchant either, so there
+					// is not even a vendor default to inherit. Adding a pin here would
+					// be inventing a place from a calendar.
+					place: null
 				};
 				const event: TransitionEvent = {
 					fromState: null,
