@@ -125,13 +125,17 @@
 	 * the margin instead of off the buildings.
 	 */
 	/*
-	 * Coarsest first. `find` takes the first interval that fits, so the order is
-	 * load-bearing — and so is falling back to STEPS[0] rather than the last
-	 * entry: at a whole-world view nothing satisfies the predicate, and falling
-	 * back to the *finest* step asked for a third of a million lines and hung
-	 * the tab.
+	 * Coarsest first, and the predicate is "at least this many lines", not "at
+	 * most".
+	 *
+	 * `find` returns the first match, so asking for `span / s <= 8` was satisfied
+	 * by the 90° step for every span smaller than 720° — which is all of them.
+	 * The world view looked right by luck and every closer view drew no grid at
+	 * all. Asking for `s <= span / 4` picks the coarsest interval that still puts
+	 * four lines on screen, which is the actual intent.
 	 */
 	const STEPS = [90, 30, 10, 5, 2, 1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001];
+	const MIN_GRID_LINES = 4;
 	/** Hard ceiling, so no arithmetic surprise can ever draw an unbounded grid. */
 	const MAX_GRID_LINES = 24;
 
@@ -146,7 +150,9 @@
 
 		const b = viewportBounds(viewport);
 		const span = Math.max(b.maxLng - b.minLng, 1e-6);
-		const step = STEPS.find((s) => span / s <= 8) ?? STEPS[0];
+		// Falls back to the finest interval only for a span smaller than the data's
+		// own precision, where any grid is arbitrary anyway.
+		const step = STEPS.find((s) => s <= span / MIN_GRID_LINES) ?? STEPS[STEPS.length - 1];
 		const dp = step < 0.01 ? 3 : step < 0.1 ? 2 : step < 1 ? 1 : 0;
 
 		const lines: Graticule['lines'] = [];
@@ -828,9 +834,18 @@
 	 * an ink bubble is exactly the screenshot this is not.
 	 */
 	:global(.map-tiles img) {
-		filter: grayscale(1) sepia(0.42) saturate(0.65) contrast(0.86) brightness(1.06);
+		filter: grayscale(1) sepia(0.4) saturate(0.6) contrast(0.92) brightness(1.02);
 		mix-blend-mode: multiply;
-		opacity: 0.5;
+		/*
+		 * Tuned against real tiles, not guessed. The first pass (0.5 opacity,
+		 * contrast 0.86, brightness 1.06) rendered near-white OSM tiles into cream
+		 * on cream — the basemap loaded correctly and was invisible. Going the
+		 * other way, at 0.75 the tile source's own place labels started competing
+		 * with the bubbles' names for the same reading. This sits where streets
+		 * and water are legible as context and the plot is unambiguously the
+		 * subject.
+		 */
+		opacity: 0.55;
 	}
 	@media (prefers-color-scheme: dark) {
 		:global(:root:not([data-theme='light']) .map-tiles img) {

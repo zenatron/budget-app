@@ -48,6 +48,16 @@ sw.addEventListener('fetch', (event) => {
 	const url = new URL(event.request.url);
 	if (url.origin !== sw.location.origin) return;
 
+	/*
+	 * Basemap tiles go straight to the network and the HTTP cache, never into
+	 * ours. They are same-origin only because the server proxies them, but they
+	 * are third-party imagery in unbounded quantity: one pan session is hundreds
+	 * of images, which would evict the app shell that makes this thing work
+	 * offline at all. The route already sets its own long Cache-Control, and the
+	 * map degrades to a plotted graticule when a tile doesn't arrive.
+	 */
+	if (url.pathname.includes('/tiles/')) return;
+
 	if (ASSETS.has(url.pathname)) {
 		event.respondWith(
 			caches.open(CACHE).then(async (cache) => {

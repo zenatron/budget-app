@@ -133,6 +133,10 @@ See `.env.example` for the full env contract. Notes:
   and register `https://your-host/auth/callback` exactly.
 - Blobs live in the `blobs` volume (`/data/blobs`); back up the DB first, then the
   blob dir (blobs are content-addressed and append-only, so that order is safe).
+- **Basemap tiles are not a blob.** `TILE_CACHE_DIR` (`/data/tiles` by default)
+  holds disposable third-party imagery keyed by coordinate, with a 30-day TTL.
+  Do **not** back it up — it would carry hundreds of megabytes of somebody
+  else's map into every archive — and deleting it at any time is safe.
 
 ## Backup & restore
 
