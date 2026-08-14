@@ -369,7 +369,13 @@
 			opening the map read as changing the month.
 		-->
 		{#if data.hasPlaces}
-			<a href="map{mapSearch}" class="icon-btn press" aria-label="Spending map">
+			<!--
+				Absolute, not relative. `href="map"` resolves against
+				/w/{slug}/analytics — which has no trailing slash — so it lands on
+				/w/{slug}/map and 404s. Every other link in the app is absolute or
+				query-only; this was the one exception, and it was wrong.
+			-->
+			<a href="/w/{slug}/analytics/map{mapSearch}" class="icon-btn press" aria-label="Spending map">
 				<MapIcon class="h-[18px] w-[18px]" />
 			</a>
 		{/if}

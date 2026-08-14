@@ -164,7 +164,10 @@ export interface LocatedPoint {
 	/** The place: the vendor's name, or whatever the pin was called. */
 	label: string | null;
 	color: string | null;
-	/** True when the pin came from the vendor's default rather than the purchase. */
+	/**
+	 * True when nobody recorded being here — the pin came from the vendor's
+	 * usual place, either copied onto this row at submit or coalesced in above.
+	 */
 	inherited: boolean;
 }
 
@@ -201,7 +204,12 @@ export async function locatedSpending(
 			total: sql<string>`${purchase.finalAmountMinor}`,
 			label: sql<string | null>`coalesce(${merchant.name}, ${purchase.placeLabel})`,
 			color: category.color,
-			ownPin: purchase.latE3
+			// The recorded provenance, not "did the coalesce fire". submitPurchase
+			// *copies* a vendor's default onto the purchase row (marked 'merchant'),
+			// so a row can carry its own lat_e3 and still not be somewhere anyone
+			// stood. Inferring from the fallback alone reported those as observed,
+			// and disagreed with the detail page, which reads this column.
+			locationSource: purchase.locationSource
 		})
 		.from(purchase)
 		.leftJoin(merchant, eq(purchase.merchantId, merchant.id))
@@ -232,7 +240,7 @@ export async function locatedSpending(
 			totalMinor: BigInt(r.total ?? '0'),
 			label: r.label,
 			color: r.color,
-			inherited: r.ownPin === null
+			inherited: r.locationSource === 'merchant' || r.locationSource === null
 		}))
 	};
 }

@@ -7,7 +7,14 @@
 	import { modal } from '$lib/actions/modal';
 	import { formatMinor } from '$lib/money-format';
 	import { ledgerLink } from '$lib/ledger-filters';
-	import { E3, formatCoords, fromE3, type Coords } from '$lib/domain/location/coords';
+	import {
+		E3,
+		MAX_LAT_E3,
+		MAX_LNG_E3,
+		formatCoords,
+		fromE3,
+		type Coords
+	} from '$lib/domain/location/coords';
 	import {
 		MAX_ZOOM,
 		MIN_ZOOM,
@@ -114,8 +121,21 @@
 		)
 	);
 
-	let tilesFailed = $state(false);
-	const tiles = $derived(data.tileUrl && !tilesFailed && ready ? tilesFor(viewport) : []);
+	/*
+	 * No global "tiles failed" latch.
+	 *
+	 * There was one, and a single failed image killed the basemap for the rest of
+	 * the session — along with the attribution caption, which the licence
+	 * requires to be permanent. And failures are routine rather than exceptional:
+	 * the proxy answers 204 for a tile upstream doesn't have (ocean, edges) and
+	 * 429 once the per-minute limiter trips during a hard pan, and an `<img>`
+	 * treats both as an error.
+	 *
+	 * A tile that doesn't arrive simply doesn't paint — `alt=""` renders nothing —
+	 * and the graticule underneath is drawn either way, so the map stays readable
+	 * with any subset of its tiles missing.
+	 */
+	const tiles = $derived(data.tileUrl && ready ? tilesFor(viewport) : []);
 
 	/*
 	 * The graticule: lines on the round decimal degree, at whatever interval
@@ -234,13 +254,22 @@
 		replaceState(`?${q}`, page.state);
 	}
 
+	/**
+	 * The view carried in the URL — which is a shareable, editable string, so
+	 * every part of it is range-checked rather than trusted. `?c=9999999,9999999`
+	 * used to survive as a centre ten thousand degrees off-world, leaving a blank
+	 * canvas with no way back except the Fit button.
+	 */
 	function readUrl(): boolean {
 		const c = page.url.searchParams.get('c');
 		const zp = page.url.searchParams.get('z');
 		if (!c || !zp) return false;
-		const [latE3, lngE3] = c.split(',').map(Number);
+		const parts = c.split(',');
+		if (parts.length !== 2) return false;
+		const [latE3, lngE3] = parts.map(Number);
 		const zn = Number(zp);
 		if (![latE3, lngE3, zn].every(Number.isFinite)) return false;
+		if (Math.abs(latE3) > MAX_LAT_E3 || Math.abs(lngE3) > MAX_LNG_E3) return false;
 		center = fromE3({ latE3, lngE3 });
 		z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zn));
 		return true;
@@ -396,11 +425,33 @@
 			.slice(0, 3);
 	});
 
-	const sheetInherited = $derived(
-		sheet !== null &&
-			sheet.count === 1 &&
-			data.points.find((p) => p.id === sheet!.memberIds[0])?.inherited === true
-	);
+	/**
+	 * True when *nothing* in this bubble was observed — every pin in it came from
+	 * a vendor's usual place. Requiring a single member meant a cluster of purely
+	 * inherited pins silently claimed to be somewhere people had been.
+	 */
+	const sheetInherited = $derived.by(() => {
+		if (!sheet) return false;
+		const ids = new Set(sheet.memberIds);
+		const members = data.points.filter((p) => ids.has(p.id));
+		return members.length > 0 && members.every((p) => p.inherited);
+	});
+
+	/**
+	 * Back to Activity on the same window. Built by deleting the map-only keys
+	 * rather than by stripping them with a regex: a regex assuming `z`/`c` are
+	 * never first produced `?period=week` → `&period=week`, i.e. a path, on any
+	 * URL a person had edited or reordered.
+	 */
+	const backSearch = $derived.by(() => {
+		// A throwaway builder, read once into a string; nothing renders from the
+		// instance, so it has no reason to be reactive.
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
+		const q = new URLSearchParams(page.url.searchParams);
+		q.delete('z');
+		q.delete('c');
+		return q.size > 0 ? `?${q}` : '';
+	});
 
 	function periodHref(extra: Record<string, string>) {
 		// A throwaway builder, read once into a string; nothing renders from the
@@ -459,7 +510,7 @@
 	<!-- Back to the list, and what window we're looking at. -->
 	<div class="flex items-center justify-between px-4 pt-1 pb-2">
 		<a
-			href="/w/{slug}/analytics{page.url.search.replace(/[?&](z|c)=[^&]*/g, '') || ''}"
+			href="/w/{slug}/analytics{backSearch}"
 			class="press -ml-1 flex items-center gap-0.5 text-[15px]"
 			style="color: var(--ink-3)"
 		>
@@ -558,13 +609,19 @@
 		>
 			{#if tiles.length > 0}
 				<div class="map-tiles pointer-events-none absolute inset-0">
-					{#each tiles as t (`${t.z}/${t.x}/${t.y}`)}
+					<!--
+						Keyed on the *unwrapped* column. Tiles wrap across the antimeridian
+						so panning past the date line keeps drawing map, which means the
+						same (z,x,y) legitimately appears twice whenever the viewport is
+						wider than the world — and keying on it threw `each_key_duplicate`,
+						taking the whole page down at low zoom.
+					-->
+					{#each tiles as t (`${t.z}/${t.column}/${t.y}`)}
 						<img
 							src="{data.tileUrl}/{t.z}/{t.x}/{t.y}"
 							alt=""
 							draggable="false"
 							decoding="async"
-							onerror={() => (tilesFailed = true)}
 							style="position:absolute; left:0; top:0; width:{t.size}px; height:{t.size}px; transform: translate3d({t.px}px, {t.py}px, 0)"
 						/>
 					{/each}
@@ -697,7 +754,7 @@
 				<Maximize2 class="h-[17px] w-[17px]" />
 			</button>
 
-			{#if data.tileUrl && !tilesFailed}
+			{#if data.tileUrl}
 				<!-- ODbL requires visible credit, so this is a permanent caption
 				     rather than something behind a tap. -->
 				<span
@@ -770,7 +827,8 @@
 
 			{#if sheetInherited}
 				<p class="mt-2 text-[12px] leading-relaxed" style="color: var(--ink-3)">
-					Placed from the vendor's usual location — nobody recorded being here.
+					{sheet.count === 1 ? 'Placed' : 'All placed'} from the vendor's usual location — nobody recorded
+					being here.
 				</p>
 			{/if}
 

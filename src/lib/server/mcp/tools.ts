@@ -84,6 +84,7 @@ import {
 	periodTotal,
 	categoryBreakdown,
 	memberBreakdown,
+	placeBreakdown,
 	budgetVsActual,
 	monthlyTrend
 } from '$lib/server/repo/analytics';
@@ -489,6 +490,81 @@ export const TOOLS: McpTool[] = [
 				`Total ${data.period.replace('_', ' ')}: ${data.total}\n` +
 				`By category:\n${data.by_category.map((c) => `  - ${c.name}: ${c.amount}`).join('\n') || '  (none)'}\n` +
 				`By member:\n${data.by_member.map((m) => `  - ${m.name}: ${m.amount}`).join('\n') || '  (none)'}`;
+			return { text, data };
+		}
+	},
+	{
+		name: 'spending_by_place',
+		description:
+			"Where money went in a period: the top places by amount, with how many purchases at each. Places are rounded to about 110 m and are seal-aware — computed as the token's member sees it, so a purchase hidden from them contributes nothing. Period is one of this_month, last_month, this_week, last_week.",
+		scope: 'read',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				period: {
+					type: 'string',
+					enum: ['this_month', 'last_month', 'this_week', 'last_week'],
+					description: 'Which period to summarize. Defaults to this_month.'
+				},
+				limit: {
+					type: 'number',
+					description: 'How many places to return. Default 8, max 25.'
+				}
+			},
+			additionalProperties: false
+		},
+		/*
+		 * Read-only, and there is deliberately no write counterpart — `log_purchase`
+		 * and `request_purchase` take no lat/lng and must not gain them.
+		 *
+		 * A model that invents a plausible coordinate produces a purchase pinned to
+		 * a place that never happened. Unlike a wrong category, that is a false
+		 * claim about where a person physically was, sitting in an audited record.
+		 * It is the same line `ports/llm-assist` already draws — the model may
+		 * reduce and phrase, never assert a fact the app will treat as one. A place
+		 * is set by a person, on a device, with a tap.
+		 */
+		async handler(ctx, args) {
+			if (!ctx.authed.workspace.locationEnabled) {
+				return { text: 'Places are turned off for this workspace.', data: { places: [] } };
+			}
+			const tz = ctx.authed.workspace.timezone;
+			const today = calDateInZone(ctx.now, tz);
+			const wsd = ctx.authed.workspace.weekStartDay;
+			const period: Period =
+				args.period === 'last_month'
+					? previousMonthPeriod(today)
+					: args.period === 'this_week'
+						? weekPeriod(today, wsd)
+						: args.period === 'last_week'
+							? previousWeekPeriod(today, wsd)
+							: monthPeriod(today);
+			// Not posNum: that throws when the argument is absent, and absent is the
+			// ordinary case here — the tool has a default.
+			const asked = Number(args.limit);
+			const limit = Number.isFinite(asked) ? Math.min(Math.max(Math.trunc(asked), 1), 25) : 8;
+			const places = await placeBreakdown(
+				ctx.db,
+				{ ...viewScope(ctx), timezone: tz },
+				period,
+				ctx.now,
+				limit
+			);
+			const data = {
+				period: (args.period as string) || 'this_month',
+				places: places.map((p) => ({
+					place: p.label,
+					amount: fmt(p.totalMinor, ctx),
+					purchases: p.count,
+					// Three decimals, because that is all the column holds.
+					lat: p.latE3 / 1000,
+					lng: p.lngE3 / 1000
+				}))
+			};
+			const text =
+				`Where the money went, ${data.period.replace('_', ' ')}:\n` +
+				(data.places.map((p) => `  - ${p.place}: ${p.amount} (${p.purchases})`).join('\n') ||
+					'  (nowhere — no purchase in this period has a place)');
 			return { text, data };
 		}
 	},

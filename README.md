@@ -94,6 +94,40 @@ PostgreSQL 17 + Drizzle, auth via an external [Pocket ID](https://pocket-id.org)
   > therefore re-encoded to JPEG at a single choke point (`toModelImage`) before
   > any model sees them.
 
+- ✅ **Phase 16 — Places**: a purchase can record _where_, and the "Where" label on
+  the form moves to **"From"** — it always meant the vendor, and the two questions
+  now have a row each. Nothing renamed underneath: `merchant_id`, the `merchant`
+  table and the MCP `merchant` argument all stand.
+
+  Capture is opt-in per purchase and never automatic: tap "Use my location",
+  paste a map link (read **offline** — the URL already contains its coordinates,
+  so nothing is told where you went), or type an address when a geocoder is
+  configured. Coordinates are integer **millidegrees** on the wire and in the
+  column, so ~110 m is the only precision the schema can express — the guarantee
+  does not depend on a client honouring it. A block is not anonymity, and the
+  settings copy says so.
+
+  Two pins, asymmetric on purpose: a purchase's is the fact, a vendor's is a
+  default learned from an observed one and used to place purchases logged from
+  the sofa — which the map states rather than implies. An inherited pin never
+  teaches another vendor.
+
+  The spending map clusters by a grid defined in _screen pixels_, so bubbles
+  merge and split with zoom for free, and radius scales with the square root of
+  the amount so area carries the money. Zoom is capped at 16 because past that
+  the rounding grid becomes visible and would imply precision the data lacks.
+  With no basemap configured — the default — it draws a plotted graticule
+  instead of streets: no third party, nothing leaves the box, same geometry.
+  Optional raster tiles are fetched **by the server** and re-served from this
+  origin, so the browser never talks to the tile provider and the CSP stays at
+  `'self'`.
+
+  Seal-aware on every surface it reaches — the map's point feed, "By place" on
+  Activity, and the `spending_by_place` MCP tool all route through the same
+  `spentInPeriod` predicate, and an e2e test holds them to it. There is
+  deliberately **no** write path for coordinates over MCP: a model that invents
+  a plausible pin produces a false claim about where a person physically was.
+
 ## Development
 
 ```sh
@@ -111,7 +145,7 @@ The fake IdP auto-approves logins. Switch identities with
 `curl http://localhost:9443/_as/bob` (alice / bob / carol).
 
 - `bun run test` — domain unit tests (vitest)
-- `bun run test:e2e` — Playwright: approval + sealing flows (needs the db container)
+- `bun run test:e2e` — Playwright: approval, sealing and places flows (needs the db container)
 - `bun run seed` — demo workspace for the fake-IdP users
 - `bun run check` — svelte-check
 - `bun run lint` / `bun run format`
@@ -157,18 +191,23 @@ docker run --rm -v budget-app_blobs:/data/blobs -v "$PWD/backup:/backup" \
 
 ```
 src/lib/domain/        pure TS, no I/O — money, purchase state machine,
-                       approval policy evaluation, staleness (all unit-tested)
+                       approval policy evaluation, staleness, and the location
+                       maths (Web Mercator, bubble clustering, map-link
+                       parsing) — all unit-tested
 src/lib/application/   use-cases: create/join workspace, submit/approve/deny/
                        cancel/complete/edit purchase (transactional + audit event),
                        recurring materialization, bucket accruals, budget alerts
 src/lib/intelligence/  intent parser for the command palette (pure TS, no network)
-src/lib/ports/         Clock, IdGenerator, Notifier, BlobStore
+src/lib/ports/         Clock, IdGenerator, Notifier, BlobStore, LlmAssist,
+                       Geocoder (the last two default to null adapters — the app
+                       is fully usable with neither configured)
 src/lib/infra/         system clock, UUIDv7, filesystem blob store, image pipeline,
-                       notifiers (web push, ntfy, composite), in-process SSE bus
+                       notifiers (web push, ntfy, composite), in-process SSE bus,
+                       geocoding adapters
 src/lib/actions/       Svelte actions — money input masking, use:submit, use:dismiss
 src/lib/server/        env validation, db client, migrations, auth (OIDC, sessions),
-                       rate limiting, repositories (every purchase read takes
-                       workspaceId + viewerId)
+                       rate limiting, basemap tile cache, repositories (every
+                       purchase read takes workspaceId + viewerId)
 src/routes/            thin routes; authorization resolved once in hooks.server.ts
 ```
 

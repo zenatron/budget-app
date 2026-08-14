@@ -130,6 +130,24 @@ describe('tilesFor', () => {
 		expect(xs.has(2 ** 4 - 1)).toBe(true);
 	});
 
+	it('gives every placement a unique column, even when the world repeats', () => {
+		/*
+		 * At any zoom where the viewport is wider than the world, the same wrapped
+		 * (z,x,y) is drawn more than once. Keying a rendered list on that trio
+		 * threw `each_key_duplicate` and took the whole map down — so the
+		 * unwrapped column is what a keyed list must use, and it has to be unique.
+		 */
+		for (const v of [
+			{ center: NULL_ISLAND, z: 1, width: 1200, height: 800 },
+			{ center: NULL_ISLAND, z: 1, width: 390, height: 700 },
+			{ center: { lat: 0, lng: 179 }, z: 2, width: 1400, height: 900 }
+		]) {
+			const tiles = tilesFor(v);
+			const keys = tiles.map((t) => `${t.z}/${t.column}/${t.y}`);
+			expect(new Set(keys).size).toBe(tiles.length);
+		}
+	});
+
 	it('places tiles on a 256px lattice relative to the viewport', () => {
 		const tiles = tilesFor(phone);
 		const first = tiles[0];

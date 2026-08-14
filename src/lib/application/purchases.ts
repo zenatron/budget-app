@@ -140,7 +140,12 @@ async function reconcilePlaceWithMerchant(
 	tx: Db,
 	offered: PurchasePlace | null,
 	merchantId: string | null,
-	now: Date
+	now: Date,
+	/**
+	 * Whether this purchase is hidden from anyone. A sealed purchase never
+	 * teaches its vendor a pin — see below.
+	 */
+	sealed: boolean
 ): Promise<PurchasePlace | null> {
 	if (!merchantId) return offered;
 
@@ -159,7 +164,22 @@ async function reconcilePlaceWithMerchant(
 		return learned ? { ...learned, source: 'merchant' } : null;
 	}
 
-	if (isObservedPlace(offered)) {
+	/*
+	 * A sealed purchase teaches nothing.
+	 *
+	 * `merchant` rows are workspace-global and carry no seal — which the read
+	 * path handles by always entering through `purchase`. The *write* path can
+	 * launder around that: teach a vendor from a sealed gift, and the very next
+	 * unsealed purchase at that vendor inherits the coordinate and shows it to
+	 * the person the gift was hidden from. Buy a ring at a jeweller, seal it,
+	 * then buy a $5 nothing at the same jeweller, and the map draws a bubble at
+	 * a place only the sealed purchase ever supplied.
+	 *
+	 * The pin still lives on the sealed purchase itself, where the seal filter
+	 * covers it. All that is lost is the convenience of the vendor remembering a
+	 * place — cheap against a leak of exactly the kind sealing exists to stop.
+	 */
+	if (isObservedPlace(offered) && !sealed) {
 		await tx
 			.update(merchant)
 			.set({
@@ -211,7 +231,7 @@ export async function submitPurchase(
 		// door every caller goes through, including MCP and recurring materializat-
 		// ion, so a workspace with places off cannot acquire one by any path.
 		const place = ws.locationEnabled
-			? await reconcilePlaceWithMerchant(tx, cmd.place ?? null, merchantId, now)
+			? await reconcilePlaceWithMerchant(tx, cmd.place ?? null, merchantId, now, Boolean(cmd.seal))
 			: null;
 
 		const members = await tx
@@ -717,8 +737,11 @@ export async function setPurchasePlace(
 			.where(eq(purchaseTable.id, p.id));
 
 		// Teach the vendor its default from an observed pin, on the same terms as
-		// submitPurchase: only when it has none, and never from an inherited one.
-		if (place && p.merchantId && isObservedPlace(place)) {
+		// submitPurchase: only when it has none, never from an inherited one, and
+		// never from a purchase that is hidden from somebody — a vendor pin is
+		// workspace-global, so that would hand the concealed member the location
+		// through the next unsealed purchase at that vendor.
+		if (place && p.merchantId && isObservedPlace(place) && !isSealed(p, now)) {
 			await tx
 				.update(merchant)
 				.set({

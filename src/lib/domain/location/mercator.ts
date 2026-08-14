@@ -51,8 +51,18 @@ export interface BBox {
 
 export interface TilePlacement {
 	z: number;
+	/** Wrapped into [0, 2^z) — what the tile server is asked for. */
 	x: number;
 	y: number;
+	/**
+	 * The unwrapped column, which may be negative or ≥ 2^z.
+	 *
+	 * When the viewport is wider than the world — any low zoom — the same
+	 * wrapped tile is drawn at two or more screen positions, so `x` is *not*
+	 * unique per placement and keying a render on it collides. This is, so a
+	 * keyed list must key on this.
+	 */
+	column: number;
 	/** Where this tile's top-left corner sits in viewport pixels. */
 	px: number;
 	py: number;
@@ -161,6 +171,7 @@ export function tilesFor(v: Viewport): TilePlacement[] {
 			out.push({
 				z,
 				x: ((tx % n) + n) % n,
+				column: tx,
 				y: ty,
 				px: tx * size - o.x,
 				py: ty * size - o.y,

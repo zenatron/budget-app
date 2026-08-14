@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
+	clickAndConfirm,
 	createInvite,
 	createWorkspace,
 	joinWorkspace,
@@ -52,9 +53,9 @@ test('sealing: concealed member sees nothing anywhere; reveal restores; conflict
 
 	// Early reveal by the requester corrects alice's picture.
 	await bob.goto(giftUrl);
-	// Revealing early is destructive-ish, so the app confirms first.
-	bob.once('dialog', (d) => d.accept());
-	await bob.getByRole('button', { name: 'Reveal now' }).click();
+	// Revealing early is destructive-ish, so the app confirms first — through its
+	// own ConfirmDialog, not window.confirm, so a `dialog` listener never fires.
+	await clickAndConfirm(bob, 'Reveal now');
 	await expect(bob.getByText(/Hidden from Alice Test/)).toHaveCount(0);
 	await alice.goto(`/w/${slug}/purchases`);
 	await expect(alice.getByText('Anniversary gift')).toBeVisible();

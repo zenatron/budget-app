@@ -1,7 +1,9 @@
 import { defineConfig } from '@playwright/test';
 
 /**
- * E2E for the two security-critical flows: approval and sealing.
+ * E2E for the security-critical flows: approval, sealing, and places — a
+ * location is the most sensitive thing this app stores, so the seal has to hold
+ * on every surface a pin can reach.
  * Requires the local postgres from `docker compose up -d db`.
  */
 export default defineConfig({
