@@ -63,7 +63,7 @@ function isoDay(d: Date): string {
 function labelFor(c: MatchCandidate, currency: string): string {
 	const amount = Money.of(c.amountMinor < 0n ? -c.amountMinor : c.amountMinor, currency).format();
 	const where = c.merchantName ? ` at ${c.merchantName}` : '';
-	return `${c.itemName}${where} — ${amount} on ${isoDay(c.completedAt)}`;
+	return `${c.itemName}${where} · ${amount} on ${isoDay(c.completedAt)}`;
 }
 
 const EXAMPLES = [

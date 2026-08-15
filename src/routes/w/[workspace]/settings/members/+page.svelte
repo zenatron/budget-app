@@ -63,7 +63,7 @@
 			lines.push(
 				amt
 					? `${who} needs approval at ${symbol}${amt} and above.`
-					: `${who} needs approval above an amount — set it below.`
+					: `${who} needs approval above an amount. Set it below.`
 			);
 		}
 

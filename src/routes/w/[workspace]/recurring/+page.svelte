@@ -65,7 +65,7 @@
 	}
 
 	function fmtNext(iso: string | null): string {
-		if (!iso) return '—';
+		if (!iso) return '·';
 		return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 
@@ -415,7 +415,7 @@
 			</div>
 			<p class="text-[18px] font-semibold" style="color: var(--ink)">No recurring charges</p>
 			<p class="mx-auto mt-1 max-w-[28ch] text-[15px] leading-relaxed" style="color: var(--ink-3)">
-				Add subscriptions, bills, and rent so they track themselves.
+				Add a bill or subscription and each charge is recorded on its own schedule.
 			</p>
 			<a
 				href="/w/{slug}/settings/help?s=recurring"

@@ -130,7 +130,7 @@
 	}
 </script>
 
-<svelte:head><title>{periodLabel} — Reconcile — Ledger</title></svelte:head>
+<svelte:head><title>{periodLabel} · Reconcile · Ledger</title></svelte:head>
 
 {#snippet stateChip(label: string, colorVar: string)}
 	<span
@@ -165,7 +165,7 @@
 			-->
 			<p class="mt-2 flex items-center gap-1.5 text-[13px]" style="color: var(--seal)">
 				<EyeOff class="h-3.5 w-3.5 shrink-0" />
-				<span>Accounted for — hidden from you</span>
+				<span>Accounted for, hidden from you</span>
 			</p>
 		{:else if l.purchase}
 			<div class="mt-2 flex items-center gap-2.5">
@@ -357,8 +357,8 @@
 		>
 			<Sparkles class="mt-0.5 h-4 w-4 shrink-0" style="color: var(--pending)" />
 			<span>
-				Read from a picture of this statement, not from its text. Check each amount against the
-				statement before you clear it.
+				This statement was read from a picture. Check each amount against the statement before you
+				clear it.
 			</span>
 		</div>
 	{/if}
@@ -459,7 +459,7 @@
 					</p>
 				{:else if suggestMissed}
 					<p class="mt-2 text-[12.5px]" style="color: var(--ink-3)">
-						Nothing recognisable in that line — here's everything in the period.
+						Nothing recognizable in that line. Here's everything in the period.
 					</p>
 				{/if}
 			</div>

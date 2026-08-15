@@ -174,7 +174,7 @@ export function nominatimGeocoder(cfg: { endpoint: string; email?: string }): Ge
 					return {
 						...base,
 						state: 'starting',
-						detail: `${cfg.endpoint} is running, but rejected the request with HTTP ${res.status} before Nominatim saw it. That is the web server in front of it, not the data — check the URL points at the API root.`
+						detail: `${cfg.endpoint} is running, but rejected the request with HTTP ${res.status} before Nominatim saw it. That is the web server in front of it, not the data. Check that the URL points at the API root.`
 					};
 				}
 
@@ -205,7 +205,7 @@ export function nominatimGeocoder(cfg: { endpoint: string; email?: string }): Ge
 				 */
 				return {
 					...base,
-					detail: `Nothing answered at ${cfg.endpoint}. Either it isn't running, the address is wrong, or an import is still in progress — the web server doesn't start until an import finishes, which takes hours for a country-sized extract.`
+					detail: `Nothing answered at ${cfg.endpoint}. Either it isn't running, the address is wrong, or an import is still in progress: the web server doesn't start until an import finishes, which can take hours.`
 				};
 			}
 
@@ -227,7 +227,7 @@ export function nominatimGeocoder(cfg: { endpoint: string; email?: string }): Ge
 					detail:
 						rows.length > 0
 							? `${cfg.endpoint} is up, and this place is in its data.`
-							: `${cfg.endpoint} is up and serving, but it has nothing for that. The extract it imported probably doesn't cover there — or the text isn't an address it can parse.`
+							: `${cfg.endpoint} is up and serving, but it has nothing for that. The extract it imported probably doesn't cover there, or the text isn't an address it can parse.`
 				};
 			} catch {
 				return {

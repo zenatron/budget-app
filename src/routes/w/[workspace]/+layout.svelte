@@ -258,7 +258,7 @@
 	}
 </script>
 
-<svelte:head><title>{wsName} — Ledger</title></svelte:head>
+<svelte:head><title>{wsName} · Ledger</title></svelte:head>
 
 {#key slug}
 	<div
@@ -274,7 +274,7 @@
 				<button
 					onclick={() => (showSwitcher = !showSwitcher)}
 					class="press flex items-center gap-2.5"
-					aria-label="Switch workspace — currently {wsName}"
+					aria-label="Switch workspace, currently {wsName}"
 					aria-expanded={showSwitcher}
 					aria-haspopup="menu"
 				>
@@ -365,7 +365,7 @@
 					role="status"
 					transition:slide={{ duration: 180 }}
 				>
-					Offline — showing what was last loaded
+					Offline. Showing what was last loaded.
 				</div>
 			{/if}
 		</header>

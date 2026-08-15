@@ -126,7 +126,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			});
 			return json({
 				intent: 'create_bucket',
-				answer: `Bucket “${name}” created — ${amount.format()}/mo on day ${day}.`,
+				answer: `Bucket “${name}” created: ${amount.format()}/mo on day ${day}.`,
 				target: 'buckets'
 			});
 		}
@@ -155,8 +155,8 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			return json({
 				intent: 'create_income',
 				answer: proposal.monthly
-					? `Income “${source}” added — ${amount.format()} monthly on day ${start.d}.`
-					: `Income “${source}” added — ${amount.format()}.`,
+					? `Income “${source}” added: ${amount.format()} monthly on day ${start.d}.`
+					: `Income “${source}” added: ${amount.format()}.`,
 				target: 'income'
 			});
 		}

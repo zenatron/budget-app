@@ -38,7 +38,7 @@
 		{
 			id: 'read',
 			label: 'Read',
-			hint: 'View spending, summaries, buckets and pending items — never change them',
+			hint: 'View spending, summaries, buckets, and pending items. Read-only.',
 			standard: true
 		},
 		{
@@ -87,9 +87,8 @@
 		</h2>
 		<p class="mt-1 text-[13px] leading-relaxed" style="color: var(--ink-3)">
 			Add this workspace as an <strong>MCP server</strong> in Claude, ChatGPT, or your editor, and ask
-			about your budget in plain language — “how much did we spend on groceries?”, “log $40 at Trader
-			Joe’s”, “what’s waiting on my approval?”. It acts as you, so approvals and gift-mode seals still
-			apply.
+			about your budget in plain language, like “how much did we spend on groceries?” or “log $40 at Trader
+			Joe’s”. It acts as you, so approvals and gift-mode seals still apply.
 		</p>
 		<div class="mt-3">
 			<span class="section-label mb-1.5 block">Server URL</span>
@@ -129,7 +128,7 @@
 				<Check class="h-4 w-4" /> “{revealed.name}” created
 			</p>
 			<p class="mt-1 text-[13px]" style="color: var(--ink-3)">
-				Copy it now — this is the only time it’s shown.
+				Copy it now. This is the only time it’s shown.
 			</p>
 			<div class="mt-2.5 flex items-center gap-2">
 				<code
@@ -146,7 +145,7 @@
 				type="button"
 				onclick={() => (revealed = null)}
 				class="btn btn-plain mt-2 px-0 text-[13px]"
-				style="color: var(--ink-3)">I’ve saved it — hide</button
+				style="color: var(--ink-3)">Saved it, hide</button
 			>
 		</div>
 	{/if}

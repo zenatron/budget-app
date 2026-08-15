@@ -543,7 +543,7 @@
 	}
 </script>
 
-<svelte:head><title>Map — Ledger</title></svelte:head>
+<svelte:head><title>Map · Ledger</title></svelte:head>
 
 <div
 	class="-mx-4 flex flex-col"
@@ -896,7 +896,7 @@
 
 			{#if sheetInherited}
 				<p class="mt-2 text-[12px] leading-relaxed" style="color: var(--ink-3)">
-					{sheet.count === 1 ? 'Placed' : 'All placed'} from the vendor's usual location — nobody recorded
+					{sheet.count === 1 ? 'Placed' : 'All placed'} from the vendor's usual location. Nobody recorded
 					being here.
 				</p>
 			{/if}

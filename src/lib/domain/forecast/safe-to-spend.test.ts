@@ -114,7 +114,7 @@ describe('narrateSafeToSpend', () => {
 		expect(n.text).toContain('$80.00 past your budget');
 	});
 
-	it('calls the budget the ceiling when it is the tighter positive limit', () => {
+	it('calls the budget the tighter limit when it is the tighter positive bound', () => {
 		const n = say({ incomeMinor: 100000n, budgetRemainingMinor: 30000n });
 		expect(n.tone).toBe('budget');
 		expect(n.text).toContain('$300.00');
@@ -123,7 +123,7 @@ describe('narrateSafeToSpend', () => {
 	it('is all-clear with room to spare and nothing pressing', () => {
 		const n = say({ incomeMinor: 100000n, cashSpentMinor: 20000n });
 		expect(n.tone).toBe('clear');
-		expect(n.text).toContain('$800.00 free and clear');
+		expect(n.text).toContain('$800.00 free to spend');
 	});
 });
 
@@ -208,12 +208,12 @@ describe('narration follows the shape of the budget it measured', () => {
 			fmt
 		).text;
 
-	it('says "budget" for one overall ceiling', () => {
-		expect(withPlan('overall')).toContain('your budget is the real ceiling');
+	it('says "budget" for one overall limit', () => {
+		expect(withPlan('overall')).toContain('your budget is the tighter limit');
 	});
 
-	it('says "budgets" when the ceiling is several allowances summed', () => {
-		expect(withPlan('categories')).toContain('your budgets are the real ceiling');
+	it('says "budgets" when the limit is several allowances summed', () => {
+		expect(withPlan('categories')).toContain('your budgets are the tighter limit');
 	});
 
 	it('agrees on number when over the plan too', () => {

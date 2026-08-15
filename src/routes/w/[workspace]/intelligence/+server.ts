@@ -91,7 +91,7 @@ async function buildBriefing(
 	const lines = [
 		`Workspace: ${briefingField(ws.name)}. Currency: ${currency}. Today: ${isoToday}.`,
 		`This month (${monthLabel(today)}): spent ${fmt(thisSpent)}, income ${fmt(income)}, set aside in savings ${fmt(savings)}, net ${fmt(net)}.`,
-		`Safe to Spend right now (free cash left this month): ${fmt(sts.freeMinor)} — status ${sts.status}.`,
+		`Safe to Spend right now (free cash left this month): ${fmt(sts.freeMinor)}; status ${sts.status}.`,
 		`Last month (${monthLabel(lastMonth.from)}): spent ${fmt(lastSpent)}.`,
 		topCats
 			? `Spending by category this month: ${topCats}.`

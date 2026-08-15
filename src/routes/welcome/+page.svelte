@@ -10,7 +10,7 @@
 	let wsName = $state('');
 </script>
 
-<svelte:head><title>Welcome — Ledger</title></svelte:head>
+<svelte:head><title>Welcome · Ledger</title></svelte:head>
 
 <main
 	class="min-h-viewport px-5 py-10"

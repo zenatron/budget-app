@@ -95,8 +95,8 @@
 			>
 		</p>
 		<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
-			Works out what's genuinely safe to spend this month, and answers questions about your money in
-			plain language.
+			Works out what's safe to spend this month and answers questions about your money in plain
+			language.
 		</p>
 		<a
 			href="/w/{slug}/settings/help?s=safe-to-spend"
@@ -112,8 +112,8 @@
 				Read a bill or receipt
 			</p>
 			<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
-				Extracts text from a PDF or image. The AI can help interpret fuzzy amounts, but always asks
-				you to confirm before anything lands in the ledger.
+				Extracts text from a PDF or image. AI can help interpret unclear amounts, and nothing lands
+				in the ledger until you confirm it.
 			</p>
 		</div>
 		{#if owner}
@@ -133,13 +133,13 @@
 			</p>
 			<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
 				Point your camera at a barcode to capture the product code. To look up a product name and
-				category, wire up a product-lookup API like <a
+				category, set up a product-lookup API like <a
 					href="https://world.openfoodfacts.org/data"
 					target="_blank"
 					rel="noopener noreferrer"
 					class="underline decoration-dotted"
 					style="color: var(--ws-accent)">Open Food Facts</a
-				> — set the URL in your deployment's environment.
+				> and set the URL in your deployment's environment.
 			</p>
 			{#if !data.barcodeConfigured}
 				<p
@@ -168,7 +168,7 @@
 
 	<!--
 		Places. The copy carries the honest version of what 110 m means on purpose:
-		"rounded" invites people to read "anonymised", and it isn't. Understating it
+		"rounded" invites people to read "anonymized", and it isn't. Understating it
 		here would be the one place in the app where the interface is less truthful
 		than the thing it describes.
 	-->
@@ -179,14 +179,14 @@
 				Places
 			</p>
 			<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
-				Attach a place to a purchase and see where the money goes on a map. Nothing is ever captured
-				on its own — you tap <strong style="color: var(--ink-2)">Use my location</strong>, type an
-				address, or paste a map link.
+				Attach a place to a purchase and see where the money goes on a map. Location is never
+				captured automatically: you tap <strong style="color: var(--ink-2)">Use my location</strong
+				>, type an address, or paste a map link.
 			</p>
 			<p class="mt-2 text-[13px] leading-relaxed" style="color: var(--ink-3)">
-				Pins are rounded to about 110&nbsp;m before they're stored. That's a block, not a doorstep —
-				but it is still enough to recognise a home. Places follow the same seal rules as everything
-				else: a purchase you can't see has no pin you can see.
+				Pins are rounded to about 110&nbsp;m before they're stored. That is too coarse to pinpoint
+				an address, yet close enough to recognize a home. Places follow the same seal rules as
+				everything else: a purchase you can't see has no pin you can see.
 			</p>
 			{#if !data.tileConfigured}
 				<p
@@ -195,7 +195,7 @@
 				>
 					<CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
 					<span>
-						No basemap configured. The map still works — it draws your spending on a plotted grid
+						No basemap configured. The map still works and draws your spending on a plotted grid
 						instead of streets. Set <code class="font-mono text-[11px]">MAP_TILE_URL</code> to a raster
 						tile template to add streets. Tiles are fetched by the server and re-served from this origin,
 						so your browser never talks to the tile provider.
@@ -214,9 +214,9 @@
 					<CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
 					<span>
 						No address search configured. You can still use your device's location and paste map
-						links — those are read offline and never leave this machine. Set <code
+						links; those are read offline and never leave this machine. Set <code
 							class="font-mono text-[11px]">GEOCODER_URL</code
-						> to a Nominatim-compatible endpoint to search addresses; self-host it if you can.
+						> to a Nominatim-compatible endpoint to search addresses. Self-host it if you can.
 					</span>
 				</p>
 			{:else if owner}
@@ -298,14 +298,15 @@
 			class="flex items-center gap-2 font-[family-name:var(--font-sans)] text-[16px] font-semibold tracking-normal"
 			style="color: var(--ink)"
 		>
-			<Sparkles class="h-4 w-4" style="color: var(--ws-accent)" /> A helper, never a decider
+			<Sparkles class="h-4 w-4" style="color: var(--ws-accent)" /> How AI assistance works
 		</h2>
 		<p class="mt-2 text-[13px] leading-relaxed" style="color: var(--ink-2)">
 			Harmony works entirely on plain arithmetic and pattern matching. You can optionally let a
 			language model help with the fuzzy parts, like reading a cryptic bank line into a merchant
-			name or suggesting a category. It only ever <strong style="color: var(--ink)">suggests</strong
-			>: it never approves a purchase, moves money, or decides your Safe to Spend. Every suggestion
-			is checked against the app's own options before you see it, so a bad answer becomes no answer.
+			name or suggesting a category. It can only
+			<strong style="color: var(--ink)">suggest</strong>: it cannot approve a purchase, move money,
+			or decide your Safe to Spend. Every suggestion is checked against the app's own options before
+			you see it.
 		</p>
 		<p class="mt-2 text-[13px] leading-relaxed" style="color: var(--ink-3)">
 			Leave it <strong style="color: var(--ink-2)">Off</strong> and nothing changes: Harmony keeps using
@@ -458,9 +459,8 @@
 					</div>
 					<p class="text-[12.5px] leading-relaxed" style="color: var(--ink-3)">
 						No capability chips here: an OpenAI-compatible endpoint lists model names and nothing
-						more, so we never learn what yours can do. We don't guess — features that need something
-						specific are offered anyway, and if the model can't do it you'll see your provider's own
-						error rather than ours.
+						more, so we never learn what yours can do. Features that need a specific capability are
+						offered anyway, and if the model can't do it you'll see your provider's own error.
 					</p>
 				{/if}
 			{/if}
@@ -519,8 +519,8 @@
 	<section class="card flex items-start gap-2.5 p-4" style="color: var(--ink-3)">
 		<ShieldCheck class="mt-0.5 h-4 w-4 shrink-0" style="color: var(--approve)" />
 		<p class="text-[12px] leading-relaxed">
-			Whatever you choose, the model is only ever a suggestion engine. It cannot approve, spend, or
-			change a number on its own, and the app runs exactly the same with it turned off.
+			Whatever you choose, the model can only make suggestions. It cannot approve, spend, or change
+			a number on its own, and the app runs exactly the same with it turned off.
 		</p>
 	</section>
 </div>

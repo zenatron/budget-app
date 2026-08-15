@@ -97,7 +97,7 @@
 			</div>
 			<p class="text-[18px] font-semibold" style="color: var(--ink)">No income yet</p>
 			<p class="mx-auto mt-1 max-w-[30ch] text-[15px] leading-relaxed" style="color: var(--ink-3)">
-				A budget without inflow can't tell you whether you're actually fine.
+				Add what comes in and Ledger can work out what's free to spend.
 			</p>
 			<a
 				href="/w/{slug}/settings/help?s=income"

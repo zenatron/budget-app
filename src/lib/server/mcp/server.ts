@@ -58,7 +58,7 @@ export async function dispatch(
 			return ok(id, {
 				protocolVersion,
 				capabilities: { tools: { listChanged: false } },
-				serverInfo: { name: 'ledger', title: 'Ledger — shared budget', version: pkg.version },
+				serverInfo: { name: 'ledger', title: 'Ledger · shared budget', version: pkg.version },
 				instructions:
 					'This is a shared household budget. You act as one member; approvals, gift-mode seals and per-member visibility all apply to you. Use whoami to confirm the workspace, search_purchases and spending_summary to read, log_purchase/request_purchase to record spending, and approve_purchase/deny_purchase for items awaiting your decision.'
 			});

@@ -48,7 +48,7 @@ export async function releaseDueHolds(
 			if (!dest) continue;
 			await deps.notifier.notify([{ userId: dest.userId, memberId: row.memberId }], 'stale_nudge', {
 				title: 'Ready to decide',
-				body: `${row.itemName} · ${Money.of(row.requestedAmountMinor, row.currency).format()} — still want it?`,
+				body: `${row.itemName} · ${Money.of(row.requestedAmountMinor, row.currency).format()}. Still want it?`,
 				path: `/w/${dest.slug}/purchases/${row.id}`,
 				tag: row.id
 			});

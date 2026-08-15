@@ -122,9 +122,7 @@ export function narrateMonth(
 		// No income to balance against: describe the spending, judge nothing.
 		tone = 'neutral';
 		if (f.spentMinor === 0n) {
-			lead = f.isPartial
-				? 'Nothing spent yet this month. A clean page.'
-				: 'Nothing went out this month. A clean page.';
+			lead = f.isPartial ? 'Nothing spent yet this month.' : 'Nothing went out this month.';
 		} else {
 			const count = f.txCount === 1 ? '1 purchase' : `${f.txCount} purchases`;
 			lead = `${opener} spent ${fmt(f.spentMinor)} across ${count}.`;
@@ -145,11 +143,11 @@ export function narrateMonth(
 		const ahead = fmt(s.netMinor);
 		lead =
 			f.savingsMinor > 0n
-				? `${fmt(f.incomeMinor)} came in against ${fmt(f.spentMinor)} out. You set aside ${fmt(f.savingsMinor)} and still closed ${ahead} ahead.`
+				? `${fmt(f.incomeMinor)} came in against ${fmt(f.spentMinor)} out. You set aside ${fmt(f.savingsMinor)} and still ended ${ahead} ahead.`
 				: `${fmt(f.incomeMinor)} came in against ${fmt(f.spentMinor)} out, leaving you ${ahead} ahead ${openerLower}.`;
 		if (f.isPartial) {
-			// "Closed ahead" overclaims a month that hasn't ended.
-			lead = lead.replace('closed', 'sitting').replace(`ahead ${openerLower}`, `ahead so far`);
+			// "Ended ahead" overclaims a month that hasn't ended.
+			lead = lead.replace('ended', 'sitting').replace(`ahead ${openerLower}`, `ahead so far`);
 		}
 	}
 
@@ -170,9 +168,9 @@ export function narrateMonth(
 		if (mag < 5) {
 			notes.push('Spending held roughly level with last month.');
 		} else if (s.momDeltaMinor > 0n) {
-			notes.push(`As a whole, that's ${fmt(s.momDeltaMinor)} more than last month, up ${mag}%.`);
+			notes.push(`That's ${fmt(s.momDeltaMinor)} more than last month, up ${mag}%.`);
 		} else {
-			notes.push(`As a whole, that's ${fmt(-s.momDeltaMinor)} less than last month, down ${mag}%.`);
+			notes.push(`That's ${fmt(-s.momDeltaMinor)} less than last month, down ${mag}%.`);
 		}
 	}
 
@@ -191,10 +189,10 @@ export function narrateMonth(
 
 	// What the buckets couldn't cover. Said plainly and without scolding: the
 	// charge was allowed, the money simply wasn't there, and the figures above
-	// have already counted it as spending rather than as savings coming back.
+	// have already counted it as this month's spending.
 	if (f.overdraftMinor > 0n) {
 		notes.push(
-			`${fmt(f.overdraftMinor)} of that was charged to buckets that didn't have it, so it counts as spending rather than savings coming back.`
+			`${fmt(f.overdraftMinor)} of that was charged to buckets that didn't have it, so it counts as this month's spending.`
 		);
 	}
 

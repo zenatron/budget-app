@@ -82,8 +82,8 @@ export async function sendSafeToSpendAlerts(
 			const overByMinor = level === 2 ? -forecast.freeMinor : -forecast.afterReservedMinor;
 			const body =
 				level === 2
-					? `You're ${formatMinor(overByMinor, ws.currency)} over for the month. Might be worth holding off on new spends.`
-					: `Heads up: approving what's pending would put you ${formatMinor(overByMinor, ws.currency)} over this month.`;
+					? `You're ${formatMinor(overByMinor, ws.currency)} over for the month. Consider holding off on new spending.`
+					: `Approving what's pending would put you ${formatMinor(overByMinor, ws.currency)} over this month.`;
 
 			const recipients: Recipient[] = [{ userId: m.userId, memberId: m.id }];
 			await deps.notifier.notify(recipients, 'safe_to_spend', {

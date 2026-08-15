@@ -291,7 +291,7 @@
 			</div>
 			<p class="text-[18px] font-semibold" style="color: var(--ink)">No buckets yet</p>
 			<p class="mx-auto mt-1 max-w-[30ch] text-[15px] leading-relaxed" style="color: var(--ink-3)">
-				Create virtual savings envelopes for goals, trips, and rainy days.
+				Set money aside on a schedule for something specific, like a trip or an emergency fund.
 			</p>
 			<a
 				href="/w/{slug}/settings/help?s=buckets"

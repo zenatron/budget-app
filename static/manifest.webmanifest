@@ -1,7 +1,7 @@
 {
 	"name": "Ledger",
 	"short_name": "Ledger",
-	"description": "Shared spending, approvals, and budgets",
+	"description": "A shared, self-hosted budget for the people you trust.",
 	"start_url": "/",
 	"scope": "/",
 	"display": "standalone",

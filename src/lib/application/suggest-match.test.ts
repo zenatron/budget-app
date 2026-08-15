@@ -71,7 +71,7 @@ describe('suggestMatch — what the model is shown', () => {
 		await suggestMatch(fakeAssist({ pickChoice }), LINE, [candidate()]);
 
 		expect(pickChoice.mock.calls[0][0].choices).toEqual([
-			{ id: 'p-1', label: 'flat white at Blue Bottle — $4.20 on 2026-08-04' }
+			{ id: 'p-1', label: 'flat white at Blue Bottle · $4.20 on 2026-08-04' }
 		]);
 	});
 
@@ -79,7 +79,7 @@ describe('suggestMatch — what the model is shown', () => {
 		const pickChoice = vi.fn<LlmAssist['pickChoice']>(async () => null);
 		await suggestMatch(fakeAssist({ pickChoice }), LINE, [candidate({ merchantName: null })]);
 
-		expect(pickChoice.mock.calls[0][0].choices[0].label).toBe('flat white — $4.20 on 2026-08-04');
+		expect(pickChoice.mock.calls[0][0].choices[0].label).toBe('flat white · $4.20 on 2026-08-04');
 	});
 
 	it('shows magnitudes, so a debit recorded as negative still reads as money', async () => {

@@ -327,9 +327,9 @@ export async function submitPurchase(
 					ws.reapprovalThresholdPct,
 					now
 				);
-				result.event.reason = 'sealed: approver concealed — recorded without approval';
+				result.event.reason = 'sealed: approver concealed, recorded without approval';
 			} else {
-				result = autoApprove(draft, now, 'sealed: approver concealed — recorded without approval');
+				result = autoApprove(draft, now, 'sealed: approver concealed, recorded without approval');
 			}
 		} else if (isLog) {
 			// completedAt/finalAmount already on the draft; complete() re-asserts them.
@@ -546,7 +546,7 @@ export async function deletePurchase(
 			const deleteHours = ws?.recentDeleteHours ?? 72;
 			const ageMs = now.getTime() - row.createdAt.getTime();
 			if (deleteHours > 0 && ageMs > deleteHours * 3_600_000) {
-				throw new PurchaseStateError('This entry is too old to remove — ask a workspace owner');
+				throw new PurchaseStateError('This entry is too old to remove. Ask a workspace owner');
 			}
 		}
 

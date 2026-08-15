@@ -25,7 +25,7 @@ describe('gateFor — the three states', () => {
 
 		expect(gate.allowed).toBe(false);
 		expect(gate.allowed === false && gate.reason).toBe(
-			"granite4.1:8b can't read images — pick a model with the vision chip."
+			"granite4.1:8b can't read images. Pick a model with the vision chip."
 		);
 	});
 

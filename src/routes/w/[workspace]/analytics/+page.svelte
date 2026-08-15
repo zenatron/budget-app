@@ -904,7 +904,7 @@
 							category: c.categoryId
 						})}
 						class="press -mx-1 block rounded-[var(--r-sm)] px-2 py-2.5"
-						aria-label="{c.name}, {formatMinor(c.totalMinor, currency)} — see purchases"
+						aria-label="{c.name}, {formatMinor(c.totalMinor, currency)} · see purchases"
 					>
 						<div class="flex items-baseline justify-between text-[15px]">
 							<span style="color: var(--ink)">
@@ -962,7 +962,7 @@
 							bbox: pl.bboxE3
 						})}
 						class="press hairline flex items-baseline justify-between gap-3 py-3.5"
-						aria-label="{pl.label}, {formatMinor(pl.totalMinor, currency)} — see purchases"
+						aria-label="{pl.label}, {formatMinor(pl.totalMinor, currency)} · see purchases"
 					>
 						<span class="flex min-w-0 items-baseline gap-2">
 							<MapPin class="h-3.5 w-3.5 shrink-0 self-center" style="color: var(--ink-4)" />
@@ -1002,7 +1002,7 @@
 							member: m.memberId
 						})}
 						class="press hairline flex items-baseline justify-between py-3.5"
-						aria-label="{m.name}, {formatMinor(m.totalMinor, currency)} — see purchases"
+						aria-label="{m.name}, {formatMinor(m.totalMinor, currency)} · see purchases"
 					>
 						<span class="text-[15px]" style="color: var(--ink)">{m.name}</span>
 						<span class="flex items-baseline gap-1.5">

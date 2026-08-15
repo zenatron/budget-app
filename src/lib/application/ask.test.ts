@@ -160,7 +160,7 @@ describe('answerAsk — the out-of-briefing refusal is not the model’s job', (
 		});
 
 		expect(out).toMatchObject({ kind: 'refusal' });
-		expect(out?.answer).toContain('I only keep this month and last month close to hand');
+		expect(out?.answer).toContain('I can only answer for this month and last month');
 		expect(answerQuestion).not.toHaveBeenCalled();
 		expect(briefing).not.toHaveBeenCalled();
 	});

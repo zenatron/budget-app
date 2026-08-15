@@ -73,10 +73,10 @@
 
 	function proposalSummary(p: Proposal): string {
 		if (p.intent === 'create_bucket') {
-			return `Create bucket “${p.name}” — ${formatMinor(BigInt(p.amountMinor), currency)}/mo on day ${p.dayOfMonth}`;
+			return `Create bucket “${p.name}”: ${formatMinor(BigInt(p.amountMinor), currency)}/mo on day ${p.dayOfMonth}`;
 		}
 		if (p.intent === 'create_income') {
-			return `Add income “${p.source}” — ${formatMinor(BigInt(p.amountMinor), currency)}${p.monthly ? ` monthly on day ${p.dayOfMonth}` : ' once'}`;
+			return `Add income “${p.source}”: ${formatMinor(BigInt(p.amountMinor), currency)}${p.monthly ? ` monthly on day ${p.dayOfMonth}` : ' once'}`;
 		}
 		return `Open ${p.label}`;
 	}

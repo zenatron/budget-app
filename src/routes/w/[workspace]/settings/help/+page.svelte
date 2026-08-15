@@ -37,8 +37,8 @@
 	};
 
 	/**
-	 * The app's rules in one place. Written against how it actually behaves —
-	 * several of these (sealing hiding totals, the approver conflict, recurring
+	 * The app's rules in one place. Written against how it actually behaves.
+	 * Several of these (sealing hiding totals, the approver conflict, recurring
 	 * bypassing approval) are deliberate decisions that are impossible to infer
 	 * from the UI alone.
 	 */
@@ -73,7 +73,7 @@
 					title: 'Logging vs asking',
 					body: [
 						'**Log it** records something you already bought. **Ask first** requests permission before you spend.',
-						'Logging something from a while ago? Set **When** to the day it happened — it lands in that month’s figures, not today’s.',
+						'Logging something from a while ago? Set **When** to the day it happened so it counts toward that month instead of the current one.',
 						'Which one needs approval is set per person in Settings → Members. If your policy says no approval is needed, "Ask first" is approved the moment you submit it.'
 					]
 				},
@@ -82,8 +82,8 @@
 					icon: 'sparkle',
 					title: 'Describe a purchase',
 					body: [
-						'At the top of the Add screen is a field you can type or **dictate** into, using your phone keyboard’s microphone. Say something like *23 on lunch at Chipotle yesterday* and it fills in the amount, item, merchant, date, and a category.',
-						'The amount and the date are read by plain rules, never by AI, so a misheard number is one you can see and fix rather than one the app invented. A category is only suggested when you have turned on AI assistance. Nothing is saved until you tap **Log it** or **Ask first**.',
+						'At the top of the Add screen is a field you can type or **dictate** into, using your phone keyboard’s microphone. Say something like *23 on lunch at Krusty Krab yesterday* and Ledger fills in the fields for you.',
+						'The amount and date come from fixed rules, so a misheard number is visible and easy to correct before you save. A category is only suggested when AI assistance is turned on. Nothing is saved until you tap **Log it** or **Ask first**.',
 						'The sparkle button at the top of the app understands the same thing: *log 18 for tacos* opens the Add screen already filled in.'
 					]
 				}
@@ -97,10 +97,10 @@
 					icon: 'checkmark',
 					title: 'Approvals',
 					body: [
-						'A policy is either **never**, **above an amount**, or **always**. You also name who can decide — any one of them, or one specific person.',
-						'Approval is not symmetric: being someone’s approver and needing approval yourself are independent settings.',
+						'A policy is either **never**, **above an amount**, or **always**. You also choose who decides: any one of the approvers, or one specific person.',
+						'Being someone’s approver and needing approval yourself are independent settings.',
 						'**Spending more than approved sends it back.** If the final amount is well over what was approved, the purchase returns to waiting until the approver confirms the real price.',
-						'Editing the item, amount or category of an approved purchase also sends it back — unless it never needed approval, in which case the change just applies.'
+						'Editing the item, amount, or category of an approved purchase also sends it back. Purchases that never needed approval just update.'
 					]
 				},
 				{
@@ -108,10 +108,10 @@
 					icon: 'bell',
 					title: 'What needs you',
 					body: [
-						'Two kinds of thing can be waiting on you, and both sit at the top of the Ledger and add up on one card in Settings, so nothing slips down the list.',
-						'**Awaiting a decision** — purchases waiting for an approver to say yes or no.',
-						'**Confirm what you paid** — purchases that are approved but have no final amount yet: a recurring bill set to ask you, or a request you had approved for an estimate. Only you can confirm your own. Open one to enter what you were actually charged, and on which date.',
-						'These are dated by when they happened, not when they landed, so an older one shows its real month rather than today — and they’re listed oldest first, so you clear the backlog in order.'
+						'Two kinds of items can wait on you. Both sit at the top of the Ledger and add up on one card in Settings.',
+						'**Awaiting a decision**: purchases waiting for an approver to say yes or no.',
+						'**Confirm what you paid**: purchases that are approved but have no final amount yet. This can be a recurring bill set to ask you, or a request you approved for an estimate. Only you can confirm your own. Open one to enter the amount you were actually charged and the date.',
+						'Each one is dated by when it happened, so an older item counts toward its own month. They are listed oldest first.'
 					]
 				},
 				{
@@ -119,10 +119,10 @@
 					icon: 'moon',
 					title: 'Sleep on it',
 					body: [
-						'Not sure about a purchase? Put it to sleep instead of deciding now. The request pauses for a set time, then comes back so you can decide with a clearer head — a gentle guard against impulse buys.',
-						'On a request that’s waiting, tap **Sleep on it** and choose how long. The length is suggested from the amount — bigger buys wait a bit longer — and you can spin the dial to change it. Either the person who asked or an approver can start a pause.',
+						'Not sure about a purchase? Put it to sleep instead of deciding now. The request pauses for a set time and then comes back for a decision.',
+						'On a waiting request, tap **Sleep on it** and choose how long. The suggested length is based on the amount, and you can spin the dial to change it. Either the requester or an approver can start a pause.',
 						'While it’s asleep it can’t be approved or bought, and it shows on the Ledger under **Sleeping on it** with a countdown. You can wake it early or let it go at any time.',
-						'When the time is up it’s marked **Ready to decide** and you get a reminder. From there it’s **Buy it** (back in the approval queue), **wait more**, or **let it go** — and changing your mind is a perfectly good outcome.'
+						'When the time is up it’s marked **Ready to decide** and you get a reminder. From there you can choose **Buy it** to return it to the approval queue, **wait more**, or **let it go**.'
 					]
 				},
 				{
@@ -130,10 +130,10 @@
 					icon: 'gift',
 					title: 'Gift mode',
 					body: [
-						'Hides a purchase from the people you pick, until a date you choose.',
-						'It is hidden **everywhere** — the list, search, the detail page, and every total on Activity. Their spending figures are computed as if it does not exist, so nothing can be worked out by subtraction.',
+						'Hides a purchase from the people you pick until a date you choose.',
+						'It is hidden **everywhere**: the list, search, the detail page, and every total on Activity. Their spending figures are computed as if it does not exist, so the amount cannot be worked out by subtraction.',
 						'Only the person who created it can reveal it early. It opens automatically on the chosen date.',
-						'If the only person who could approve it is also the person it is hidden from, it is approved automatically **and the audit trail says so** — it is never silently skipped.'
+						'If the only possible approver is also the person it is hidden from, it is approved automatically **and the audit trail says so**.'
 					]
 				}
 			]
@@ -146,11 +146,11 @@
 					icon: 'chart',
 					title: 'Budgets & Activity',
 					body: [
-						'Budgets are monthly, set overall or per category, and can be scheduled up to a year ahead — useful when you know a month will be different.',
+						'Budgets are monthly, set overall or per category, and can be scheduled up to a year ahead for months you know will be different.',
 						'Setting a new budget does not rewrite past months. Each month keeps the budget that applied at the time.',
 						'You get a notification when a budget passes 80% and again when it is exceeded.',
 						'Swipe the card on Activity to move between periods.',
-						'Tap any category or person in a breakdown to open just those purchases in the Ledger, already filtered to the period you were looking at. You can also filter the Ledger yourself by date, person or category.'
+						'Tap any category or person in a breakdown to open just those purchases in the Ledger, already filtered to the period you were looking at. You can also filter the Ledger yourself by date, person, or category.'
 					]
 				},
 				{
@@ -158,9 +158,9 @@
 					icon: 'repeat',
 					title: 'Recurring charges',
 					body: [
-						'Rent, subscriptions, bills. Each rule generates purchases on its own schedule. A rule can be charged to a bucket, drawing it down as each charge lands.',
-						'**Record automatically** posts them as already-paid at the set amount. Leave it off — for a bill that changes each month — and each one lands under **Confirm what you paid** at the top of the Ledger, waiting for you to enter the real figure.',
-						'Recurring purchases do not go through approval — the decision was made when you created the rule.',
+						'For rent, subscriptions, and bills. Each rule generates purchases on its own schedule. A rule can be charged to a bucket, which draws the bucket down as each charge lands.',
+						'**Record automatically** posts them as already paid at the set amount. Leave it off for a bill that changes each month, and each charge appears under **Confirm what you paid** at the top of the Ledger, waiting for you to enter the real figure.',
+						'Recurring purchases skip approval. The decision was made when you created the rule.',
 						'If the app is offline for a while, missed occurrences are generated when it comes back.'
 					]
 				},
@@ -169,10 +169,10 @@
 					icon: 'bank',
 					title: 'Buckets',
 					body: [
-						'A bucket sets money aside on a schedule — a travel fund, a new laptop, an emergency float. Choose the amount and the cadence: every week, every month on a chosen day, whatever fits. A start date in the past can fill in the accruals you already missed.',
+						'A bucket sets money aside on a schedule, such as a travel fund or an emergency float. Choose the amount and how often it accrues. A start date in the past can backfill accruals you already missed.',
 						'Buckets belong to the person who made them. Only that person can withdraw or adjust one.',
-						'You can charge a purchase to a bucket, which draws it down. The workspace has a default for whether bucket charges skip approval, and each person’s policy can override it — always skip, or always require — for their own charges.',
-						'A bucket can go **overdrawn**: nothing stops a charge bigger than the balance, because no real money moves either way. You are warned before it happens, the bucket is marked on this page, and the next accrual pays the hole off before it saves anything. Whatever a bucket could not cover counts as ordinary spending rather than savings you had set aside.'
+						'You can charge a purchase to a bucket, which draws it down. The workspace sets a default for whether bucket charges skip approval, and each person can override it for their own charges.',
+						'A bucket can go **overdrawn**: a charge bigger than the balance is allowed, since no real money moves. You are warned before it happens and the bucket is marked on this page. The next accrual pays off the shortfall before adding to the balance, and the part the bucket could not cover counts as ordinary spending.'
 					]
 				},
 				{
@@ -181,9 +181,9 @@
 					title: 'Income',
 					body: [
 						'Add what comes in, either as a one-off or as a monthly amount on a chosen day.',
-						'A monthly entry is a template, not a stack of records — the occurrences are worked out when you look, so editing it corrects every month at once.',
+						'A monthly entry is a template. The occurrences are computed when you view them, so editing the template corrects every month at once.',
 						'Income is visible to everyone in the workspace. Unlike purchases, it cannot be hidden.',
-						'It drives the net position on Activity: what came in, minus what went out and what you set aside, plus whatever you took back out of a bucket — that spending was already paid for in the month you set it aside.'
+						'It drives the net position on Activity: what came in, minus what went out and what you set aside, plus whatever you withdrew from a bucket. That spending was already paid for in the month you set it aside.'
 					]
 				}
 			]
@@ -196,12 +196,12 @@
 					icon: 'wallet',
 					title: 'Safe to Spend',
 					body: [
-						'The number at the top of the Ledger is how much is genuinely free to spend this month. Tap it to see the whole breakdown.',
-						'It starts from your **Income** for the month, then takes out four things. **Recurring** is the bills still to come before month-end. **Saved** is what you set aside into your buckets this month. **Approved** is purchases that were greenlit but not yet paid. **Spent** is what has already left your account, net of refunds. What is left is **Free to spend**.',
-						'Money charged to a bucket does not count as spending here. That was set aside in an earlier month, so spending it is not this month’s cash. The exception is a bucket charged past its balance: nothing had been set aside for that part, so it counts as spending like anything else.',
-						'**Pending** requests and ones you’re **sleeping on** are shown but not taken out, since they might still be denied or let go. If you set a budget, Harmony also marks the point where your budget, rather than your cash, becomes the limit.',
-						'Every figure is plain arithmetic and nothing leaves your server. It is worked out as you see it, so a hidden gift never shows in the total for the person it is for.',
-						'It is also the one number on the page that reads from across a room, so you can turn it down. Under **Filter** on the Ledger, **Safe to spend** can be **Shown**, **Hidden until tapped** — the digits become dots until you tap the eye, and hide themselves again next time you open the app — or **Off**, which drops the headline entirely. It is your own choice and changes nothing for anyone else in the workspace.'
+						'The number at the top of the Ledger is how much is free to spend this month. Tap it to see the full breakdown.',
+						'It starts from your **Income** for the month, then subtracts four things. **Recurring** is the bills still to come before month-end. **Saved** is what you set aside into your buckets this month. **Approved** is purchases that were approved but not yet paid. **Spent** is what has already left your account, net of refunds. What remains is **Free to spend**.',
+						'Money charged to a bucket does not count as spending here, because it was set aside in an earlier month. If a bucket is charged past its balance, the uncovered part does count as spending.',
+						'**Pending** requests and ones you’re **sleeping on** are shown but not subtracted, since they might still be denied or let go. If you set a budget, Harmony also marks the point where the budget becomes the limit.',
+						'Every figure is plain arithmetic computed on your server at the moment you view it, so a hidden gift never appears in the total shown to the person it is hidden from.',
+						'Under **Filter** on the Ledger, **Safe to spend** can be **Shown**, **Hidden until tapped**, or **Off**. With **Hidden until tapped**, the digits appear as dots until you tap the eye and hide again the next time you open the app. **Off** removes the headline entirely. The choice is yours alone and changes nothing for anyone else in the workspace.'
 					]
 				},
 				{
@@ -209,9 +209,9 @@
 					icon: 'notepad',
 					title: 'Month-End Statement',
 					body: [
-						'From the Activity page, open the statement for any month to read it back as a single page: what came in, what went out, what you set aside, and where you landed. It defaults to the current month, marked *in progress* until the month ends.',
-						'Harmony reads the month in plain language at the top. It only speaks to your net position when income is recorded, since a balance needs both sides. With no income logged, it describes the spending and judges nothing.',
-						'Every line is seal-aware, the same as the rest of the app: a statement shows only what you are meant to see. Use the print button for a clean copy on paper, with the app’s chrome stripped away.'
+						'From the Activity page, open the statement for any month. It summarizes what came in, what went out, what you set aside, and where you landed. It defaults to the current month, marked *in progress* until the month ends.',
+						'Harmony summarizes the month in plain language at the top. It only comments on net position when income is recorded, since a balance needs both sides. With no income logged, it describes the spending without judging it.',
+						'Every line is seal-aware, like the rest of the app: a statement shows only what you are allowed to see. Use the print button for a clean paper copy.'
 					]
 				},
 				{
@@ -219,11 +219,11 @@
 					icon: 'checkmark',
 					title: 'Reconciling a statement',
 					body: [
-						'Export a CSV or PDF from your bank and import it under Settings → Reconcile. Ledger reads the date, amount and description columns — naming them yourself if the headers are unfamiliar — and lines each transaction up against what is recorded here. A PDF is read on your device: only the three columns are sent, never the document.',
-						'A match is only ever a **suggestion**. Importing never creates, edits or deletes a purchase, and never changes an amount; confirming a match writes one thing, a mark saying this purchase appeared on a statement. Undo is always available, and removing an import releases every mark it made.',
-						'Where two purchases fit a line equally well, Ledger will not guess — it shows both and lets you choose. It does show its shortlist, though: a line it could not settle arrives with the two or three purchases it was weighing, each one tap from being linked. Lines that were never purchases (fees, transfers) can be set aside, and a line with nothing behind it can be logged as a purchase in one tap.',
-						'**Help me find this** shows up on a line nothing matched, if you have AI assistance on. A bank descriptor like *SQ \\*BLUE BOTTLE 0042* shares no words with *flat white* — the one gap plain matching can’t close. It picks from the purchases already on screen, never a name it invented, and highlights one. You still press Link.',
-						'Reconciling is seal-aware. A line that belongs to a purchase hidden from you reads *accounted for — hidden from you*: enough that you do not log a duplicate of a gift you are not meant to know about, and nothing more than that.'
+						'Export a CSV or PDF from your bank and import it under Settings → Reconcile. Ledger reads the date, amount, and description columns (you can name them yourself if the headers are unfamiliar) and matches each transaction against what is recorded here. A PDF is parsed on your device: only the three columns are sent, and the document never leaves it.',
+						'A match is only a **suggestion**. Importing never creates, edits, or deletes a purchase and never changes an amount. Confirming a match writes a single mark saying the purchase appeared on a statement. Undo is always available, and removing an import releases every mark it made.',
+						'When two purchases fit a line equally well, Ledger shows both and lets you choose. An unresolved line arrives with its shortlist of closest matches, each one tap from being linked. Lines that were never purchases, such as fees or transfers, can be set aside, and a line with nothing behind it can be logged as a purchase in one tap.',
+						'**Help me find this** appears on an unmatched line if AI assistance is on. It helps where a bank descriptor like *SQ \\*BLUE BOTTLE 0042* shares no words with *flat white*. It picks from the purchases already on screen and highlights the best candidate. You still press Link.',
+						'Reconciling is seal-aware. A line that belongs to a purchase hidden from you reads *accounted for, hidden from you*. That is enough to avoid logging a duplicate of a gift you are not meant to know about, and it reveals nothing more.'
 					]
 				},
 				{
@@ -231,11 +231,11 @@
 					icon: 'sparkle',
 					title: 'Reading a bill, receipt or scan',
 					body: [
-						'Most PDFs carry their text inside them, and Ledger reads that straight off — no AI, and it’s quick. A **scan** is different: it’s a photograph of a page, with no text in it at all. There’s nothing to read without looking at the picture.',
-						'Turn on a model that can see, and Ledger offers to look — at a scanned bill, a photo of a receipt, or a scanned bank statement. You’ll always know when it does: it asks first, and shows you what it made out before anything lands in a field.',
-						'**Nothing it reads is taken on trust.** The model only copies what’s printed; Ledger then reads those characters with the same rules it uses on any other text. Anything it can’t read cleanly is left blank for you to fill in. A misread costs you a bit of typing, never a wrong number.',
-						'A statement gets one extra step. Before importing, Ledger shows you the bank, the account and the period it read off the page and asks whether that’s yours — a glance you can answer instantly, and the app can’t. Those imports stay marked wherever they appear, so you always know which figures were transcribed rather than read.',
-						'If your model can’t read images, Ledger says so and points you at one that can. If it can’t tell — true of most external providers, which don’t publish what their models do — it tries anyway, and you get the provider’s own answer rather than a guess from us.'
+						'Most PDFs carry their text inside them, and Ledger reads it directly without AI. A **scan** is a photograph of a page with no text in it, so it needs a model that can see.',
+						'With a vision model turned on, Ledger offers to read scanned bills, receipt photos, and scanned bank statements. It always asks first and shows you what it read before anything lands in a field.',
+						'**Nothing it reads is taken on trust.** The model only copies what is printed, and Ledger then parses those characters with the same rules it uses for any other text. Anything it can’t read cleanly is left blank for you to fill in, so a misread costs some typing.',
+						'A statement gets one extra step. Before importing, Ledger shows the bank, account, and period it read from the page and asks you to confirm they are yours. Those imports stay marked wherever they appear, so you can always tell which figures were transcribed.',
+						'If your model cannot read images, Ledger says so and points you to one that can. Most external providers don’t publish their models’ capabilities, so Ledger tries anyway and shows you the provider’s own answer.'
 					]
 				},
 				{
@@ -244,8 +244,8 @@
 					title: 'Asking questions',
 					body: [
 						'The sparkle in the header takes plain language: *how much did I spend on groceries last month*, *what’s my net position*, *add income of 4800 per month on the first*, or *log 23 for lunch* to open the Add screen filled in.',
-						'It shows what it understood as you type, and offers to complete a half-typed command rather than guessing at what is missing.',
-						'The commands it recognizes and the totals it computes are plain pattern matching and arithmetic that stay on your server, the same whether or not AI assistance is on. With a model turned on, it can also answer open-ended questions — *am I spending more than last month*, *what’s my biggest expense* — phrased over your real figures. It reads those numbers from the app, never invents them, and says so plainly when the answer isn’t in the data.'
+						'It shows what it understood as you type and offers to complete a half-typed command instead of guessing what is missing.',
+						'The commands it recognizes and the totals it computes use pattern matching and arithmetic on your server, with or without AI assistance. With a model turned on, it can also answer open-ended questions like *am I spending more than last month* over your real figures. It reads those numbers from the app and tells you when the answer isn’t in the data.'
 					]
 				},
 				{
@@ -253,8 +253,8 @@
 					icon: 'sparkle',
 					title: 'AI assistance',
 					body: [
-						'Harmony works entirely on plain arithmetic and pattern matching. In Settings → Harmony you can optionally let a language model help with the fuzzy parts: suggesting a category, working out which purchase a cryptic bank line refers to, reading a bill that only exists as a picture, or answering an open-ended question in words over figures the app has already computed.',
-						'It only ever **suggests** or **explains**. It never approves a purchase, moves money, or decides your Safe to Spend; when it answers a question it reads your real figures rather than inventing any; and every suggestion is checked against the app’s own options before you see it, so a bad answer becomes no answer.',
+						'Harmony works entirely on plain arithmetic and pattern matching. In Settings → Harmony you can optionally let a language model help with the fuzzy parts: suggesting a category, matching a cryptic bank line to a purchase, reading a bill that only exists as a picture, or answering an open-ended question using figures the app has already computed.',
+						'It only ever **suggests** or **explains**. It cannot approve a purchase, move money, or decide your Safe to Spend. When it answers a question it uses your real figures, and every suggestion is checked against the app’s own options before you see it.',
 						'You choose the source. **Local** runs a model on your own machine, so nothing leaves your server. **External** uses an outside API, which means the text you send is processed by a third party. **Off**, the default, keeps everything deterministic and contacts no model at all.'
 					]
 				}
@@ -268,10 +268,10 @@
 					icon: 'people',
 					title: 'Members & roles',
 					body: [
-						'Everyone is an **owner** or a **member**. Owners change workspace settings, budgets, invites and everyone’s approval policy; members do everything else.',
-						'Any owner can make another person an owner, or step someone — including themselves — back down to member, as long as one owner is always left. Promote first, then demote yourself: that’s how you hand a workspace over.',
+						'Everyone is an **owner** or a **member**. Owners change workspace settings, budgets, invites, and everyone’s approval policy; members do everything else.',
+						'Any owner can make another person an owner, or step someone (including themselves) back down to member, as long as one owner remains. Promote first, then demote yourself to hand a workspace over.',
 						'**Disable** someone to take away their access without erasing their history; **restore** brings them back. You can’t disable yourself, the last owner, or the only person left who can approve someone else’s spending.',
-						'**Deleting the workspace** removes everything in it and cannot be undone — it makes you type the name to confirm.'
+						'**Deleting the workspace** removes everything in it and cannot be undone. You have to type the workspace name to confirm.'
 					]
 				}
 			]
@@ -288,7 +288,7 @@
 	}
 </script>
 
-<svelte:head><title>Help — Ledger</title></svelte:head>
+<svelte:head><title>Help · Ledger</title></svelte:head>
 
 <div class="mx-auto max-w-lg space-y-4">
 	<a

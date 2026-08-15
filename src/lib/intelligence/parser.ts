@@ -458,8 +458,8 @@ export interface Understanding {
 const DAY_LABEL = (d: number) => (d === -1 ? 'last day' : `day ${d}`);
 
 const MISSING_HELP: Record<string, string> = {
-	amount: 'an amount — try "of 500"',
-	cadence: 'how often — try "per month"'
+	amount: 'an amount. Try "of 500"',
+	cadence: 'how often. Try "per month"'
 };
 
 /** Suggestions offered when nothing matched, ordered by how often they're wanted. */

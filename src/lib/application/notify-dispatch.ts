@@ -116,9 +116,9 @@ function planNotification(p: Purchase, ev: TransitionEvent): NotificationPlan | 
 			recipientMemberIds: p.approverMemberIds.filter(notRequester),
 			title: (requester) =>
 				overage
-					? `${requester} overspent — needs re-approval`
+					? `${requester} overspent: needs re-approval`
 					: edited
-						? `${requester} changed a purchase — needs re-approval`
+						? `${requester} changed a purchase: needs re-approval`
 						: `${requester} requested approval`
 		};
 	}

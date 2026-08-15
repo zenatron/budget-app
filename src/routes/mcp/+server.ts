@@ -53,7 +53,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			{
 				jsonrpc: '2.0',
 				id: null,
-				error: { code: -32002, message: 'Too many attempts — wait a minute.' }
+				error: { code: -32002, message: 'Too many attempts. Wait a minute.' }
 			},
 			{ status: 429, headers: CORS }
 		);
@@ -69,7 +69,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			{
 				jsonrpc: '2.0',
 				id: null,
-				error: { code: -32002, message: 'Rate limit exceeded — slow down.' }
+				error: { code: -32002, message: 'Rate limit exceeded. Slow down.' }
 			},
 			{ status: 429, headers: CORS }
 		);

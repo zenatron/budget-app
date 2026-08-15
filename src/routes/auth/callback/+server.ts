@@ -20,7 +20,7 @@ export const GET: RequestHandler = async ({ url, cookies, request, getClientAddr
 		cookies.delete(name, { path: '/' });
 	}
 	if (!state || !nonce || !codeVerifier) {
-		error(400, 'Login flow expired — please try again');
+		error(400, 'Login flow expired. Please try again');
 	}
 
 	let tokens;
@@ -30,7 +30,7 @@ export const GET: RequestHandler = async ({ url, cookies, request, getClientAddr
 		console.log(
 			JSON.stringify({ level: 'warn', msg: 'oidc: callback rejected', err: (e as Error).message })
 		);
-		error(400, 'Login failed — please try again');
+		error(400, 'Login failed. Please try again');
 	}
 	const { identity, accessToken } = tokens;
 

@@ -266,14 +266,14 @@
 				{#if statement.ambiguous}
 					This has {statement.rows}
 					dated {statement.rows === 1 ? 'transaction' : 'transactions'} on it and something that reads
-					as an amount due, so it could be an itemised bill or a short statement. They're handled differently,
-					and guessing wrong would put the wrong figure on a purchase — so which is it?
+					as an amount due, so it could be an itemized bill or a short statement. They're handled differently,
+					and guessing wrong would put the wrong figure on a purchase. Which is it?
 				{:else}
 					There {statement.rows === 1 ? 'is' : 'are'}
 					{statement.rows}
 					dated {statement.rows === 1 ? 'transaction' : 'transactions'} in this PDF, so it's a record
-					of spending rather than one bill — there's no single amount to put on a purchase. Reconcile
-					reads it properly and ticks it against what's already recorded.
+					of spending. There's no single amount to put on a purchase. Reconcile reads it properly and
+					checks it against what's already recorded.
 				{/if}
 			</p>
 			<div class="mt-3 flex flex-wrap items-center gap-2">
@@ -305,8 +305,8 @@
 			<p class="section-label">A scanned bill</p>
 			<p class="mt-2 text-[14px] leading-relaxed" style="color: var(--ink-2)">
 				There's no text in this PDF to read, so it's a picture of a page. Harmony can look at it and
-				try to make out the amount — that takes a moment, and it's a guess you'll confirm before
-				anything moves.
+				try to make out the amount. That takes a moment, and you'll confirm the guess before
+				it's logged.
 			</p>
 			{#if vision.allowed && !vision.certain}
 				<p class="mt-2 text-[12.5px] leading-relaxed" style="color: var(--ink-3)">
@@ -363,7 +363,7 @@
 					{busy
 						? 'This can take a moment'
 						: visionOn
-							? 'A PDF or a photo — fills in the amount'
+							? 'Fills in the amount from a PDF or a photo'
 							: 'Fills in the amount from a PDF'}
 				</span>
 			</span>
@@ -432,7 +432,7 @@
 			{#if result.extraction.dueDate}
 				<p class="mt-3 text-[13px]" style="color: var(--ink-3)">
 					Due {result.extraction.dueDate.date}{result.extraction.dueDate.ambiguous
-						? ' — day and month could be either way round'
+						? '. Day and month could be either way round'
 						: ''}
 				</p>
 			{/if}

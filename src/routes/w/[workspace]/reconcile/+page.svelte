@@ -219,7 +219,7 @@
 	}
 </script>
 
-<svelte:head><title>Reconcile — Ledger</title></svelte:head>
+<svelte:head><title>Reconcile · Ledger</title></svelte:head>
 
 <div class="mx-auto max-w-lg">
 	<a
@@ -234,9 +234,9 @@
 		<p class="section-label">Statements</p>
 		<h1 class="mt-1 text-[28px]">Reconcile</h1>
 		<p class="mt-2 text-[15px] leading-relaxed" style="color: var(--ink-3)">
-			Import a CSV or PDF from your bank and tick it against what's recorded here. Nothing is
-			created, edited or deleted — this only marks what has cleared. A PDF is read on your device;
-			only the dates, amounts and descriptions are sent.
+			Import a CSV or PDF from your bank and check it against what's recorded here. Nothing is
+			created, edited or deleted. Importing only marks what has cleared. A PDF is read on your
+			device; only the dates, amounts and descriptions are sent.
 		</p>
 	</div>
 
@@ -264,7 +264,7 @@
 			<div>
 				<p class="text-[15px] font-semibold" style="color: var(--ink)">Which column is which?</p>
 				<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
-					{mapping.filename} — its headers didn't match anything recognisable.
+					{mapping.filename}. Its headers didn't match anything recognizable.
 				</p>
 			</div>
 
@@ -299,7 +299,7 @@
 				<span class="text-[14px] leading-snug" style="color: var(--ink-2)">
 					Positive amounts are money going out
 					<span class="mt-0.5 block text-[13px]" style="color: var(--ink-3)">
-						Tick this if your bank lists spending as positive numbers.
+						Check this if your bank lists spending as positive numbers.
 					</span>
 				</span>
 			</label>
@@ -316,9 +316,9 @@
 				<p class="section-label">A scanned statement</p>
 				{#if scanRows.length === 0}
 					<p class="mt-2 text-[14px] leading-relaxed" style="color: var(--ink-2)">
-						There's no text in this PDF, so it's a picture of a statement — {scanned.pageCount}
+						There's no text in this PDF, so it's a picture of a statement: {scanned.pageCount}
 						{scanned.pageCount === 1 ? 'page' : 'pages'}. Harmony can read the pages and show you
-						what it made out. Nothing is imported until you've looked at it.
+						what it found. Nothing is imported until you've looked at it.
 					</p>
 					<div class="mt-3 flex flex-wrap items-center gap-2">
 						<button
@@ -343,15 +343,15 @@
 						be checked at a glance.
 					-->
 					<p class="mt-2 text-[14px] leading-relaxed" style="color: var(--ink-2)">
-						Read from the page. Check this is your statement before importing — these figures were
-						transcribed from a picture, not read from the file.
+						Read from the page. Check this is your statement before importing. These figures were
+						transcribed from a picture.
 					</p>
 					<dl class="mt-3 space-y-1 text-[14px]">
 						{#each [['Bank', scanHeader.bank], ['Account', scanHeader.account], ['Period', scanHeader.period]] as [label, value] (label)}
 							<div class="flex gap-2">
 								<dt style="color: var(--ink-3)">{label}</dt>
 								<dd class="flex-1 text-right" style="color: var(--ink)">
-									{value || '—'}
+									{value || '·'}
 								</dd>
 							</div>
 						{/each}
@@ -366,7 +366,7 @@
 							<div class="flex items-baseline gap-2 py-1.5 text-[13px] {i ? 'hairline' : ''}">
 								<span class="num shrink-0" style="color: var(--ink-3)">{r.date}</span>
 								<span class="min-w-0 flex-1 truncate" style="color: var(--ink-2)"
-									>{r.description || '—'}</span
+									>{r.description || '·'}</span
 								>
 								<span class="num shrink-0" style="color: var(--ink)">{r.amount}</span>
 							</div>
@@ -414,7 +414,7 @@
 						{/each}
 					</select>
 					<span class="mt-1.5 block text-[13px] leading-snug" style="color: var(--ink-3)">
-						Naming the card keeps one statement from claiming another card's purchases.
+						Naming the card keeps one statement from matching another card's purchases.
 					</span>
 				</label>
 			{/if}
@@ -505,7 +505,7 @@
 				style="color: var(--ink-3)"
 			>
 				Most banks export a CSV from their transactions page, and a PDF statement works too. Import
-				one and Ledger will line it up against what's here.
+				one and Ledger will match it against what's recorded here.
 			</p>
 		</div>
 	{:else}

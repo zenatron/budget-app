@@ -345,8 +345,8 @@
 		>
 			<p class="text-[15px] font-medium" style="color: var(--deny)">Danger zone</p>
 			<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
-				Permanently removes {data.workspace.name} — every purchase, bucket, budget and member. This cannot
-				be undone.
+				Permanently removes {data.workspace.name}: every purchase, bucket, budget, and member. This
+				cannot be undone.
 			</p>
 
 			{#if !confirmingDelete}

@@ -151,7 +151,7 @@ export function buildActionOutcome(
 		return {
 			kind: 'proposal',
 			intent: 'propose',
-			answer: `Create bucket “${name}” — ${amount.format()}/mo on day ${day}`,
+			answer: `Create bucket “${name}”: ${amount.format()}/mo on day ${day}`,
 			propose: {
 				intent: 'create_bucket',
 				name,
@@ -185,7 +185,7 @@ export function buildActionOutcome(
 		return {
 			kind: 'proposal',
 			intent: 'propose',
-			answer: `Add income “${source}” — ${amount.format()} ${cadence}${action.monthly ? ` on day ${day}` : ''}`,
+			answer: `Add income “${source}”: ${amount.format()} ${cadence}${action.monthly ? `, day ${day}` : ''}`,
 			propose: {
 				intent: 'create_income',
 				source,
@@ -249,7 +249,7 @@ function briefingRefusal(query: string, today: AskDeps['today']): AskOutcome | n
 		kind: 'refusal',
 		raw: query,
 		answer:
-			`I only keep this month and last month close to hand, so I can't answer that for ${outOfScope.mention}. ` +
+			`I can only answer for this month and last month, so I can't answer that for ${outOfScope.mention}. ` +
 			(outOfScope.suggest === 'ledger'
 				? 'The Ledger tab has it day by day.'
 				: 'The Analytics tab goes back further.')

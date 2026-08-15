@@ -50,7 +50,7 @@ export function gateFor(entry: ModelEntry | null, cap: string): Gate {
 	if (hasCapability(entry, cap)) return { allowed: true, certain: true };
 	return {
 		allowed: false,
-		reason: `${entry.name} can't ${capabilityVerb(cap)} — pick a model with the ${cap} chip.`
+		reason: `${entry.name} can't ${capabilityVerb(cap)}. Pick a model with the ${cap} chip.`
 	};
 }
 

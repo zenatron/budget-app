@@ -150,7 +150,7 @@
 			</p>
 		{:else if permission === 'denied'}
 			<p class="mt-2 text-[14px]" style="color: var(--ink-3)">
-				Notifications are blocked — enable them in your browser settings.
+				Notifications are blocked. Enable them in your browser settings.
 			</p>
 		{:else if subscribed}
 			<p class="mt-2 flex items-center gap-1.5 text-[14px]" style="color: var(--approve)">
@@ -192,7 +192,7 @@
 			<Antenna class="h-4 w-4" style="color: var(--ws-accent)" /> ntfy
 		</h2>
 		<p class="mt-1 text-[13px]" style="color: var(--ink-3)">
-			Reliable delivery via the ntfy app — subscribe to your topic there.
+			Reliable delivery via the ntfy app. Subscribe to your topic there.
 		</p>
 		<form method="POST" action="?/ntfy" use:submit class="mt-3.5 space-y-3">
 			<label class="block">
@@ -200,7 +200,7 @@
 				<input name="serverUrl" bind:value={ntfyServerUrl} class="field mt-1 text-[16px]" />
 			</label>
 			<label class="block">
-				<span class="text-[12px]" style="color: var(--ink-3)">Topic — treat it like a password</span
+				<span class="text-[12px]" style="color: var(--ink-3)">Topic (treat it like a password)</span
 				>
 				<input name="topic" bind:value={ntfyTopic} class="field mt-1 font-mono text-[16px]" />
 			</label>
@@ -220,9 +220,7 @@
 			{#if form.error}
 				<p class="mt-2 text-[13px]" style="color: var(--deny)">{form.error}</p>
 			{:else if form.tested}
-				<p class="mt-2 text-[13px]" style="color: var(--approve)">
-					Test sent — check the ntfy app.
-				</p>
+				<p class="mt-2 text-[13px]" style="color: var(--approve)">Test sent. Check the ntfy app.</p>
 			{:else}
 				<p class="mt-2 text-[13px]" style="color: var(--approve)">Saved.</p>
 			{/if}
@@ -267,7 +265,7 @@
 						class="flex cursor-pointer justify-center py-2"
 						style={i > 0 ? 'box-shadow: inset 0 0.5px 0 var(--hairline)' : ''}
 					>
-						<span class="sr-only">{event.label} — push</span>
+						<span class="sr-only">{event.label} (push)</span>
 						<input
 							type="checkbox"
 							name="enabled"
@@ -283,7 +281,7 @@
 							? 'box-shadow: inset 0 0.5px 0 var(--hairline)'
 							: ''}"
 					>
-						<span class="sr-only">{event.label} — ntfy</span>
+						<span class="sr-only">{event.label} (ntfy)</span>
 						<input
 							type="checkbox"
 							name="enabled"
@@ -321,8 +319,8 @@
 			>
 		</h2>
 		<p class="mt-1 text-[13px]" style="color: var(--ink-3)">
-			A short digest of your spending — total, top category and net — sent to your notifications.
-			It’s your own view, so sealed purchases stay hidden.
+			A short digest of your spending, with your total, top category, and net, sent to your
+			notifications. It’s your own view, so sealed purchases stay hidden.
 		</p>
 		<form
 			method="POST"
@@ -363,7 +361,7 @@
 				<Bell class="h-4 w-4" style="color: var(--ws-accent)" /> Safe-to-Spend alerts
 			</h2>
 			<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
-				Notify each member when their month tips into "tight" or "over", computed from their own
+				Notify each member when their month turns "tight" or "over", computed from their own
 				seal-aware view.
 			</p>
 		</div>

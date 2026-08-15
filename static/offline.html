@@ -2,27 +2,26 @@
 <!--
 	The navigation fallback when the network is gone and this page has never been
 	cached. It replaced a bare `<h1>Offline</h1>` string literal in the service
-	worker, which rendered in Times New Roman on white — the one screen in the app
-	that looked like a browser error rather than like Ledger.
+	worker, which rendered in Times New Roman on white. That was the one screen
+	in the app that looked like a browser error.
 
 	No build assets and no script. It has to work when nothing can be fetched,
-	which also means it can't reference the token sheet — so the handful of paper
+	which also means it can't reference the token sheet, so the handful of paper
 	values it needs are inlined here. They mirror `--paper` / `--ink` / `--ink-3`
 	/ `--surface` in src/routes/layout.css; if those move, move these.
 
-	The two faces are the one exception, and they're safe: they live in static/
-	rather than the build, so the service worker precaches them by name in the
-	same `files` pass that caches this page. Naming the families without loading
-	them — which is what this page used to do — silently rendered the offline
-	screen in Georgia and Arial, the exact browser-error look the page exists to
-	avoid.
+	The two font faces are the one exception, and they're safe: they live in
+	static/, so the service worker precaches them by name in the same `files`
+	pass that caches this page. This page used to name the families without
+	loading them, which silently rendered the offline screen in Georgia and
+	Arial, the exact browser-error look it exists to avoid.
 -->
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 		<meta name="color-scheme" content="light dark" />
-		<title>Offline — Ledger</title>
+		<title>Offline · Ledger</title>
 		<style>
 			@font-face {
 				font-family: 'Hanken Grotesk Variable';

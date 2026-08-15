@@ -590,8 +590,8 @@
 					{#if p.sealed}
 						<span
 							role="img"
-							title="Sealed — hidden from some members"
-							aria-label="Sealed — hidden from some members"
+							title="Sealed: hidden from some members"
+							aria-label="Sealed: hidden from some members"
 							class="contents"
 						>
 							<Lock class="h-3 w-3 shrink-0" style="color: var(--seal)" />
@@ -661,7 +661,7 @@
 					aria-label={masked
 						? 'Reveal the amount'
 						: showRunway
-							? 'Hide the runway'
+							? 'Hide the breakdown'
 							: 'Show how this is calculated'}
 				>
 					<div class="min-w-0">
@@ -714,7 +714,7 @@
 			     tone colour gives the answer away on its own. -->
 			{#if masked}
 				<p class="mt-1.5 text-[13px] leading-snug" style="color: var(--ink-3)">
-					Hidden — tap to reveal
+					Hidden. Tap to reveal.
 				</p>
 			{:else}
 				<p
@@ -792,7 +792,7 @@
 					{#if f.breakdown.upcomingBillsEstimated}
 						<!-- Said once, under the figures, rather than on the row itself. -->
 						<p class="mt-2.5 text-[12px] leading-relaxed" style="color: var(--ink-3)">
-							The dotted figure is an estimate — some of those bills ask you to confirm the real
+							The dotted figure is an estimate. Some of those bills ask you to confirm the real
 							price, so it's what they came to last time.
 						</p>
 					{/if}
@@ -810,9 +810,7 @@
 				{#if f.breakdown.sleepingMinor > 0n}
 					<p class="mt-1 flex items-center gap-1.5 text-[13px]" style="color: var(--seal)">
 						<Moon class="h-3.5 w-3.5" />
-						<span
-							><span class="num">{amt(f.breakdown.sleepingMinor)}</span> sleeping on the horizon</span
-						>
+						<span><span class="num">{amt(f.breakdown.sleepingMinor)}</span> sleeping on it</span>
 					</p>
 				{/if}
 			{/if}

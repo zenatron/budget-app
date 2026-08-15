@@ -105,9 +105,9 @@ describe('narrateMonth', () => {
 		expect(n.lead).not.toMatch(/ahead|behind|even/);
 	});
 
-	it('names a clean page when nothing was spent and nothing came in', () => {
+	it('says nothing went out when nothing was spent and nothing came in', () => {
 		const n = narrateMonth(base, fmt);
-		expect(n.lead).toContain('clean page');
+		expect(n.lead).toContain('Nothing went out');
 	});
 
 	it('leads with the shortfall when over', () => {
@@ -132,7 +132,7 @@ describe('narrateMonth', () => {
 			fmt
 		);
 		expect(n.lead).toContain('ahead so far');
-		expect(n.lead).not.toContain('closed');
+		expect(n.lead).not.toContain('ended');
 	});
 
 	it('adds a top-category note and flags a dominant share', () => {

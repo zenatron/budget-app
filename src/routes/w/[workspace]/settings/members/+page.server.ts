@@ -148,7 +148,7 @@ export const actions: Actions = {
 				(m) => m.member.id !== memberId && m.member.role === 'owner' && m.member.status === 'active'
 			);
 			if (target.member.role === 'owner' && otherActiveOwners.length === 0) {
-				return fail(400, { error: 'That is the only owner — the workspace would be unmanageable' });
+				return fail(400, { error: 'That is the only owner. The workspace would be unmanageable.' });
 			}
 
 			const stranded = strandedByRemoving(

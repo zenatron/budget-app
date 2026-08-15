@@ -4,129 +4,82 @@ Self-hosted workspace budget & approval tracker. SvelteKit 2 (Svelte 5 runes) + 
 PostgreSQL 17 + Drizzle, auth via an external [Pocket ID](https://pocket-id.org) instance
 (OIDC, passkeys only). Single app container + database behind your reverse proxy.
 
-## Status
+## Screenshots
 
-- ✅ **Phase 0 — Foundation**: Docker Compose, migrations on boot (advisory-locked),
-  `Money` value object (bigint minor units, banker's rounding), `Clock`/`IdGenerator`
-  ports, env validation, `/healthz`, sharp-under-Bun-in-container verified.
-- ✅ **Phase 1 — Identity & workspaces**: OIDC login (PKCE + state + nonce), server-side
-  sessions, orphan-user landing, workspace create/join via invite codes, roles,
-  workspace switcher, membership enforced in `hooks.server.ts`.
-- ✅ **Phase 2 — Core loop**: purchase state machine with append-only `approval_event`
-  audit log, per-member approval policies (none/threshold/always + any_of routing),
-  overage re-approval, edit invalidation, derived staleness.
-- ✅ **Phase 3 — Sealed purchases**: `visibility` domain module, seal filter enforced in
-  the repository on every read (list, detail, aggregates, images), approval×seal
-  conflict rule (route around concealed approvers, else _disclosed_ auto-approval),
-  requester-only early unseal, boot + 5-minute unseal sweep, audit-logged seals.
-  Decisions taken: no seal amount cap in v1; no owner force-unseal.
-- ✅ **Phase 4 — Images**: content-addressed filesystem `BlobStore`, magic-byte
-  validation, rotate-then-strip-EXIF, 400px/1600px WebP derivatives (originals
-  discarded), seal-aware authorized serving route.
-- ✅ **Phase 5 — PWA & notifications**: manifest + icons + service worker (push,
-  deep-link notification clicks, asset cache), Web Push with VAPID
-  (subscribe/upsert-by-endpoint/410-prune/failure-count), ntfy channel, composite
-  `Notifier` honoring per-member × per-event × per-channel prefs, seal-filtered
-  payloads, workspace SSE stream (per-subscriber seal filtering) with live page
-  invalidation, stale-nudge sweep (threshold, then daily, cap 5), iOS
-  Add-to-Home-Screen onboarding + gesture-gated permission flow on
-  `/w/{slug}/settings/notifications`.
-- ✅ **Phase 6 — Recurring**: purpose-built RRULE subset (daily/weekly/monthly/yearly,
-  intervals, BYDAY, last-day-of-month) anchored by DTSTART, timezone-correct
-  occurrence times, materialization sweep with capped catch-up after downtime,
-  pause/resume/end, price changes (future occurrences only), auto-complete vs
-  confirm-at-actual-price, optional charging to a bucket (drawn down on
-  completion). Recurring purchases bypass approval; sealing them is
-  impossible by construction.
-- ✅ **Phase 7 — Analytics**: computed on the fly, every query seal-filtered
-  (`visibleTo`). Month vs last-month comparison, daily trend (hand-built SVG),
-  category and member breakdowns, monthly budgets (overall + per category) with
-  seal-filtered actuals. All bucketing in the workspace timezone.
-- ✅ **Phase 8 — Income & net position**: one-off entries plus recurring templates
-  expanded at query time (no materialization state), net cash flow and savings
-  rate on the analytics page. Income is workspace-open by design.
-- ✅ **Phase 9 — Export & ops**: seal-aware CSV export (formula-injection safe),
-  CSP with split `style-src-elem`/`style-src-attr`, per-IP rate limiting on auth
-  and per-session on uploads, seed script, backup docs.
-- ✅ **Phase 10 — Buckets**: per-member sinking funds accruing on the same RRULE
-  subset as recurring purchases (daily/weekly/monthly/yearly, intervals, BYDAY,
-  start dates, optional backfill), materialized by the sweep under a row lock
-  with capped catch-up. Withdrawals and manual adjustments are owner-only.
-  Purchases can be charged to a bucket, optionally skipping approval per workspace.
-- ✅ **Phase 11 — Intelligence & command palette**: a local intent parser (no LLM)
-  over spending questions, net-position questions, bucket creation, and navigation,
-  reachable from the palette in the header. Same-origin enforced like `/push`.
-- ✅ **Phase 12 — Merchants & accents**: merchant extraction and per-merchant
-  grouping on purchases; a per-workspace accent color that drives the whole theme.
-- ✅ **Phase 13 — Interaction polish**: navigation progress bar, toast feedback,
-  in-flight form state and confirm gates via `use:submit`, Escape-dismissable
-  popovers via `use:dismiss`.
-- ✅ **Phase 14 — Reconciliation**: import a bank CSV or PDF and tick it against
-  what is recorded. PDFs are parsed in the browser (pdf.js), so the document
-  never leaves the device — only the date/amount/description columns are posted,
-  rejoining the same `parse-csv` pipeline. Matching is pure and deliberately
-  refuses to guess: a line with two equally good candidates stays unmatched and
-  carries its ranked shortlist for a person to pick from. Importing never
-  creates, edits or deletes a purchase; confirming a match writes `cleared_at`
-  and nothing else. Seal-aware throughout — a line belonging to a concealed
-  purchase reads _accounted for, hidden from you_ and carries no id to follow.
-- ✅ **Phase 15 — Optional assist (LLM as a port)**: a narrow `LlmAssist` port with
-  a null adapter as the default, plus Ollama and OpenAI-compatible adapters. The
-  model is a _fuzzy reducer_, never an approver: it picks from an option set the
-  caller already owns, or transcribes glyphs the app's own parsers then read.
-  Every output crosses `domain/intelligence/constrain` or
-  `domain/intelligence/read-fields` before it counts, so a hallucination becomes
-  _no suggestion_ rather than a wrong one. Nothing it produces is written without
-  a person confirming, and every surface degrades to its deterministic behaviour
-  with the assist off — which is the property the test suite pins down.
+> Add screenshots before release. Suggested subjects: the Ledger with Safe to Spend,
+> an approval request, the Activity breakdown, the spending map.
 
-  Vision is reachable only through two constrained methods (`readFields`,
-  `readRows`) — never an open-ended `describeImage` — and every value returns as
-  a **string** for `parseAmount`/`findDates`/`sanitizeLabel` to interpret. That
-  buys scanned bills, receipt photos and scanned statements; a figure the app
-  cannot read cleanly becomes an empty field, never a plausible wrong number.
-  Model capability is gated three ways (has it / provably lacks it / never
-  established), failing open on the third because no OpenAI-compatible endpoint
-  publishes what its models can do.
+|                                                           |                                                    |
+| --------------------------------------------------------- | -------------------------------------------------- |
+| ![Ledger with Safe to Spend](docs/screenshots/ledger.png) | ![Approval request](docs/screenshots/approval.png) |
+| ![Activity breakdown](docs/screenshots/activity.png)      | ![Spending map](docs/screenshots/map.png)          |
 
-  > **Note for self-hosters:** Ollama does not decode WebP, and fails _silently_
-  > — the image is dropped and the model answers from priors. Images are
-  > therefore re-encoded to JPEG at a single choke point (`toModelImage`) before
-  > any model sees them.
+## Demo
 
-- ✅ **Phase 16 — Places**: a purchase can record _where_, and the "Where" label on
-  the form moves to **"From"** — it always meant the vendor, and the two questions
-  now have a row each. Nothing renamed underneath: `merchant_id`, the `merchant`
-  table and the MCP `merchant` argument all stand.
+<!-- Embed once recorded:
+<video src="https://github.com/user-attachments/assets/VIDEO_ID" controls muted></video>
+-->
 
-  Capture is opt-in per purchase and never automatic: tap "Use my location",
-  paste a map link (read **offline** — the URL already contains its coordinates,
-  so nothing is told where you went), or type an address when a geocoder is
-  configured. Coordinates are integer **millidegrees** on the wire and in the
-  column, so ~110 m is the only precision the schema can express — the guarantee
-  does not depend on a client honouring it. A block is not anonymity, and the
-  settings copy says so.
+> Add a demo video before release. Suggested flow: dictate a purchase, request
+> approval, approve it from a partner's phone, check the month statement.
 
-  Two pins, asymmetric on purpose: a purchase's is the fact, a vendor's is a
-  default learned from an observed one and used to place purchases logged from
-  the sofa — which the map states rather than implies. An inherited pin never
-  teaches another vendor.
+## Features
 
-  The spending map clusters by a grid defined in _screen pixels_, so bubbles
-  merge and split with zoom for free, and radius scales with the square root of
-  the amount so area carries the money. Zoom is capped at 16 because past that
-  the rounding grid becomes visible and would imply precision the data lacks.
-  With no basemap configured — the default — it draws a plotted graticule
-  instead of streets: no third party, nothing leaves the box, same geometry.
-  Optional raster tiles are fetched **by the server** and re-served from this
-  origin, so the browser never talks to the tile provider and the CSP stays at
-  `'self'`.
-
-  Seal-aware on every surface it reaches — the map's point feed, "By place" on
-  Activity, and the `spending_by_place` MCP tool all route through the same
-  `spentInPeriod` predicate, and an e2e test holds them to it. There is
-  deliberately **no** write path for coordinates over MCP: a model that invents
-  a plausible pin produces a false claim about where a person physically was.
+- **Workspaces.** Create or join via invite codes. Owner and member roles,
+  per-member approval policies, workspace switcher.
+- **The approval loop.** Log what you already spent, or ask first. Policies are
+  never / above an amount / always, routed to any approver or one specific
+  person. Overspending an approved amount or editing it sends it back for
+  re-approval. Every decision is kept in an append-only audit log.
+- **Gift mode (sealed purchases).** Hide a purchase from chosen people until a
+  date. Hidden everywhere: lists, search, detail pages, and every aggregate is
+  recomputed as if it did not exist, so nothing leaks by subtraction. The only
+  seal-aware auto-approval path is disclosed in the audit log.
+- **Images.** Content-addressed blob store with magic-byte validation, EXIF
+  stripping, and WebP derivatives (originals discarded).
+- **PWA & notifications.** Web Push (VAPID) and ntfy channels, per-member,
+  per-event, per-channel preferences, iOS Add-to-Home-Screen onboarding.
+- **Recurring charges.** A purpose-built RRULE subset (intervals, BYDAY,
+  last-day-of-month) with timezone-correct times, capped catch-up after
+  downtime, pause/resume/end, price changes for future occurrences, and
+  auto-complete or confirm-at-actual-price. Recurring charges skip approval.
+- **Buckets.** Per-member sinking funds on the same RRULE subset. Purchases can
+  be charged to a bucket; an overdraft is allowed and counted as ordinary
+  spending.
+- **Analytics.** Computed on the fly and seal-filtered per viewer: month vs
+  last-month comparison, daily trend, category and member breakdowns, monthly
+  budgets overall and per category, net cash flow and savings rate.
+- **Income.** One-off entries plus recurring templates expanded at query time.
+  Income is workspace-open by design.
+- **Safe to Spend.** A deterministic cash-flow read of the current month:
+  income minus spent, approved, upcoming bills, and savings. The narration and
+  alerts are interpretations of that arithmetic, nothing more.
+- **Reconciliation.** Import a bank CSV or PDF and tick it against what is
+  recorded. PDFs are parsed in the browser (pdf.js), so the document never
+  leaves the device; only the date/amount/description columns are posted.
+  Matching never guesses: ambiguous lines stay unmatched with a ranked
+  shortlist for a person to pick from. Importing marks cleared lines and
+  changes nothing else.
+- **Optional AI assist.** A narrow `LlmAssist` port with a null adapter as the
+  default, plus Ollama and OpenAI-compatible adapters. The model can only pick
+  from option sets the caller already owns or transcribe glyphs for the app's
+  own parsers; every output passes `domain/intelligence/constrain` or
+  `read-fields` before it counts. A hallucination becomes an empty suggestion.
+  Nothing it produces is written without a person confirming, and every surface
+  degrades to its deterministic behavior with the assist off (the property the
+  test suite pins down).
+- **Command palette.** A local intent parser (no LLM) over spending questions,
+  net-position questions, bucket creation, and navigation. With a model on, it
+  can also answer open-ended questions over a computed briefing.
+- **Places.** Optional per-purchase location, captured only on explicit tap,
+  pasted map link (read offline), or typed address. Coordinates are stored as
+  integer millidegrees (~110 m, which is not anonymity and the settings copy
+  says so). A spending map with grid clustering in screen pixels; with no
+  basemap configured it draws a plotted graticule instead of streets. Optional
+  raster tiles are fetched by the server and re-served from this origin.
+  There is deliberately no MCP write path for coordinates.
+- **API & MCP.** Bearer tokens with read / log / approve scopes, and an MCP
+  server so an assistant can query the workspace in plain language.
 
 ## Development
 
@@ -169,8 +122,8 @@ See `.env.example` for the full env contract. Notes:
   blob dir (blobs are content-addressed and append-only, so that order is safe).
 - **Basemap tiles are not a blob.** `TILE_CACHE_DIR` (`/data/tiles` by default)
   holds disposable third-party imagery keyed by coordinate, with a 30-day TTL.
-  Do **not** back it up — it would carry hundreds of megabytes of somebody
-  else's map into every archive — and deleting it at any time is safe.
+  Do not back it up: it would carry hundreds of megabytes of somebody else's
+  map into every archive. Deleting it at any time is safe.
 
 ## Backup & restore
 

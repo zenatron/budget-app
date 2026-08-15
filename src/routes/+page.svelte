@@ -20,17 +20,18 @@
 
 	<div>
 		<h1 class="text-[clamp(3.4rem,3rem+4vw,4.5rem)] leading-[0.92]">
-			Spend<br />with<br /><span style="font-style: italic">consensus.</span>
+			Budget<br />together<br /><span style="font-style: italic">in private.</span>
 		</h1>
 		<p class="mt-5 max-w-[32ch] text-[17px] leading-relaxed" style="color: var(--ink-3)">
-			Shared spending, approvals, and budgets — a private ledger for the people you trust.
+			Ledger is a budget for the people you share money with. Log what you spent, or ask before you
+			buy. Set budgets and savings goals, and see what's safe to spend this month.
 		</p>
 	</div>
 
 	<div>
 		<a href="/auth/login" class="btn btn-accent w-full py-4 text-[17px]">Sign in with Pocket ID</a>
 		<p class="mt-4 text-center text-[13px]" style="color: var(--ink-3)">
-			Self-hosted · Passkey auth
+			Open source · Self-hosted · Passkey auth · Optional AI integration
 		</p>
 	</div>
 </main>

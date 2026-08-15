@@ -120,7 +120,7 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 				// applyAction keeps them on the page they filled in, rather than
 				// replacing it with an error screen that discards what they typed.
 				if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-					toastError("You're offline — this didn't save");
+					toastError("You're offline, this didn't save");
 					return;
 				}
 				toastError(result.error?.message ?? 'Something went wrong. Try again.');

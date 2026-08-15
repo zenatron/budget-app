@@ -301,7 +301,7 @@ export const TOOLS: McpTool[] = [
 				kind: a.kind
 			}));
 			const text = data.length
-				? data.map((a) => `- ${accountLabel(a)} — ${a.kind} (${a.id})`).join('\n')
+				? data.map((a) => `- ${accountLabel(a)} · ${a.kind} (${a.id})`).join('\n')
 				: 'No cards or accounts named yet.';
 			return { text, data };
 		}
@@ -319,7 +319,7 @@ export const TOOLS: McpTool[] = [
 				role: m.member.role,
 				status: m.member.status
 			}));
-			return { text: data.map((m) => `- ${m.name} — ${m.role} (${m.id})`).join('\n'), data };
+			return { text: data.map((m) => `- ${m.name} · ${m.role} (${m.id})`).join('\n'), data };
 		}
 	},
 	{
@@ -418,7 +418,7 @@ export const TOOLS: McpTool[] = [
 				}))
 			};
 			return {
-				text: `${data.item} — ${data.amount} — ${data.state}. Requested by ${data.requested_by}.${data.approvers.length ? ` Approvers: ${data.approvers.join(', ')}.` : ''}`,
+				text: `${data.item} · ${data.amount} · ${data.state}. Requested by ${data.requested_by}.${data.approvers.length ? ` Approvers: ${data.approvers.join(', ')}.` : ''}`,
 				data
 			};
 		}
@@ -496,7 +496,7 @@ export const TOOLS: McpTool[] = [
 	{
 		name: 'spending_by_place',
 		description:
-			"Where money went in a period: the top places by amount, with how many purchases at each. Places are rounded to about 110 m and are seal-aware — computed as the token's member sees it, so a purchase hidden from them contributes nothing. Period is one of this_month, last_month, this_week, last_week.",
+			"Where money went in a period: the top places by amount, with how many purchases at each. Places are rounded to about 110 m and are seal-aware, computed as the token's member sees it, so a purchase hidden from them contributes nothing. Period is one of this_month, last_month, this_week, last_week.",
 		scope: 'read',
 		inputSchema: {
 			type: 'object',
@@ -564,14 +564,14 @@ export const TOOLS: McpTool[] = [
 			const text =
 				`Where the money went, ${data.period.replace('_', ' ')}:\n` +
 				(data.places.map((p) => `  - ${p.place}: ${p.amount} (${p.purchases})`).join('\n') ||
-					'  (nowhere — no purchase in this period has a place)');
+					'  (nowhere; no purchase in this period has a place)');
 			return { text, data };
 		}
 	},
 	{
 		name: 'safe_to_spend',
 		description:
-			"Harmony's Safe to Spend for the current month: how much cash is genuinely free after income, everything already spent, money committed to approved purchases, upcoming bills, and planned savings. Also reports where you'd land if all pending requests are approved (after_reserved), and the budget guardrail if one is set. Seal-aware — computed as the token's member sees it. Use this for \"how much can I spend?\" questions.",
+			"Harmony's Safe to Spend for the current month: how much cash is genuinely free after income, everything already spent, money committed to approved purchases, upcoming bills, and planned savings. Also reports where you'd land if all pending requests are approved (after_reserved), and the budget guardrail if one is set. Seal-aware, computed as the token's member sees it. Use this for \"how much can I spend?\" questions.",
 		scope: 'read',
 		inputSchema: { type: 'object', properties: {}, additionalProperties: false },
 		async handler(ctx) {
@@ -615,7 +615,7 @@ export const TOOLS: McpTool[] = [
 	{
 		name: 'spending_trend',
 		description:
-			'Total spending per month over the last N months (default 6, max 24), oldest first — for spotting whether spending is rising or falling.',
+			'Total spending per month over the last N months (default 6, max 24), oldest first, for spotting whether spending is rising or falling.',
 		scope: 'read',
 		inputSchema: {
 			type: 'object',
@@ -945,7 +945,7 @@ export const TOOLS: McpTool[] = [
 			if (args.backfill === true) await materializeDueRules(ctx.db, ctx.deps);
 			const cadence = describeRecurrence(rec);
 			return {
-				text: `Created recurring "${required(args, 'item')}" — ${cadence}. Rule id ${ruleId}.`,
+				text: `Created recurring "${required(args, 'item')}" (${cadence}). Rule id ${ruleId}.`,
 				data: { rule_id: ruleId, cadence }
 			};
 		}
@@ -953,7 +953,7 @@ export const TOOLS: McpTool[] = [
 	{
 		name: 'update_recurring',
 		description:
-			'Update a recurring rule. Change item, amount (future charges only), category, or auto_complete. To change the schedule, pass freq plus any of start_date/interval/weekdays/day_of_month — omitted schedule fields keep their current value.',
+			'Update a recurring rule. Change item, amount (future charges only), category, or auto_complete. To change the schedule, pass freq plus any of start_date/interval/weekdays/day_of_month; omitted schedule fields keep their current value.',
 		scope: 'write',
 		inputSchema: {
 			type: 'object',
@@ -1029,7 +1029,7 @@ export const TOOLS: McpTool[] = [
 	},
 	{
 		name: 'pause_recurring',
-		description: 'Pause a recurring rule — it stops generating charges until resumed.',
+		description: 'Pause a recurring rule. It stops generating charges until resumed.',
 		scope: 'write',
 		inputSchema: {
 			type: 'object',
@@ -1105,7 +1105,7 @@ export const TOOLS: McpTool[] = [
 					type: 'array',
 					items: { type: 'string' },
 					description:
-						'Gift mode: member ids (see list_members) this purchase is hidden from — invisible to them everywhere, including totals. Requires reveal_on.'
+						'Gift mode: member ids (see list_members) this purchase is hidden from, invisible to them everywhere, including totals. Requires reveal_on.'
 				},
 				reveal_on: {
 					type: 'string',
@@ -1138,13 +1138,13 @@ export const TOOLS: McpTool[] = [
 			if (bucketId && state === 'completed') {
 				const after = await bucketBalance(ctx.db, bucketId);
 				if (after < 0n) {
-					overdrawn = ` That bucket is now ${Money.of(-after, ctx.authed.workspace.currency).format()} overdrawn — nothing had been set aside to cover it, so the shortfall counts as ordinary spending.`;
+					overdrawn = ` That bucket is now ${Money.of(-after, ctx.authed.workspace.currency).format()} overdrawn. Nothing had been set aside to cover it, so the shortfall counts as ordinary spending.`;
 				}
 			}
 			return {
 				text:
 					(state === 'pending_approval'
-						? `Logged "${required(args, 'item')}" — it needs approval and has been sent to your approver(s). Purchase id ${purchaseId}.`
+						? `Logged "${required(args, 'item')}". It needs approval and has been sent to your approver(s). Purchase id ${purchaseId}.`
 						: `Logged "${required(args, 'item')}" as ${state}. Purchase id ${purchaseId}.`) +
 					overdrawn,
 				data: { purchase_id: purchaseId, state }
@@ -1205,8 +1205,8 @@ export const TOOLS: McpTool[] = [
 			return {
 				text:
 					p?.state === 'pending_approval'
-						? `Requested "${required(args, 'item')}" — awaiting approval. Purchase id ${purchaseId}.`
-						: `Requested "${required(args, 'item')}" — approved automatically (no approval required). Purchase id ${purchaseId}.`,
+						? `Requested "${required(args, 'item')}". Awaiting approval. Purchase id ${purchaseId}.`
+						: `Requested "${required(args, 'item')}". Approved automatically (no approval required). Purchase id ${purchaseId}.`,
 				data: { purchase_id: purchaseId, state: p?.state ?? 'unknown' }
 			};
 		}
@@ -1274,7 +1274,7 @@ export const TOOLS: McpTool[] = [
 	{
 		name: 'edit_purchase',
 		description:
-			'Edit a purchase you requested — item, amount, category, or note — while it is draft, pending, or approved. Changing item/amount/category on an approved purchase sends it back for approval.',
+			'Edit a purchase you requested (item, amount, category, or note) while it is draft, pending, or approved. Changing item/amount/category on an approved purchase sends it back for approval.',
 		scope: 'write',
 		inputSchema: {
 			type: 'object',
@@ -1416,7 +1416,7 @@ export const TOOLS: McpTool[] = [
 	{
 		name: 'wake_purchase',
 		description:
-			'Wake a sleeping purchase — still want it. It returns to waiting for approval, or to approved if it never needed a decision.',
+			'Wake a sleeping purchase that you still want. It returns to waiting for approval, or to approved if it never needed a decision.',
 		scope: 'write',
 		inputSchema: {
 			type: 'object',
@@ -1432,7 +1432,7 @@ export const TOOLS: McpTool[] = [
 	},
 	{
 		name: 'let_go_purchase',
-		description: 'Let a sleeping purchase go — cancel it. The decided-not-to-buy outcome.',
+		description: 'Let a sleeping purchase go: cancel it. The decided-not-to-buy outcome.',
 		scope: 'write',
 		inputSchema: {
 			type: 'object',
@@ -1492,7 +1492,7 @@ export const TOOLS: McpTool[] = [
 	},
 	{
 		name: 'update_bucket',
-		description: 'Update a bucket you own — name, monthly amount, day of month, or goal.',
+		description: 'Update a bucket you own: name, monthly amount, day of month, or goal.',
 		scope: 'write',
 		inputSchema: {
 			type: 'object',
@@ -1581,7 +1581,7 @@ export const TOOLS: McpTool[] = [
 					text:
 						`${withdraw ? 'Withdrew' : 'Deposited'} ${m.format()} ${withdraw ? 'from' : 'into'} "${b.name}".` +
 						(after < 0n
-							? ` It is now ${Money.of(-after, b.currency).format()} overdrawn — more has been taken out than was ever set aside, and the shortfall counts as ordinary spending.`
+							? ` It is now ${Money.of(-after, b.currency).format()} overdrawn. More has been taken out than was ever set aside, and the shortfall counts as ordinary spending.`
 							: ''),
 					data: { bucket_id: id, balance: Money.of(after, b.currency).format() }
 				};
@@ -1592,7 +1592,7 @@ export const TOOLS: McpTool[] = [
 	},
 	{
 		name: 'pause_bucket',
-		description: 'Pause a bucket — it stops accruing until resumed.',
+		description: 'Pause a bucket. It stops accruing until resumed.',
 		scope: 'write',
 		inputSchema: {
 			type: 'object',
@@ -1657,7 +1657,7 @@ export const TOOLS: McpTool[] = [
 	},
 	{
 		name: 'add_income',
-		description: 'Record income received — a paycheck or other money in.',
+		description: 'Record income received: a paycheck or other money in.',
 		scope: 'write',
 		inputSchema: {
 			type: 'object',
@@ -1695,7 +1695,7 @@ export const TOOLS: McpTool[] = [
 	{
 		name: 'update_income',
 		description:
-			'Update an income entry you recorded — its source, amount, date, or note. Get the id from list_income.',
+			'Update an income entry you recorded: its source, amount, date, or note. Get the id from list_income.',
 		scope: 'write',
 		inputSchema: {
 			type: 'object',

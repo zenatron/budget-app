@@ -37,8 +37,8 @@ const CreateSchema = v.object({
 
 const JOIN_MESSAGES: Record<JoinWorkspaceError['reason'], string> = {
 	invalid_code: 'That code is not valid.',
-	expired: 'That invite has expired — ask for a new one.',
-	already_used: 'That invite was already used — ask for a new one.',
+	expired: 'That invite has expired. Ask for a new one.',
+	already_used: 'That invite was already used. Ask for a new one.',
 	already_member: 'You are already a member of that workspace.'
 };
 

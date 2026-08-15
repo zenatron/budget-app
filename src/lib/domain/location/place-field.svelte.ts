@@ -152,7 +152,7 @@ export function createPlaceField(opts: {
 			return;
 		}
 		error = name
-			? 'That link names a place but not where it is. Drop a pin on the spot in your maps app and share that — a pin carries its coordinates.'
+			? 'That link names a place but not where it is. Drop a pin on the spot in your maps app and share that; it will have the coordinates.'
 			: 'That link hides its location behind a shortener. Open it in your maps app, then share the place or pin directly.';
 	}
 
@@ -173,12 +173,12 @@ export function createPlaceField(opts: {
 		}
 		if (out === 'shortened') {
 			error =
-				'That Plus Code is the short form, which only means something next to a town name. Open it in your maps app and copy the full code — the one with eight characters before the +.';
+				'That Plus Code is the short form, which only means something next to a town name. Open it in your maps app and copy the full code, the one with eight characters before the +.';
 			return 'explained';
 		}
 		if (out === 'too-coarse') {
 			error =
-				'That Plus Code covers too wide an area to pin — it names a region, not a place. A longer code, without the zeros, points at a building.';
+				'That Plus Code covers too wide an area to pin; it names a region rather than a place. A longer code, without the zeros, points at a building.';
 			return 'explained';
 		}
 		return 'no';

@@ -256,14 +256,14 @@ export async function newPurchase(page: Page, slug: string, p: NewPurchase): Pro
 		await expect(page.locator('input[name="latE3"]')).toHaveCount(1);
 	}
 	if (p.sealFrom && p.sealFrom.length > 0) {
-		await page.getByText('Gift mode — hide this purchase').click();
+		await page.getByText('Gift mode: hide this purchase').click();
 		for (const name of p.sealFrom) {
 			await page.getByRole('checkbox', { name }).check();
 		}
 		await page.getByLabel(/Reveal on/).fill(p.sealUntil!);
 	}
 	await page
-		.getByRole('button', { name: p.intent === 'log' ? 'Log it — already bought' : 'Ask first' })
+		.getByRole('button', { name: p.intent === 'log' ? 'Log it: already bought' : 'Ask first' })
 		.click();
 	await page.waitForURL(/\/purchases\/[0-9a-f-]+$/);
 	return page.url();

@@ -12,7 +12,7 @@
 	const ErrIcon = $derived(ICONS[x.icon]);
 </script>
 
-<svelte:head><title>{x.t} — Ledger</title></svelte:head>
+<svelte:head><title>{x.t} · Ledger</title></svelte:head>
 
 <div
 	class="min-h-viewport flex items-center justify-center px-6"

@@ -132,14 +132,14 @@ export function narrateSafeToSpend(
 	if (r.status === 'over') {
 		return {
 			tone: 'over',
-			text: `You're ${fmt(-r.freeMinor)} over for the month. Worth holding off on new spends until more comes in.`
+			text: `You're ${fmt(-r.freeMinor)} over for the month. Consider holding off on new spending.`
 		};
 	}
 	// Cash is positive, but approving what's pending would tip it negative.
 	if (r.status === 'tight') {
 		return {
 			tone: 'tight',
-			text: `${fmt(r.freeMinor)} free, though approving everything pending would put you ${fmt(-r.afterReservedMinor)} under.`
+			text: `You have ${fmt(r.freeMinor)} free, but approving everything pending would put you ${fmt(-r.afterReservedMinor)} under.`
 		};
 	}
 	/*
@@ -160,15 +160,15 @@ export function narrateSafeToSpend(
 	if (r.onPlanMinor !== null && r.onPlanMinor < r.freeMinor) {
 		return {
 			tone: 'budget',
-			text: `${fmt(r.freeMinor)} in the bank this month, though ${plan} ${
+			text: `You have ${fmt(r.freeMinor)} in the bank this month; ${plan} ${
 				r.breakdown.budgetRemainingKind === 'categories' ? 'are' : 'is'
-			} the real ceiling at ${fmt(r.onPlanMinor)}.`
+			} the tighter limit at ${fmt(r.onPlanMinor)}.`
 		};
 	}
 	// Room to spare, nothing pressing.
 	return {
 		tone: 'clear',
-		text: `${fmt(r.freeMinor)} free and clear. Everything this month is accounted for.`
+		text: `You have ${fmt(r.freeMinor)} free to spend this month. Everything is accounted for.`
 	};
 }
 

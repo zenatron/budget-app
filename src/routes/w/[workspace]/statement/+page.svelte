@@ -155,7 +155,7 @@
 			</h1>
 			<p class="mt-1.5 text-[14px]" style="color: var(--ink-2)">
 				{data.label}{#if data.isPartial}
-					&mdash; through {data.asOf}{/if}
+					, through {data.asOf}{/if}
 			</p>
 		</div>
 		<div class="text-right">

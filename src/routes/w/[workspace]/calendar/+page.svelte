@@ -63,7 +63,7 @@
 	}
 </script>
 
-<svelte:head><title>{data.month.label} — Calendar — Ledger</title></svelte:head>
+<svelte:head><title>{data.month.label} · Calendar · Ledger</title></svelte:head>
 
 <div class="mx-auto max-w-lg">
 	<a
@@ -261,7 +261,7 @@
 						someone seeing them for the first time.
 					-->
 					<p class="mt-3 text-[12px] leading-relaxed" style="color: var(--ink-3)">
-						Dotted figures are estimates — those bills ask you to confirm the real price, so this is
+						Dotted figures are estimates. Those bills ask you to confirm the real price, so this is
 						what they cost last time.
 					</p>
 				{/if}

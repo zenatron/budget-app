@@ -36,7 +36,7 @@ test('sealing: concealed member sees nothing anywhere; reveal restores; conflict
 	// List: bob sees both (with lock), alice sees only the pizza.
 	await bob.goto(`/w/${slug}/purchases`);
 	await expect(bob.getByText('Anniversary gift')).toBeVisible();
-	await expect(bob.getByTitle('Sealed — hidden from some members')).toBeVisible();
+	await expect(bob.getByTitle('Sealed: hidden from some members')).toBeVisible();
 	await alice.goto(`/w/${slug}/purchases`);
 	await expect(alice.getByText('Shared pizza')).toBeVisible();
 	await expect(alice.getByText('Anniversary gift')).toHaveCount(0);
@@ -73,5 +73,5 @@ test('sealing: concealed member sees nothing anywhere; reveal restores; conflict
 		sealUntil: inDays(7)
 	});
 	await expect(bob.locator('.chip', { hasText: 'Approved' })).toBeVisible();
-	await expect(bob.getByText(/approver concealed — recorded without approval/)).toBeVisible();
+	await expect(bob.getByText(/approver concealed, recorded without approval/)).toBeVisible();
 });

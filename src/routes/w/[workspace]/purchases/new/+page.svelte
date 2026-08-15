@@ -8,13 +8,13 @@
 		ChevronDown,
 		ChevronLeft,
 		ChevronRight,
-		Clock,
 		CreditCard,
 		Gift,
 		Landmark,
 		LocateFixed,
 		MapPin,
 		Moon,
+		NotebookPen,
 		Search,
 		ShoppingBag,
 		Store,
@@ -97,7 +97,7 @@
 		overdraft
 			? {
 					title: `${overdraft.bucketName} doesn't have that`,
-					body: `It holds ${formatMinor(overdraft.balanceMinor, overdraft.currency)}, and this is ${formatMinor(overdraft.amountMinor, overdraft.currency)}. Charging it anyway leaves the bucket ${formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn, and that part counts as ordinary spending rather than savings you'd already set aside.`,
+					body: `It holds ${formatMinor(overdraft.balanceMinor, overdraft.currency)}, and this is ${formatMinor(overdraft.amountMinor, overdraft.currency)}. Charging it anyway leaves the bucket ${formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn, and that part counts as ordinary spending.`,
 					confirmLabel: 'Charge it anyway',
 					tone: 'danger' as const
 				}
@@ -175,7 +175,7 @@
 				body: JSON.stringify({ text })
 			});
 			if (!res.ok) {
-				describeError = "Couldn't reach Harmony just now — fill the fields in below.";
+				describeError = "Couldn't reach Harmony just now. Fill the fields in below.";
 				return;
 			}
 			const d = await res.json();
@@ -194,7 +194,7 @@
 			}
 		} catch {
 			// Offline, or the request never landed. Leave the form untouched.
-			describeError = "Couldn't reach Harmony just now — fill the fields in below.";
+			describeError = "Couldn't reach Harmony just now. Fill the fields in below.";
 		} finally {
 			parsing = false;
 		}
@@ -375,7 +375,7 @@
 			day: 'numeric',
 			timeZone: 'UTC'
 		});
-		return `Hidden from ${names.join(' and ')} until ${on} — ${days} day${days === 1 ? '' : 's'}.`;
+		return `Hidden from ${names.join(' and ')} until ${on}, ${days} day${days === 1 ? '' : 's'}.`;
 	});
 
 	function onPhoto(e: Event) {
@@ -497,8 +497,8 @@
 				</p>
 			{:else if !describeText}
 				<p class="mt-2 pl-[30px] text-[12px] leading-snug" style="color: var(--ink-3)">
-					Type or dictate a sentence like "23 on lunch at Chipotle yesterday". Harmony fills in the
-					amount, item, and category; you confirm before saving.
+					Type or dictate a sentence like "23 on lunch at Krusty Krab yesterday". Harmony fills in the
+					fields. You confirm before saving.
 				</p>
 			{/if}
 		</div>
@@ -811,7 +811,7 @@
 				</div>
 			{/if}
 			<div class="row" style="box-shadow: inset 0 0.5px 0 var(--hairline); align-items: flex-start">
-				<Clock class="mt-0.5 h-5 w-5" style="color: var(--ink-3)" />
+				<NotebookPen class="mt-0.5 h-5 w-5" style="color: var(--ink-3)" />
 				<textarea
 					name="note"
 					aria-label="Note"
@@ -859,7 +859,7 @@
 					</span>
 					<div class="flex-1">
 						<p class="text-[15px] font-semibold" style="color: var(--seal)">
-							Gift mode — hide this purchase
+							Gift mode: hide this purchase
 						</p>
 						<p class="text-[13px]" style="color: var(--ink-3)">
 							Invisible to who you pick, including totals
@@ -960,7 +960,7 @@
 			<button
 				name="intent"
 				value="log"
-				aria-label="Log it — already bought"
+				aria-label="Log it: already bought"
 				class="btn btn-accent flex-col gap-0 py-3.5"
 			>
 				<span>Log it</span>
@@ -969,7 +969,7 @@
 			<button
 				name="intent"
 				value="request"
-				aria-label="Ask first — needs approval"
+				aria-label="Ask first: needs approval"
 				class="btn btn-ghost flex-col gap-0 py-3.5"
 			>
 				<span>Ask first</span>
@@ -1024,7 +1024,7 @@
 						</button>
 					</div>
 					<p class="mt-1 text-[13px]" style="color: var(--ink-3)">
-						Take some time before deciding. We've suggested how long based on the amount — spin to
+						Take some time before deciding. We've suggested how long based on the amount. Spin to
 						change it.
 					</p>
 					<div class="mt-3">

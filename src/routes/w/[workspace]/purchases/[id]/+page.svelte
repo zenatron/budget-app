@@ -149,7 +149,7 @@
 		overdraft && p.bucket
 			? {
 					title: `${p.bucket.name} doesn't have that`,
-					body: `It holds ${formatMinor(p.bucket.balanceMinor, overdraft.currency)}, and you spent ${formatMinor(overdraft.amountMinor, overdraft.currency)}. Recording it leaves the bucket ${formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn, and that part counts as ordinary spending rather than savings you'd already set aside.`,
+					body: `It holds ${formatMinor(p.bucket.balanceMinor, overdraft.currency)}, and you spent ${formatMinor(overdraft.amountMinor, overdraft.currency)}. Recording it leaves the bucket ${formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn, and that part counts as ordinary spending.`,
 					confirmLabel: 'Record it anyway',
 					tone: 'danger' as const
 				}
@@ -202,7 +202,7 @@
 				'--ink-4'}); background: color-mix(in oklab, var({stateVar[p.state] ??
 				'--ink-4'}) 14%, transparent)"
 		>
-			{stateLabel[p.state]}{p.stale ? ' — stale' : ''}{isPending && p.waitingDays > 0
+			{stateLabel[p.state]}{p.stale ? ' · stale' : ''}{isPending && p.waitingDays > 0
 				? ` · ${p.waitingDays}d`
 				: ''}
 		</span>
@@ -220,7 +220,7 @@
 					</p>
 				{:else if p.state === 'approved'}
 					<p class="text-[13px]" style="color: var(--ink-3)">
-						This didn't need approval, so changes apply straight away.
+						This didn't need approval, so changes apply right away.
 					</p>
 				{/if}
 				<input
@@ -293,7 +293,7 @@
 						>
 							Ready to decide
 						</p>
-						<p class="text-[13px]" style="color: var(--ink-3)">You slept on it — still want it?</p>
+						<p class="text-[13px]" style="color: var(--ink-3)">You slept on it. Still want it?</p>
 					{:else if p.heldUntil}
 						<p
 							class="text-[15px] font-semibold"
@@ -339,7 +339,7 @@
 						use:submit={{
 							confirm: {
 								title: 'Let it go?',
-								body: 'This cancels the request. Deciding not to buy is a perfectly good outcome.',
+								body: 'This cancels the request.',
 								confirmLabel: 'Let it go',
 								tone: 'danger'
 							},
@@ -512,7 +512,7 @@
 					class="flex items-center gap-1.5 text-[14px] font-semibold"
 					style="color: var(--pending)"
 				>
-					<CircleAlert class="h-4 w-4" /> Over budget — needs re-approval
+					<CircleAlert class="h-4 w-4" /> Over budget. Needs re-approval
 				</p>
 				<p class="num mt-1 text-[13px]" style="color: var(--ink-2)">
 					Approved {formatMinor(p.approvedAmountMinor, p.currency)}, spent {formatMinor(
@@ -811,7 +811,7 @@
 									<!-- Places are off; the only thing left to do with a pin
 								     that predates that is remove it. -->
 									<span class="mr-auto text-[12px]" style="color: var(--ink-4)">
-										Places are turned off — you can remove this one.
+										Places are turned off. You can remove this one.
 									</span>
 								{/if}
 								<button
@@ -1031,7 +1031,7 @@
 							Hidden from {p.sealedFromNames.join(' and ')}
 						</p>
 						<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
-							Until {fmtDate(p.sealedUntil!)} — invisible everywhere, including totals.
+							Until {fmtDate(p.sealedUntil!)}. Invisible everywhere, including totals.
 						</p>
 						{#if data.can.unseal}
 							<form
@@ -1059,7 +1059,7 @@
 			<div class="card p-5">
 				<p class="text-[15px] font-semibold" style="color: var(--ink)">Mark as bought</p>
 				<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
-					Enter what you actually spent — a large overage triggers re-approval.
+					Enter what you actually spent. A large overage triggers re-approval.
 					{#if p.bucket}
 						It comes out of {p.bucket.name}, which holds {formatMinor(
 							p.bucket.balanceMinor,
@@ -1185,7 +1185,7 @@
 								<span class="text-[13px]" style="color: var(--ink-2)">
 									{stateLabel[e.toState] ?? e.toState}{e.actorName
 										? ` · ${e.actorName}`
-										: ''}{e.reason ? ` — ${e.reason}` : ''}
+										: ''}{e.reason ? ` · ${e.reason}` : ''}
 								</span>
 								<span class="num shrink-0 text-[12px]" style="color: var(--ink-3)">
 									{fmtDate(e.at)}{e.amountMinor !== null
@@ -1234,8 +1234,8 @@
 				</button>
 			</div>
 			<p class="mt-1 text-[13px]" style="color: var(--ink-3)">
-				Take some time before deciding. We've suggested how long based on the amount — spin to
-				change it.
+				Take some time before deciding. We've suggested how long based on the amount. Spin to change
+				it.
 			</p>
 			<div class="mt-3">
 				<HoldPicker amountMinor={p.requestedAmountMinor} bind:days={holdDays} />

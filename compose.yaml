@@ -48,23 +48,23 @@ services:
         condition: service_healthy
 
   # Self-hosted geocoder, opt-in: `docker compose --profile geocoder up -d`,
-  # with GEOCODER_URL=http://geocoder:8080 in .env. This is the honest answer
-  # to the .env.example warning — the public Nominatim instance's usage policy
+  # with GEOCODER_URL=http://geocoder:8080 in .env. This avoids the problem
+  # described in .env.example: the public Nominatim instance's usage policy
   # forbids autocomplete-style querying and will ban your IP. Not started by
   # default, and deliberately unreachable from outside the compose network.
   #
   # The first start imports the extract at NOMINATIM_IMPORT_URL and can take
   # tens of minutes for a country; plan RAM and disk accordingly (a country is
   # single-digit GB of volume). Add FREEZE: 'true' once you're sure you'll
-  # never want replication updates — it drops postcodes/wiki data and shrinks
+  # never want replication updates; it drops postcodes/wiki data and shrinks
   # the index.
   geocoder:
     image: mediagis/nominatim:4.4
     profiles: ['geocoder', 'full']
     restart: unless-stopped
     environment:
-      # Defaults to Monaco — Geofabrik's smallest extract, imported in about a
-      # minute — because the image's own default is the *planet*, and a
+      # Defaults to Monaco, Geofabrik's smallest extract, imported in about a
+      # minute, because the image's own default is the *planet* and a
       # household budget does not have a machine for the planet. A forgotten
       # var gets you a working geocoder that finds nothing, not a multi-day
       # import. Point it at your region: https://download.geofabrik.de
@@ -77,7 +77,7 @@ services:
     image: postgres:17
     restart: unless-stopped
     ports:
-      # Loopback only — the app reaches the db over the compose network. Publishing
+      # Loopback only: the app reaches the db over the compose network. Publishing
       # on 0.0.0.0 would expose Postgres (with this default password) to the LAN.
       - '127.0.0.1:5432:5432'
     environment:
@@ -95,7 +95,7 @@ services:
 volumes:
   pgdata:
   blobs:
-  # Disposable third-party bytes — map tiles the server re-serves. Safe to
+  # Disposable third-party bytes: map tiles the server re-serves. Safe to
   # delete any time; kept on its own volume so blob backups stay lean.
   tiles:
   # The geocoder's imported extract and index. Profile-gated service, so the
