@@ -132,4 +132,139 @@ describe('nominatimGeocoder', () => {
 		const url = new URL(String(spy.mock.calls[0][0]));
 		expect(Number(url.searchParams.get('limit'))).toBeLessThanOrEqual(10);
 	});
+
+	it('sends an Accept that Apache content negotiation can satisfy', async () => {
+		/*
+		 * The mediagis image serves Nominatim as PHP behind Apache MultiViews. A
+		 * bare `Accept: application/json` matches no variant of `search.php`, so
+		 * Apache returns 406 before Nominatim runs — and this adapter reports every
+		 * non-ok response as "no such place". A fully imported extract answered
+		 * nothing at all for exactly this reason.
+		 */
+		const spy = OK([SF_ROW]);
+		vi.stubGlobal('fetch', spy);
+		await make().search('Ferry Building');
+		const headers = spy.mock.calls[0][1]?.headers as Record<string, string>;
+		expect(headers.Accept).toContain('*/*');
+	});
+
+	it('keeps a base path, so an endpoint behind a proxy subpath still resolves', async () => {
+		// `new URL('/search', base)` drops the base path, which sent every request
+		// to the origin root — a 404, which this adapter reports as "no such place".
+		const spy = OK([SF_ROW]);
+		vi.stubGlobal('fetch', spy);
+		await nominatimGeocoder({ endpoint: 'https://example.com/nominatim' }).search('Ferry Building');
+		expect(String(spy.mock.calls[0][0])).toContain('/nominatim/search');
+	});
+});
+
+describe('checkHealth', () => {
+	const make = () => nominatimGeocoder({ endpoint: 'https://nominatim.example' });
+
+	/** Nominatim's own /status shape: 0 is healthy, anything else is not. */
+	const status = (body: unknown, init: ResponseInit = {}) =>
+		new Response(JSON.stringify(body), { status: 200, ...init });
+
+	it('reports off without touching the network when there is no endpoint', async () => {
+		const spy = vi.fn();
+		vi.stubGlobal('fetch', spy);
+		const health = await getGeocoder({ endpoint: null }).checkHealth('anywhere');
+		expect(health.state).toBe('off');
+		expect(spy).not.toHaveBeenCalled();
+	});
+
+	it('reads a healthy status, and says how fresh the data is', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => status({ status: 0, message: 'OK', data_updated: '2026-08-01T00:00:00Z' }))
+		);
+		const health = await make().checkHealth();
+		expect(health.state).toBe('ready');
+		expect(health.dataUpdated).toBe('2026-08-01T00:00:00Z');
+		expect(health.probe).toBeNull();
+	});
+
+	it('separates a database that is not serving yet from one that is', async () => {
+		// The window a country-sized import spends here is hours long, and the
+		// whole point of the probe is that it does not look like "broken".
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () =>
+				status({ status: 700, message: 'Database connection failed' }, { status: 500 })
+			)
+		);
+		const health = await make().checkHealth();
+		expect(health.state).toBe('starting');
+		expect(health.detail).toContain('Database connection failed');
+	});
+
+	it('blames the web server, not the import, for a 4xx', async () => {
+		// A 406 from Apache's content negotiation reported as "the database isn't
+		// ready" sends an operator to watch an import that finished hours ago.
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response('not acceptable', { status: 406 }))
+		);
+		const health = await make().checkHealth();
+		expect(health.state).toBe('starting');
+		expect(health.detail).toContain('406');
+		expect(health.detail).toContain('web server');
+		expect(health.detail).not.toContain('database');
+	});
+
+	it('reports nothing answering as unreachable, and names the import as a cause', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => {
+				throw new Error('ECONNREFUSED');
+			})
+		);
+		const health = await make().checkHealth();
+		expect(health.state).toBe('unreachable');
+		expect(health.detail).toContain('import');
+	});
+
+	it('tells "up but this place is not in the extract" apart from "up"', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (input: RequestInfo | URL) =>
+				String(input).includes('/status')
+					? status({ status: 0, message: 'OK' })
+					: status([] as unknown[])
+			)
+		);
+		const health = await make().checkHealth('495 Flatbush Ave, Hartford CT');
+		expect(health.state).toBe('ready');
+		expect(health.probe).toEqual({
+			query: '495 Flatbush Ave, Hartford CT',
+			found: 0,
+			first: null
+		});
+		expect(health.detail).toContain("doesn't cover");
+	});
+
+	it('confirms a place the extract does have', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (input: RequestInfo | URL) =>
+				String(input).includes('/status') ? status({ status: 0, message: 'OK' }) : status([SF_ROW])
+			)
+		);
+		const health = await make().checkHealth('Ferry Building');
+		expect(health.probe?.found).toBe(1);
+		expect(health.probe?.first).toBe('Ferry Building, San Francisco');
+	});
+
+	it('is not silenced by the one-per-second gate the search box lives under', async () => {
+		// A diagnostic that reported "unreachable" because its own app rate-limited
+		// it would be the exact confusion it exists to end.
+		const spy = vi.fn(async (input: RequestInfo | URL) =>
+			String(input).includes('/status') ? status({ status: 0, message: 'OK' }) : status([SF_ROW])
+		);
+		vi.stubGlobal('fetch', spy);
+		const g = make();
+		await g.search('Ferry Building');
+		const health = await g.checkHealth('Ferry Building');
+		expect(health.probe?.found).toBe(1);
+	});
 });

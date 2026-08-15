@@ -1,10 +1,3 @@
-# Pin the Compose project name so it never depends on the folder it's deployed
-# from. Without this, `docker compose` derives the project from the directory
-# basename — so a rename (or a plugin that normalizes dashes vs underscores)
-# silently creates a *second*, parallel stack with its own empty volumes, and
-# `pull`/`up` update the wrong one. Everything (containers, network, volumes)
-# is namespaced under this name: containers `ledger-app-1`/`ledger-db-1`,
-# volumes `ledger_pgdata`/`ledger_blobs`.
 name: ledger
 
 services:
@@ -36,11 +29,49 @@ services:
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
       NTFY_SERVER_URL: ${NTFY_SERVER_URL:-}
       NTFY_DEFAULT_TOKEN: ${NTFY_DEFAULT_TOKEN:-}
+      # --- Places & barcode lookup (all optional) ---
+      # Without these the app still records pins from links and the device; the
+      # map draws its graticule fallback and address search stays off. The tile
+      # vars are passed through from .env like everything else; the tile cache
+      # is pinned to the container path its named volume mounts.
+      MAP_TILE_URL: ${MAP_TILE_URL:-}
+      MAP_TILE_ATTRIBUTION: ${MAP_TILE_ATTRIBUTION:-}
+      GEOCODER_URL: ${GEOCODER_URL:-http://geocoder:8080}
+      GEOCODER_EMAIL: ${GEOCODER_EMAIL:-}
+      BARCODE_LOOKUP_URL: ${BARCODE_LOOKUP_URL:-}
+      TILE_CACHE_DIR: /data/tiles
     volumes:
       - blobs:/data/blobs
+      - tiles:/data/tiles
     depends_on:
       db:
         condition: service_healthy
+
+  # Self-hosted geocoder, opt-in: `docker compose --profile geocoder up -d`,
+  # with GEOCODER_URL=http://geocoder:8080 in .env. This is the honest answer
+  # to the .env.example warning — the public Nominatim instance's usage policy
+  # forbids autocomplete-style querying and will ban your IP. Not started by
+  # default, and deliberately unreachable from outside the compose network.
+  #
+  # The first start imports the extract at NOMINATIM_IMPORT_URL and can take
+  # tens of minutes for a country; plan RAM and disk accordingly (a country is
+  # single-digit GB of volume). Add FREEZE: 'true' once you're sure you'll
+  # never want replication updates — it drops postcodes/wiki data and shrinks
+  # the index.
+  geocoder:
+    image: mediagis/nominatim:4.4
+    profiles: ['geocoder', 'full']
+    restart: unless-stopped
+    environment:
+      # Defaults to Monaco — Geofabrik's smallest extract, imported in about a
+      # minute — because the image's own default is the *planet*, and a
+      # household budget does not have a machine for the planet. A forgotten
+      # var gets you a working geocoder that finds nothing, not a multi-day
+      # import. Point it at your region: https://download.geofabrik.de
+      PBF_URL: ${NOMINATIM_IMPORT_URL:-https://download.geofabrik.de/europe/monaco-latest.osm.pbf}
+      THREADS: '4'
+    volumes:
+      - geocoder:/nominatim
 
   db:
     image: postgres:17
@@ -64,3 +95,9 @@ services:
 volumes:
   pgdata:
   blobs:
+  # Disposable third-party bytes — map tiles the server re-serves. Safe to
+  # delete any time; kept on its own volume so blob backups stay lean.
+  tiles:
+  # The geocoder's imported extract and index. Profile-gated service, so the
+  # volume only fills if you opt in.
+  geocoder:

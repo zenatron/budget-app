@@ -30,9 +30,8 @@
 	import { calDateInZone } from '$lib/domain/time/zoned';
 	import { dismiss } from '$lib/actions/dismiss';
 	import { modal } from '$lib/actions/modal';
-	import { formatCoords, roundToE3 } from '$lib/domain/location/coords';
-	import { parseMapsLink } from '$lib/domain/location/maps-link';
-	import { shortenPlaceLabel, type PurchasePlace } from '$lib/domain/location/place';
+	import { formatCoords } from '$lib/domain/location/coords';
+	import { createPlaceField } from '$lib/domain/location/place-field.svelte';
 
 	import BillImport from '$lib/components/BillImport.svelte';
 	import BarcodeScanner from '$lib/components/BarcodeScanner.svelte';
@@ -55,164 +54,18 @@
 	let photoInput: HTMLInputElement | null = $state(null);
 
 	/*
-	 * The place.
+	 * The place. Two states, one row: unresolved, where it is a field you paste
+	 * or tap into; and resolved, where it stops being a field and becomes a
+	 * line on the statement.
 	 *
-	 * Two states, one row: unresolved, where it is a field you paste or tap into;
-	 * and resolved, where it stops being a field and becomes a line on the
-	 * statement.
-	 *
-	 * Nothing here runs on its own. `locate()` is only ever reached from a tap,
-	 * and resolving a pasted link is pure arithmetic on the URL — no network, and
-	 * nothing is told where this household went.
+	 * The behavior — reading a link offline, searching an address, the device
+	 * on a tap — lives in the shared field, so this form and the ledger's
+	 * inline editor can never drift apart on what a paste is allowed to do.
 	 */
-	let place: PurchasePlace | null = $state(null);
-	let placeQuery = $state('');
-	let placeError: string | null = $state(null);
-	let locating = $state(false);
-
-	async function locate() {
-		if (!navigator.geolocation) {
-			placeError = 'This device has no location to share. Paste a map link instead?';
-			return;
-		}
-		locating = true;
-		placeError = null;
-		try {
-			const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-				navigator.geolocation.getCurrentPosition(resolve, reject, {
-					// Deliberately low. Everything finer than ~110 m is discarded by
-					// roundToE3 anyway, and asking for high accuracy wakes the GPS and
-					// costs seconds to produce a number we immediately throw away.
-					enableHighAccuracy: false,
-					timeout: 8000,
-					maximumAge: 300_000
-				})
-			);
-			// A 2 km fix is a cell tower, not a shop. Pinning it would record a
-			// confident lie, so say so and offer the honest route instead.
-			if (pos.coords.accuracy > 2000) {
-				placeError = `Your location is only accurate to about ${Math.round(
-					pos.coords.accuracy / 1000
-				)} km here. Type the address instead?`;
-				return;
-			}
-			// Rounded here, before it is ever in the DOM: the precise fix never
-			// enters a form field, never crosses the wire, and never reaches a log.
-			const e3 = roundToE3({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-			place = { ...e3, label: null, source: 'device' };
-			placeQuery = '';
-		} catch (e) {
-			// Same shape as the barcode scanner's camera decline: name what happened
-			// and point at the way round it, never a dead end.
-			const denied =
-				typeof e === 'object' &&
-				e !== null &&
-				'code' in e &&
-				(e as GeolocationPositionError).code === 1;
-			placeError = denied
-				? 'Location access was declined. You can type an address or paste a map link instead.'
-				: 'Could not get your location on this device.';
-		} finally {
-			locating = false;
-		}
-	}
-
-	/**
-	 * Resolve a map link, offline — the URL already contains the answer.
-	 *
-	 * Deliberately *not* wired to `oninput`. A paste is one event but typing is
-	 * many, and a URL contains a valid coordinate long before it is finished:
-	 * parsing per keystroke resolved halfway through ".../@37.7955,-122.3937,17z",
-	 * swapped this row out from under the caret, and swallowed the rest of what
-	 * was being typed. So it runs on paste, on blur, and on Enter — the three
-	 * moments the text is actually complete.
-	 */
-	function resolveLink(text: string): boolean {
-		const hit = parseMapsLink(text);
-		if (!hit) return false;
-		place = { ...roundToE3(hit), label: null, source: 'link' };
-		placeQuery = '';
-		placeError = null;
-		return true;
-	}
-
-	function onPlacePaste(e: ClipboardEvent) {
-		const text = e.clipboardData?.getData('text') ?? '';
-		// Resolve from the clipboard directly rather than waiting for the value to
-		// settle, so the pin appears on the paste itself.
-		if (resolveLink(text)) e.preventDefault();
-	}
-
-	/*
-	 * Typed addresses, when a geocoder is configured.
-	 *
-	 * Never per keystroke. Nominatim's usage policy forbids autocomplete-style
-	 * querying outright and will ban the deployment's IP for it, so a search only
-	 * happens on Enter or on leaving the field — a deliberate act, not a
-	 * side-effect of typing. The adapter enforces one request per second on top
-	 * of this; the two are belt-and-braces.
-	 */
-	let candidates = $state<{ latE3: number; lngE3: number; label: string }[]>([]);
-	let searching = $state(false);
-
-	async function searchPlace() {
-		const q = placeQuery.trim();
-		if (q.length < 3) return;
-		searching = true;
-		candidates = [];
-		try {
-			const res = await fetch(`/w/${slug}/places/search`, {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ query: q })
-			});
-			const body = res.ok ? await res.json() : { places: [] };
-			candidates = body.places ?? [];
-			if (candidates.length === 0) {
-				placeError = `Nothing found for "${q}". Paste a link from a maps app, or use where you are.`;
-			}
-		} catch {
-			// The endpoint never 5xxs, so this is the browser being offline. Same
-			// answer either way: no candidates, and the other two routes still work.
-			placeError = 'Could not search for that right now.';
-		} finally {
-			searching = false;
-		}
-	}
-
-	function pickCandidate(c: { latE3: number; lngE3: number; label: string }) {
-		// Already rounded by the server; the hidden inputs carry it as-is. The
-		// label is shortened on the way in: the picker shows the full postal chain
-		// because that is what tells two candidates apart, but the row that ends up
-		// on the purchase wants the name, not the county and the postcode.
-		place = {
-			latE3: c.latE3,
-			lngE3: c.lngE3,
-			label: shortenPlaceLabel(c.label),
-			source: 'geocode'
-		};
-		candidates = [];
-		placeQuery = '';
-		placeError = null;
-	}
-
-	function onPlaceCommit() {
-		if (!placeQuery.trim()) return;
-		if (resolveLink(placeQuery)) return;
-		if (data.geocoderEnabled) {
-			void searchPlace();
-			return;
-		}
-		placeError =
-			"That doesn't have a location in it. Paste a link from a maps app, or use where you are.";
-	}
-
-	function clearPlace() {
-		place = null;
-		placeQuery = '';
-		placeError = null;
-		candidates = [];
-	}
+	const placeField = createPlaceField({
+		slug: () => page.params.workspace ?? '',
+		geocoderEnabled: () => data.geocoderEnabled
+	});
 
 	/*
 	 * Charging to a bucket, and what happens if the bucket can't cover it.
@@ -715,61 +568,61 @@
 				<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
 					<MapPin
 						class="h-5 w-5 shrink-0"
-						style="color: {place ? 'var(--ws-accent)' : 'var(--ink-4)'}"
+						style="color: {placeField.place ? 'var(--ws-accent)' : 'var(--ink-4)'}"
 					/>
-					{#if place}
+					{#if placeField.place}
 						<!-- Resolved: a fact now, so it reads as a line rather than a field. -->
 						<span class="min-w-0 flex-1">
 							<span class="block truncate text-[17px]" style="color: var(--ink)">
-								{place.label ?? 'Pinned location'}
+								{placeField.place.label ?? 'Pinned location'}
 							</span>
 							<span class="num mt-0.5 block text-[12px]" style="color: var(--ink-3)">
-								{formatCoords(place)} · ±110 m
+								{formatCoords(placeField.place)} · ±110 m
 							</span>
 						</span>
 						<!-- 32px circle: this dismisses. The 38px square below does something. -->
 						<button
 							type="button"
-							onclick={clearPlace}
+							onclick={() => placeField.clear()}
 							aria-label="Remove the place"
 							class="press flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
 							style="color: var(--ink-3)"
 						>
 							<X class="h-4 w-4" />
 						</button>
-						<input type="hidden" name="latE3" value={place.latE3} />
-						<input type="hidden" name="lngE3" value={place.lngE3} />
-						<input type="hidden" name="placeLabel" value={place.label ?? ''} />
-						<input type="hidden" name="locationSource" value={place.source} />
+						<input type="hidden" name="latE3" value={placeField.place.latE3} />
+						<input type="hidden" name="lngE3" value={placeField.place.lngE3} />
+						<input type="hidden" name="placeLabel" value={placeField.place.label ?? ''} />
+						<input type="hidden" name="locationSource" value={placeField.place.source} />
 					{:else}
 						<input
 							name="placeQuery"
 							aria-label="Place"
-							bind:value={placeQuery}
-							onpaste={onPlacePaste}
-							onblur={onPlaceCommit}
+							bind:value={placeField.query}
+							onpaste={(e) => placeField.onPaste(e)}
+							onblur={() => placeField.commit()}
 							onkeydown={(e) => {
 								if (e.key !== 'Enter') return;
 								// This row lives inside the purchase form; Enter here means
 								// "resolve what I typed", never "submit the purchase".
 								e.preventDefault();
-								onPlaceCommit();
+								placeField.commit();
 							}}
 							maxlength="200"
 							placeholder={data.geocoderEnabled
-								? 'Address, or paste a map link'
-								: 'Paste a map link'}
+								? 'Address, map link, or coordinates'
+								: 'Map link or coordinates'}
 							class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:opacity-40"
 							style="color: var(--ink)"
 						/>
 						<button
 							type="button"
-							onclick={locate}
-							disabled={locating}
+							onclick={() => placeField.locate()}
+							disabled={placeField.locating}
 							class="icon-btn press shrink-0"
 							aria-label="Use my location"
 						>
-							{#if locating}
+							{#if placeField.locating}
 								<span
 									class="h-2 w-2 animate-pulse rounded-full"
 									style="background: var(--ws-accent)"
@@ -787,10 +640,10 @@
 					provider returned the same row twice. The endpoint dedupes as well;
 					this is the half that doesn't depend on the provider behaving.
 				-->
-				{#each candidates as c, i (i)}
+				{#each placeField.candidates as c, i (i)}
 					<button
 						type="button"
-						onclick={() => pickCandidate(c)}
+						onclick={() => placeField.pickCandidate(c)}
 						class="row row-tap hairline w-full text-left"
 						style="box-shadow: inset 0 0.5px 0 var(--hairline)"
 					>
@@ -800,11 +653,11 @@
 						</span>
 					</button>
 				{/each}
-				{#if searching}
+				{#if placeField.searching}
 					<p class="px-3 pb-2 text-[13px]" style="color: var(--ink-3)">Looking…</p>
-				{:else if placeError}
+				{:else if placeField.error}
 					<p class="px-3 pb-2 text-[13px] leading-relaxed" style="color: var(--ink-3)">
-						{placeError}
+						{placeField.error}
 					</p>
 				{/if}
 			{/if}

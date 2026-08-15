@@ -296,6 +296,17 @@
 		color: var(--ink-3);
 	}
 
+	/*
+	 * 17px, and never overridden below 16px.
+	 *
+	 * Mobile Safari zooms the viewport when a form control smaller than 16px
+	 * takes focus, and does not zoom back out afterwards. In an installed PWA
+	 * that reads as the whole layout lurching sideways under a thumb, on the tap
+	 * that was meant to start typing. Seven fields had drifted to 14–15px for
+	 * density; they are all back at 16px or above. If a row is too tight at
+	 * 16px, the row is too tight — shorten the label or stack it, don't shrink
+	 * the input.
+	 */
 	.field {
 		width: 100%;
 		background: var(--surface);

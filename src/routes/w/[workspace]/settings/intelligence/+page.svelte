@@ -41,6 +41,22 @@
 	] as const;
 
 	const testResult = $derived(form && 'test' in form ? form.test : null);
+	const geoHealth = $derived(form && 'geocoder' in form ? form.geocoder : null);
+
+	/**
+	 * Green only when the check actually proved something. A provider that is up
+	 * but found nothing for the address you gave it is the case this whole panel
+	 * exists for — the extract doesn't cover you — so it must not read as a pass.
+	 */
+	const geoPassed = $derived(
+		geoHealth?.state === 'ready' && (geoHealth.probe === null || geoHealth.probe.found > 0)
+	);
+	function geoTone(state: string): string {
+		if (geoPassed) return 'var(--approve)';
+		if (state === 'ready' || state === 'starting') return 'var(--pending)';
+		return 'var(--deny)';
+	}
+
 	const availableModels = $derived(testResult?.models ?? []);
 
 	/*
@@ -203,6 +219,70 @@
 						> to a Nominatim-compatible endpoint to search addresses; self-host it if you can.
 					</span>
 				</p>
+			{:else if owner}
+				<!--
+					Address search is the one optional layer whose failures are all
+					invisible by design — off, unreachable, mid-import and "not in the
+					imported extract" reach the form as the same empty list, because a
+					person recording a purchase can do nothing with the difference. An
+					operator can, and this is where they're told apart. It sits behind a
+					button rather than probing on load: this is the only thing on the page
+					that reaches out to another service just for being looked at.
+				-->
+				<div class="mt-2.5 border-t pt-2.5" style="border-color: var(--hairline)">
+					<p class="text-[12px] leading-relaxed" style="color: var(--ink-4)">
+						Address search: <span class="font-mono">{data.geocoderEndpoint}</span>
+					</p>
+					<!--
+						`.field` unmodified, at its own 17px. Anything under 16px in a text
+						input makes iOS Safari zoom the viewport on focus and leave it
+						there — the page is an installed PWA, so that lands as the layout
+						visibly lurching under someone's thumb.
+					-->
+					<form
+						method="POST"
+						action="?/checkGeocoder"
+						use:submit={{ reset: false }}
+						class="mt-2 space-y-2"
+					>
+						<input
+							name="probe"
+							class="field"
+							placeholder="Test an address near you"
+							autocomplete="off"
+							autocapitalize="off"
+							spellcheck="false"
+							enterkeyhint="search"
+						/>
+						<button class="btn btn-ghost px-4 py-2 text-[14px]">Check</button>
+					</form>
+					{#if geoHealth}
+						<p
+							class="mt-2 flex items-start gap-1.5 text-[12px] leading-relaxed"
+							style="color: {geoTone(geoHealth.state)}"
+						>
+							{#if geoPassed}
+								<Check class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+							{:else}
+								<CircleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+							{/if}
+							<span>
+								{geoHealth.detail}
+								{#if geoHealth.probe}
+									{#if geoHealth.probe.first}
+										<br />Best match:
+										<span style="color: var(--ink-2)">{geoHealth.probe.first}</span>
+									{/if}
+								{/if}
+								{#if geoHealth.dataUpdated}
+									<br /><span style="color: var(--ink-4)"
+										>Data imported up to {geoHealth.dataUpdated}.</span
+									>
+								{/if}
+							</span>
+						</p>
+					{/if}
+				</div>
 			{/if}
 		</div>
 		{#if owner}
@@ -290,7 +370,7 @@
 						bind:value={endpoint}
 						disabled={!owner}
 						placeholder={mode === 'local' ? 'http://localhost:11434' : 'https://api.openai.com'}
-						class="field mt-1 font-mono text-[15px]"
+						class="field mt-1 font-mono text-[16px]"
 					/>
 				</div>
 				<div>
@@ -359,7 +439,7 @@
 							bind:value={model}
 							disabled={!owner}
 							placeholder={mode === 'local' ? 'Connect to list models' : 'gpt-4o-mini'}
-							class="field mt-1 font-mono text-[15px]"
+							class="field mt-1 font-mono text-[16px]"
 						/>
 					{/if}
 				</div>
@@ -373,7 +453,7 @@
 							bind:value={apiKey}
 							disabled={!owner}
 							placeholder={data.config.apiKeySet ? 'Stored. Leave blank to keep it.' : 'sk-...'}
-							class="field mt-1 font-mono text-[15px]"
+							class="field mt-1 font-mono text-[16px]"
 						/>
 					</div>
 					<p class="text-[12.5px] leading-relaxed" style="color: var(--ink-3)">

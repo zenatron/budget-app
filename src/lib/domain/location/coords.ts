@@ -119,3 +119,46 @@ function part(e3: number): string {
 export function formatCoords(e: CoordsE3): string {
 	return `${part(e.latE3)}, ${part(e.lngE3)}`;
 }
+
+/*
+ * A coordinate pair, written out.
+ *
+ * The fourth honest route to a pin, and the only one that needs nothing at all:
+ * no provider, no network, no device permission. Reading it is arithmetic, the
+ * same argument that lets a map link resolve offline — which matters most for
+ * the deployments that decide a geocoder isn't worth a hundred gigabytes of
+ * disk, because it leaves them a way to record an exact spot by hand.
+ *
+ * Accepts what people actually paste: a comma, a semicolon, a slash or plain
+ * whitespace between the two; an optional degree sign; and hemisphere letters
+ * instead of a sign. U+2212 is in the sign class because `formatCoords` above
+ * emits it — the app renders coordinates with a true minus, so text copied out
+ * of this app must be text it can read back in.
+ */
+const COORD_PAIR =
+	/^([+\-−]?\d{1,3}(?:\.\d+)?)\s*°?\s*([NS])?(?:\s*[,;/]\s*|\s+)([+\-−]?\d{1,3}(?:\.\d+)?)\s*°?\s*([EW])?$/i;
+
+/** One half of the pair: the number, with a hemisphere letter overriding its sign. */
+function signedDegrees(text: string, letter: string | undefined, negative: string): number {
+	const n = Number(text.replace('−', '-'));
+	if (!letter) return n;
+	return letter.toUpperCase() === negative ? -Math.abs(n) : Math.abs(n);
+}
+
+/**
+ * Read "41.7398, −72.7133" — or "41.7398° N, 72.7133° W" — as a coordinate.
+ *
+ * Returns null for anything else, including a pair that isn't a point on Earth.
+ * Deliberately strict about the whole string matching: an address that merely
+ * contains two numbers must fall through to the geocoder, not silently become a
+ * pin somewhere off the coast of Africa.
+ */
+export function parseCoordsText(text: string): Coords | null {
+	const m = COORD_PAIR.exec(text.trim());
+	if (!m) return null;
+	const coords = {
+		lat: signedDegrees(m[1], m[2], 'S'),
+		lng: signedDegrees(m[3], m[4], 'W')
+	};
+	return isValidCoords(coords) ? coords : null;
+}

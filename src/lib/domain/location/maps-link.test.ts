@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseMapsLink } from './maps-link';
+import { isMapsUrl, parseMapsLink, parseMapsPlaceName } from './maps-link';
 
 const SF = { lat: 37.7749, lng: -122.4194 };
 
@@ -116,5 +116,54 @@ describe('parseMapsLink — the things it must refuse', () => {
 
 	it('survives a malformed percent escape', () => {
 		expect(() => parseMapsLink('https://example.com/?q=%E0%A4%A')).not.toThrow();
+	});
+});
+
+describe('isMapsUrl — recognizing the source without a coordinate', () => {
+	it('accepts the known maps hosts', () => {
+		expect(isMapsUrl('https://maps.apple.com/?place-id=abc')).toBe(true);
+		expect(isMapsUrl('https://maps.app.goo.gl/aBcDeFg')).toBe(true);
+		expect(isMapsUrl('https://goo.gl/maps/xyz123')).toBe(true);
+		expect(isMapsUrl('https://www.google.com/maps/place/Ferry+Building')).toBe(true);
+		expect(isMapsUrl('https://www.openstreetmap.org/#map=17/51.5/-0.1')).toBe(true);
+	});
+
+	it('refuses anything else', () => {
+		expect(isMapsUrl('1600 Amphitheatre Pkwy, Mountain View')).toBe(false);
+		expect(isMapsUrl('https://example.com/?q=nowhere')).toBe(false);
+		expect(isMapsUrl('37.7749, -122.4194')).toBe(false);
+	});
+});
+
+describe('parseMapsPlaceName — the name a coordinate-less link carries', () => {
+	it('reads an Apple place-card share', () => {
+		expect(
+			parseMapsPlaceName('https://maps.apple.com/?place-id=EWKGMQAACLA1tQ&q=Ferry%20Building')
+		).toBe('Ferry Building');
+	});
+
+	it('reads an address-only Apple share, decoding + as space', () => {
+		expect(parseMapsPlaceName('https://maps.apple.com/?address=1+Market+St,+San+Francisco')).toBe(
+			'1 Market St, San Francisco'
+		);
+	});
+
+	it('reads a Google place URL whose name lives in the path', () => {
+		expect(parseMapsPlaceName('https://www.google.com/maps/place/Tartine+Bakery')).toBe(
+			'Tartine Bakery'
+		);
+	});
+
+	it('refuses text that is not a map link — a typed address is not one', () => {
+		expect(parseMapsPlaceName('221B Baker Street, London')).toBeNull();
+		expect(parseMapsPlaceName('https://example.com/?q=nowhere')).toBeNull();
+	});
+
+	it('refuses a maps link that names nothing', () => {
+		expect(parseMapsPlaceName('https://maps.apple.com/?ll=37.7749,-122.4194')).toBeNull();
+	});
+
+	it('survives a malformed percent escape', () => {
+		expect(parseMapsPlaceName('https://maps.apple.com/?q=%E0%A4%A&place-id=x')).toBeNull();
 	});
 });

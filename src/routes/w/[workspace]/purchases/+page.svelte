@@ -948,7 +948,7 @@
 									value={from}
 									max={to || undefined}
 									onchange={(e) => setRange({ from: e.currentTarget.value })}
-									class="field text-[14px]"
+									class="field text-[16px]"
 								/>
 							</label>
 							<span class="text-[13px]" style="color: var(--ink-3)">to</span>
@@ -959,7 +959,7 @@
 									value={to}
 									min={from || undefined}
 									onchange={(e) => setRange({ to: e.currentTarget.value })}
-									class="field text-[14px]"
+									class="field text-[16px]"
 								/>
 							</label>
 						</div>

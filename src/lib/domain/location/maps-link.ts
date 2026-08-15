@@ -18,6 +18,52 @@
 
 import { isValidCoords, type Coords } from './coords';
 
+/** Percent-decode, keeping the original if the escape is malformed. */
+function decoded(text: string): string {
+	try {
+		return decodeURIComponent(text);
+	} catch {
+		return text;
+	}
+}
+
+/** Hosts a link can come from and still be "a map link" to this module. */
+const MAPS_URL =
+	/(?:maps\.apple\.com|maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\.[a-z.]+|google\.[a-z.]+\/maps|openstreetmap\.org|osm\.org)/i;
+
+/** Is this text a link from a maps service, coordinate-bearing or not? */
+export function isMapsUrl(text: string): boolean {
+	return MAPS_URL.test(text.trim());
+}
+
+/**
+ * The place a map link *names*, when it carries no coordinate.
+ *
+ * Apple place-card shares (`?place-id=…&q=Name`) and Google short links say
+ * where they mean without saying where it is. Offline, that name is all there
+ * is — so this returns it, and the caller can take it to the geocoder as an
+ * explicit, user-initiated act. Same narrow contract as `parseMapsLink`:
+ * a plain street address is not a map link and gets nothing.
+ */
+export function parseMapsPlaceName(text: string): string | null {
+	if (!isMapsUrl(text)) return null;
+	const raw = text.trim();
+	// A query parameter (`?q=` / `?address=`), else Google's `/maps/place/Name`
+	// path segment. Both stop at the next delimiter; neither spans the `#`.
+	const m = /[?&](?:q|address)=([^&#]+)/i.exec(raw) ?? /\/maps\/place\/([^/?#]+)/i.exec(raw);
+	if (!m) return null;
+	// A malformed escape means the name is unreadable, not merely ugly.
+	let value: string;
+	try {
+		value = decodeURIComponent(m[1]);
+	} catch {
+		return null;
+	}
+	// `+` is a space in query-string encoding; decodeURIComponent leaves it.
+	const name = value.replace(/\+/g, ' ').trim();
+	return name ? name.slice(0, 200) : null;
+}
+
 /** Accepts a pair only if both halves are real numbers in range. */
 function pair(latText: string | undefined, lngText: string | undefined): Coords | null {
 	if (latText === undefined || lngText === undefined) return null;
@@ -71,12 +117,7 @@ export function parseMapsLink(text: string): Coords | null {
 
 	// Percent-decoding first, so an `ll=37.775%2C-122.419` still matches. A
 	// malformed escape is not a reason to give up on the rest of the string.
-	let s = raw;
-	try {
-		s = decodeURIComponent(raw);
-	} catch {
-		/* keep the original */
-	}
+	const s = decoded(text.trim());
 
 	for (const re of PATTERNS) {
 		const m = re.exec(s);

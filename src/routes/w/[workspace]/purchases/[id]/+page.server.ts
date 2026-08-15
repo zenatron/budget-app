@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { error, fail, redirect } from '@sveltejs/kit';
+import { getEnv } from '$lib/server/env';
 import { Money, InvalidMoneyError } from '$lib/domain/money/money';
 import { PurchaseStateError } from '$lib/domain/purchase/purchase';
 import { isStale, waitingDays } from '$lib/domain/approval/staleness';
@@ -202,7 +203,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		})),
 		categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
 		merchants: merchants.map((m) => m.name),
-		locationEnabled: locals.workspace!.locationEnabled
+		locationEnabled: locals.workspace!.locationEnabled,
+		// Same gate as the new-purchase form: the Where editor offers address
+		// search and name-lookup for coordinate-less links only when there is
+		// something behind the endpoint to answer.
+		geocoderEnabled: !!getEnv().GEOCODER_URL
 	};
 };
 

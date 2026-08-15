@@ -15,12 +15,12 @@
 		Moon,
 		Pencil,
 		RotateCcw,
+		Search,
 		Trash2,
 		X
 	} from '@lucide/svelte';
-	import { formatCoords, roundToE3 } from '$lib/domain/location/coords';
-	import { parseMapsLink } from '$lib/domain/location/maps-link';
-	import type { PurchasePlace } from '$lib/domain/location/place';
+	import { formatCoords } from '$lib/domain/location/coords';
+	import { createPlaceField } from '$lib/domain/location/place-field.svelte';
 	import Money from '$lib/components/Money.svelte';
 	import { money } from '$lib/actions/money';
 	import { fade, fly } from 'svelte/transition';
@@ -53,84 +53,33 @@
 	}
 
 	/*
-	 * Editing the place. Same two honest routes as the new-purchase form — the
-	 * device, on an explicit tap, or a pasted map link read offline — and the
-	 * same rounding before the value is ever in the DOM. There is no free-text
-	 * field here: a place you can only describe is not a place this row can pin.
+	 * Editing the place. Same field as the new-purchase form — the device, on
+	 * an explicit tap; a map link read offline; a name or address the geocoder
+	 * resolves, when one is configured. There is no free-text value here: a
+	 * place you can only describe is not a place this row can pin.
 	 */
-	let draftPlace = $state<PurchasePlace | null>(null);
-	let placeLink = $state('');
-	let placeError = $state<string | null>(null);
-	let locating = $state(false);
+	const placeField = createPlaceField({
+		slug: () => page.params.workspace ?? '',
+		geocoderEnabled: () => data.geocoderEnabled
+	});
 
 	function openPlaceEdit() {
-		draftPlace = p.place ? { ...p.place } : null;
-		placeLink = '';
-		placeError = null;
+		// Reopen with the saved pin, so canceling the editor is not a way to
+		// silently drop it.
+		placeField.seed(p.place ? { ...p.place } : null);
 		editingField = 'place';
 	}
 
 	/**
-	 * Resolve on paste / blur / Enter, never per keystroke — a URL holds a valid
-	 * coordinate long before it is finished typing, and resolving mid-word swaps
-	 * this row out from under the caret.
+	 * The pin's form must not post while the link field still holds unresolved
+	 * text — that submit would save no place (or worse, clear one) and close
+	 * the editor over the reason. Blur has already had its say by now; if the
+	 * text is still unresolved, hold the form and show why.
 	 */
-	function resolveLink(text: string): boolean {
-		const hit = parseMapsLink(text);
-		if (!hit) return false;
-		draftPlace = { ...roundToE3(hit), label: null, source: 'link' };
-		placeLink = '';
-		placeError = null;
-		return true;
-	}
-
-	function onLinkPaste(e: ClipboardEvent) {
-		if (resolveLink(e.clipboardData?.getData('text') ?? '')) e.preventDefault();
-	}
-
-	function onLinkCommit() {
-		if (!placeLink.trim()) return;
-		if (resolveLink(placeLink)) return;
-		placeError = "That doesn't have a location in it. Paste a link from a maps app instead.";
-	}
-
-	async function locateHere() {
-		if (!navigator.geolocation) {
-			placeError = 'This device has no location to share. Paste a map link instead?';
-			return;
-		}
-		locating = true;
-		placeError = null;
-		try {
-			const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-				navigator.geolocation.getCurrentPosition(resolve, reject, {
-					enableHighAccuracy: false,
-					timeout: 8000,
-					maximumAge: 300_000
-				})
-			);
-			if (pos.coords.accuracy > 2000) {
-				placeError = `Your location is only accurate to about ${Math.round(
-					pos.coords.accuracy / 1000
-				)} km here. Paste a map link instead?`;
-				return;
-			}
-			draftPlace = {
-				...roundToE3({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-				label: null,
-				source: 'device'
-			};
-		} catch (e) {
-			const denied =
-				typeof e === 'object' &&
-				e !== null &&
-				'code' in e &&
-				(e as GeolocationPositionError).code === 1;
-			placeError = denied
-				? 'Location access was declined. You can paste a map link instead.'
-				: 'Could not get your location on this device.';
-		} finally {
-			locating = false;
+	function guardPlaceSubmit(e: Event) {
+		if (placeField.unresolved()) {
+			e.preventDefault();
+			placeField.commit();
 		}
 	}
 
@@ -292,14 +241,15 @@
 					class="ledger-input w-full text-[18px] font-medium"
 					style="color: var(--ink-2)"
 				/>
-				<div class="flex gap-4 pt-1 text-[16px]">
-					<button class="press font-semibold" style="color: var(--ink)">Save</button>
+				<div class="mt-2.5 flex items-center justify-end gap-2">
 					<button
 						type="button"
 						onclick={() => (editingMasthead = false)}
-						class="press"
-						style="color: var(--ink-3)">Cancel</button
+						class="btn btn-ghost text-[13px]"
 					>
+						Cancel
+					</button>
+					<button class="btn btn-accent text-[13px]">Save</button>
 				</div>
 			</form>
 		{:else}
@@ -699,31 +649,34 @@
 						method="POST"
 						action="?/merchant"
 						use:submit={{ success: 'Saved', onSuccess: () => (editingField = null) }}
-						class="hairline flex items-center justify-between py-3.5"
+						class="hairline py-3.5"
 					>
-						<span class="shrink-0 text-[16px]" style="color: var(--ink-3)">From</span>
-						<span class="flex items-center gap-2">
+						<div class="flex items-center justify-between gap-3">
+							<span class="shrink-0 text-[16px]" style="color: var(--ink-3)">From</span>
 							<input
 								name="merchantName"
 								list="merchant-names"
 								maxlength="200"
 								placeholder="Merchant"
 								value={p.merchantName ?? ''}
-								class="ledger-input text-right text-[16px] font-medium"
+								class="ledger-input min-w-0 flex-1 text-right text-[16px] font-medium"
 								style="color: var(--ink)"
 								onkeydown={(e) => {
 									if (e.key === 'Enter') save(e.currentTarget);
 									cancelEdit(e);
 								}}
 							/>
+						</div>
+						<div class="mt-2.5 flex items-center justify-end gap-2">
 							<button
-								class="press flex h-[18px] w-[18px] shrink-0 items-center justify-center"
-								style="color: var(--ink-3)"
-								aria-label="Save"
+								type="button"
+								onclick={() => (editingField = null)}
+								class="btn btn-ghost text-[13px]"
 							>
-								<Check class="h-4 w-4" />
+								Cancel
 							</button>
-						</span>
+							<button class="btn btn-accent text-[13px]">Save</button>
+						</div>
 					</form>
 				{:else}
 					<button
@@ -763,75 +716,124 @@
 							method="POST"
 							action="?/place"
 							use:submit={{ success: 'Saved', onSuccess: () => (editingField = null) }}
+							onsubmit={guardPlaceSubmit}
 							class="hairline py-3.5"
 						>
-							<div class="flex items-center justify-between gap-3">
-								<span class="shrink-0 text-[16px]" style="color: var(--ink-3)">Where</span>
-								<span class="flex min-w-0 items-center gap-2">
-									{#if draftPlace}
-										<span class="num truncate text-[15px]" style="color: var(--ink)">
-											{formatCoords(draftPlace)}
-										</span>
-										<button
-											type="button"
-											onclick={() => (draftPlace = null)}
-											aria-label="Remove the place"
-											class="press flex h-[18px] w-[18px] shrink-0 items-center justify-center"
-											style="color: var(--ink-3)"
-										>
-											<X class="h-4 w-4" />
-										</button>
-									{:else if data.locationEnabled}
-										<input
-											bind:value={placeLink}
-											onpaste={onLinkPaste}
-											onblur={onLinkCommit}
-											onkeydown={(e) => {
-												if (e.key === 'Enter') {
-													// Resolve the link; the Save button posts the form.
-													e.preventDefault();
-													onLinkCommit();
-													return;
-												}
-												cancelEdit(e);
-											}}
-											maxlength="200"
-											placeholder="Paste a map link"
-											class="ledger-input min-w-0 text-right text-[15px]"
-											style="color: var(--ink)"
-										/>
-									{/if}
-								</span>
-							</div>
+							<!--
+								A resolved pin is a ledger value and sits on the label's line,
+								right-aligned like every other one. Unresolved text is not a
+								value yet — it's a field being typed into, and an address is
+								far too long to share a line with its label. Sharing one is
+								what clipped the placeholder mid-word and made a typed address
+								scroll away from the caret, so while it is still a field it
+								gets the full width on its own line, left-aligned to read the
+								way an address is written.
+							-->
+							{#if placeField.place || !data.locationEnabled}
+								<div class="flex items-center justify-between gap-3">
+									<span class="shrink-0 text-[16px]" style="color: var(--ink-3)">Where</span>
+									<span class="flex min-w-0 items-center gap-2">
+										{#if placeField.place}
+											<span
+												class="truncate text-[15px] {placeField.place.label ? '' : 'num'}"
+												style="color: var(--ink)"
+											>
+												{placeField.place.label ?? formatCoords(placeField.place)}
+											</span>
+											<button
+												type="button"
+												onclick={() => placeField.clear()}
+												aria-label="Remove the place"
+												class="press flex h-[18px] w-[18px] shrink-0 items-center justify-center"
+												style="color: var(--ink-3)"
+											>
+												<X class="h-4 w-4" />
+											</button>
+										{/if}
+									</span>
+								</div>
+							{:else}
+								<label class="block">
+									<span class="text-[16px]" style="color: var(--ink-3)">Where</span>
+									<input
+										bind:value={placeField.query}
+										onpaste={(e) => placeField.onPaste(e)}
+										onblur={() => placeField.commit()}
+										onkeydown={(e) => {
+											if (e.key === 'Enter') {
+												// Resolve the link; the Save button posts the form.
+												e.preventDefault();
+												placeField.commit();
+												return;
+											}
+											cancelEdit(e);
+										}}
+										maxlength="200"
+										autocomplete="off"
+										autocapitalize="words"
+										spellcheck="false"
+										enterkeyhint="search"
+										placeholder={data.geocoderEnabled
+											? 'Address, map link, or coordinates'
+											: 'Map link or coordinates'}
+										class="ledger-input mt-1.5 w-full"
+										style="color: var(--ink)"
+									/>
+								</label>
+							{/if}
+							<!-- The geocoder's answer, when a link or address had to be
+						     looked up: pick one, and it becomes the pin. -->
+							{#each placeField.candidates as c, i (i)}
+								<button
+									type="button"
+									onclick={() => placeField.pickCandidate(c)}
+									class="mt-2 flex w-full items-center gap-2.5 rounded-[10px] px-2 py-2 text-left"
+									style="background: color-mix(in oklab, var(--surface-2) 70%, var(--surface))"
+								>
+									<Search class="h-4 w-4 shrink-0" style="color: var(--ink-4)" />
+									<span class="min-w-0 flex-1 truncate text-[14px]" style="color: var(--ink-2)">
+										{c.label}
+									</span>
+								</button>
+							{/each}
 							<div class="mt-2.5 flex items-center justify-end gap-2">
 								{#if data.locationEnabled}
 									<button
 										type="button"
-										onclick={locateHere}
-										disabled={locating}
+										onclick={() => placeField.locate()}
+										disabled={placeField.locating}
 										class="btn btn-ghost text-[13px]"
 									>
 										<LocateFixed class="h-3.5 w-3.5" />
-										{locating ? 'Locating…' : 'Use my location'}
+										{placeField.locating ? 'Locating…' : 'Use my location'}
 									</button>
 								{:else}
 									<!-- Places are off; the only thing left to do with a pin
-									     that predates that is remove it. -->
+								     that predates that is remove it. -->
 									<span class="mr-auto text-[12px]" style="color: var(--ink-4)">
 										Places are turned off — you can remove this one.
 									</span>
 								{/if}
-								<button class="btn btn-accent text-[13px]">Save</button>
+								<button
+									type="button"
+									onclick={() => (editingField = null)}
+									class="btn btn-ghost text-[13px]"
+								>
+									Cancel
+								</button>
+								<button class="btn btn-accent text-[13px]" onclick={guardPlaceSubmit}>Save</button>
 							</div>
-							{#if placeError}
+							{#if placeField.searching}
+								<p class="mt-2 text-[13px] leading-relaxed" style="color: var(--ink-3)">Looking…</p>
+							{:else if placeField.error}
 								<p class="mt-2 text-[13px] leading-relaxed" style="color: var(--ink-3)">
-									{placeError}
+									{placeField.error}
 								</p>
 							{/if}
-							<input type="hidden" name="latE3" value={draftPlace?.latE3 ?? ''} />
-							<input type="hidden" name="lngE3" value={draftPlace?.lngE3 ?? ''} />
-							<input type="hidden" name="placeLabel" value={draftPlace?.label ?? ''} />
-							<input type="hidden" name="locationSource" value={draftPlace?.source ?? ''} />
+							<input type="hidden" name="latE3" value={placeField.place?.latE3 ?? ''} />
+							<input type="hidden" name="lngE3" value={placeField.place?.lngE3 ?? ''} />
+							<input type="hidden" name="placeLabel" value={placeField.place?.label ?? ''} />
+							<input type="hidden" name="locationSource" value={placeField.place?.source ?? ''} />
 						</form>
 					{:else}
 						<button
@@ -881,30 +883,34 @@
 						method="POST"
 						action="?/category"
 						use:submit={{ success: 'Saved', onSuccess: () => (editingField = null) }}
-						class="hairline flex items-center justify-between py-3.5"
+						class="hairline py-3.5"
 					>
-						<span class="shrink-0 text-[16px]" style="color: var(--ink-3)">Category</span>
-						<span class="flex items-center gap-2">
+						<div class="flex items-center justify-between gap-3">
+							<span class="shrink-0 text-[16px]" style="color: var(--ink-3)">Category</span>
+							<!-- No auto-submit on change: choosing is not saving. The row
+							     stays open until Save says so, same as every other editor. -->
 							<select
 								name="categoryId"
 								aria-label="Category"
-								class="ledger-input text-right text-[16px] font-medium"
+								class="ledger-input min-w-0 flex-1 text-right text-[16px] font-medium"
 								style="color: var(--ink)"
-								onchange={(e) => save(e.currentTarget)}
 							>
 								<option value="">None</option>
 								{#each data.categories as c (c.id)}
 									<option value={c.id} selected={c.id === p.categoryId}>{c.icon} {c.name}</option>
 								{/each}
 							</select>
+						</div>
+						<div class="mt-2.5 flex items-center justify-end gap-2">
 							<button
-								class="press flex h-[18px] w-[18px] shrink-0 items-center justify-center"
-								style="color: var(--ink-3)"
-								aria-label="Save"
+								type="button"
+								onclick={() => (editingField = null)}
+								class="btn btn-ghost text-[13px]"
 							>
-								<Check class="h-4 w-4" />
+								Cancel
 							</button>
-						</span>
+							<button class="btn btn-accent text-[13px]">Save</button>
+						</div>
 					</form>
 				{:else}
 					<button
@@ -972,14 +978,15 @@
 								cancelEdit(e);
 							}}>{p.note ?? ''}</textarea
 						>
-						<div class="flex gap-4 text-[16px]">
-							<button class="press font-semibold" style="color: var(--ink)">Save</button>
+						<div class="flex items-center justify-end gap-2">
 							<button
 								type="button"
 								onclick={() => (editingField = null)}
-								class="press"
-								style="color: var(--ink-3)">Cancel</button
+								class="btn btn-ghost text-[13px]"
 							>
+								Cancel
+							</button>
+							<button class="btn btn-accent text-[13px]">Save</button>
 						</div>
 					</form>
 				{:else if p.note}

@@ -8,6 +8,7 @@ import {
 	fromE3,
 	isValidCoords,
 	isValidCoordsE3,
+	parseCoordsText,
 	roundToE3
 } from './coords';
 
@@ -107,5 +108,53 @@ describe('formatCoords', () => {
 
 	it('handles the origin without a stray sign', () => {
 		expect(formatCoords({ latE3: 0, lngE3: 0 })).toBe('0.000, 0.000');
+	});
+});
+
+describe('parseCoordsText', () => {
+	it('reads a plain signed pair', () => {
+		expect(parseCoordsText('41.7398, -72.7133')).toEqual({ lat: 41.7398, lng: -72.7133 });
+	});
+
+	it('reads back what formatCoords wrote', () => {
+		// The app renders coordinates with U+2212, so its own output is text a
+		// person will copy out of one purchase and paste into another.
+		const shown = formatCoords({ latE3: 41740, lngE3: -72713 });
+		expect(parseCoordsText(shown)).toEqual({ lat: 41.74, lng: -72.713 });
+	});
+
+	it('accepts the separators people actually paste', () => {
+		for (const s of ['41.74,-72.713', '41.74 -72.713', '41.74; -72.713', '41.74 / -72.713']) {
+			expect(parseCoordsText(s)).toEqual({ lat: 41.74, lng: -72.713 });
+		}
+	});
+
+	it('accepts hemisphere letters instead of a sign', () => {
+		expect(parseCoordsText('41.74° N, 72.713° W')).toEqual({ lat: 41.74, lng: -72.713 });
+		expect(parseCoordsText('33.87 S, 151.21 E')).toEqual({ lat: -33.87, lng: 151.21 });
+	});
+
+	it('takes the origin, which is a real place', () => {
+		expect(parseCoordsText('0, 0')).toEqual({ lat: 0, lng: 0 });
+	});
+
+	it('refuses a pair that is not a point on Earth', () => {
+		expect(parseCoordsText('91.5, 0')).toBeNull();
+		expect(parseCoordsText('0, 181')).toBeNull();
+	});
+
+	it('leaves an address for the geocoder rather than guessing a pin', () => {
+		// The whole string must be a coordinate. An address that merely contains
+		// two numbers becoming a pin is a confident lie about where someone stood.
+		for (const s of [
+			'495 Flatbush Ave, Hartford, CT 06106',
+			'Walmart Supercenter, 495, Flatbush Avenue',
+			'06106',
+			'',
+			'41.7398',
+			'lat 41.7398 lng -72.7133'
+		]) {
+			expect(parseCoordsText(s)).toBeNull();
+		}
 	});
 });

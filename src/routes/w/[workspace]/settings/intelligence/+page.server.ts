@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
 import { workspace } from '$lib/server/db/schema';
+import { getGeocoder } from '$lib/infra/geocode';
 import { getLlmAssist, type AssistConfig } from '$lib/infra/llm';
 import { listModels } from '$lib/infra/llm/model-catalog';
 import { getEnv } from '$lib/server/env';
@@ -41,6 +42,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		tileConfigured: !!env.MAP_TILE_URL,
 		tileAttribution: env.MAP_TILE_ATTRIBUTION,
 		geocoderConfigured: !!env.GEOCODER_URL,
+		// Owner-only: it's an internal address, and it's the first thing that's
+		// wrong when address search silently finds nothing.
+		geocoderEndpoint: locals.member!.role === 'owner' ? (env.GEOCODER_URL ?? null) : null,
 		config: {
 			mode: ws.aiMode,
 			endpoint: ws.aiEndpoint ?? '',
@@ -92,6 +96,25 @@ export const actions: Actions = {
 			})
 			.where(eq(workspace.id, locals.workspace!.id));
 		return { ok: true };
+	},
+
+	/**
+	 * Ask the geocoder how it is, and optionally whether it knows a place.
+	 *
+	 * The only route in the app that reports a geocoder failure out loud. Every
+	 * other caller is a person recording a purchase, for whom "off", "still
+	 * importing" and "that address isn't in the extract" are all correctly the
+	 * same empty answer. An operator needs them apart, and this is where they
+	 * get told — including, crucially, that an import in progress and a
+	 * container that never started look identical from here.
+	 */
+	checkGeocoder: async ({ locals, request }) => {
+		if (locals.member!.role !== 'owner') error(403, 'Only the owner can check the geocoder');
+		const env = getEnv();
+		const fields = Object.fromEntries(await request.formData());
+		const probe = typeof fields.probe === 'string' ? fields.probe.slice(0, 200) : '';
+		const geocoder = getGeocoder({ endpoint: env.GEOCODER_URL, email: env.GEOCODER_EMAIL });
+		return { geocoder: await geocoder.checkHealth(probe) };
 	},
 
 	/** Ping the endpoint described by the form (unsaved), so it can be checked first. */

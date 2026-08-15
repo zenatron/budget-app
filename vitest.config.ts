@@ -14,7 +14,10 @@ export default defineConfig({
 		}
 	},
 	test: {
-		include: ['src/lib/**/*.test.ts'],
+		// `scripts/` holds repo-wide invariants that are lints rather than unit
+		// tests — they read the source tree instead of importing from it. They run
+		// here because `npm test` is what actually gets run in this project.
+		include: ['src/lib/**/*.test.ts', 'scripts/**/*.test.ts'],
 		environment: 'node'
 	}
 });

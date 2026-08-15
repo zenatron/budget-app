@@ -33,6 +33,39 @@ export interface GeocoderProvider {
 	endpoint: string | null;
 }
 
+/**
+ * What a live probe of the provider found.
+ *
+ * This exists because every failure in this layer is, by the contract above,
+ * silent: off, unreachable, still importing, and "that place isn't in the
+ * imported extract" all reach the user as the same empty list. That is right
+ * for someone recording a purchase and useless for someone who just spent an
+ * afternoon importing a 12&nbsp;GB extract and wants to know whether it took.
+ * The probe is the one place allowed to tell them apart, and it only ever runs
+ * when an owner asks for it.
+ *
+ * `state` is deliberately coarser than the ways this can fail — what an
+ * operator does next is the same for a container that isn't running and one
+ * that's three hours into an import, because from here they are the same
+ * silence. `detail` is what carries the distinction.
+ */
+export type GeocoderHealth = {
+	/**
+	 * - `off` — no endpoint configured; nothing was contacted.
+	 * - `unreachable` — nothing answered. Not yet running, still importing, or
+	 *   wrong host: all indistinguishable from outside.
+	 * - `starting` — something answered, but its database isn't serving yet.
+	 * - `ready` — the provider reports itself healthy.
+	 */
+	state: 'off' | 'unreachable' | 'starting' | 'ready';
+	/** One human sentence, safe to render as-is. */
+	detail: string;
+	/** How fresh the imported data is, when the provider says. */
+	dataUpdated: string | null;
+	/** The result of the probe query, when one was asked for. */
+	probe: { query: string; found: number; first: string | null } | null;
+};
+
 export interface Geocoder {
 	/** False when the layer is off or misconfigured — callers gate on this. */
 	readonly available: boolean;
@@ -47,6 +80,16 @@ export interface Geocoder {
 	 * Callers must treat an empty array as "no answer", never as "no such place".
 	 */
 	search(query: string, limit?: number): Promise<GeocodeResult[]>;
+
+	/**
+	 * Ask the provider how it is, for the settings screen. Owner-initiated only.
+	 *
+	 * Like everything else here it never throws — a probe that can crash the
+	 * page it diagnoses is worse than no probe. An optional `probeQuery` also
+	 * asks "and do you know this place?", which is the only honest way to tell a
+	 * running geocoder from one whose extract covers somewhere else.
+	 */
+	checkHealth(probeQuery?: string): Promise<GeocoderHealth>;
 }
 
 /**
@@ -56,5 +99,11 @@ export interface Geocoder {
 export const nullGeocoder: Geocoder = {
 	available: false,
 	describe: () => ({ kind: 'off', endpoint: null }),
-	search: async () => []
+	search: async () => [],
+	checkHealth: async () => ({
+		state: 'off',
+		detail: 'No address search configured. Set GEOCODER_URL to a Nominatim-compatible endpoint.',
+		dataUpdated: null,
+		probe: null
+	})
 };

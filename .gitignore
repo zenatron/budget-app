@@ -7,6 +7,7 @@ node_modules
 .wrangler
 /.svelte-kit
 /build
+/.zcode
 
 # Blob image data and basemap tiles
 /data/blobs

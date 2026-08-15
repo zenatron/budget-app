@@ -16,6 +16,12 @@ export function fakeGeocoder(over: Partial<Geocoder> = {}): Geocoder {
 		available: true,
 		describe: () => ({ kind: 'nominatim', endpoint: 'http://fake' }),
 		search: async () => [],
+		checkHealth: async () => ({
+			state: 'ready',
+			detail: 'fake',
+			dataUpdated: null,
+			probe: null
+		}),
 		...over
 	};
 }

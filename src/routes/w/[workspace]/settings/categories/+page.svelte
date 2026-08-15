@@ -246,7 +246,7 @@
 						maxlength="60"
 						required
 						placeholder="Category name"
-						class="field w-full text-[15px]"
+						class="field w-full text-[16px]"
 					/>
 					<input type="hidden" name="icon" value={editIcon} />
 					<div class="flex flex-wrap gap-1.5">
@@ -331,7 +331,7 @@
 					maxlength="60"
 					required
 					placeholder="Category name"
-					class="field w-full text-[15px]"
+					class="field w-full text-[16px]"
 				/>
 				<input type="hidden" name="icon" value={newIcon} />
 				<div class="flex flex-wrap gap-1.5">
