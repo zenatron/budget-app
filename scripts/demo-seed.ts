@@ -23,7 +23,10 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import { runMigrations } from '../src/lib/server/db/migrate';
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
-const OUT = `${ROOT}/static/demo-seed.tar.gz`;
+// Deliberately NOT static/: everything there is copied into *every* build, and
+// the production site has no use for 5 MB of demo data. `demo:build` copies it
+// into build-demo/ after vite has run.
+const OUT = `${ROOT}/demo-assets/demo-seed.tar.gz`;
 
 const ADMIN_URL =
 	process.env.DEMO_SEED_ADMIN_URL ?? 'postgres://postgres:postgres@localhost:5432/postgres';
@@ -77,12 +80,12 @@ async function main() {
 
 	console.log('6. writing snapshot…');
 	const blob = await client.dumpDataDir('gzip');
-	await mkdir(`${ROOT}/static`, { recursive: true });
+	await mkdir(`${ROOT}/demo-assets`, { recursive: true });
 	await writeFile(OUT, Buffer.from(await blob.arrayBuffer()));
 	await client.close();
 
 	const mb = (Bun.file(OUT).size / 1024 / 1024).toFixed(2);
-	console.log(`\ndemo seed written to static/demo-seed.tar.gz (${mb} MB)`);
+	console.log(`\ndemo seed written to demo-assets/demo-seed.tar.gz (${mb} MB)`);
 }
 
 main().catch((e) => {

@@ -13,9 +13,13 @@ import { defineConfig } from 'vite';
  */
 const DEMO = !!process.env.DEMO;
 /** GitHub Pages serves a project site from a subpath. */
-const DEMO_BASE = process.env.DEMO_BASE ?? '';
+const DEMO_BASE = (process.env.DEMO_BASE ?? '') as '' | `/${string}`;
 
 export default defineConfig({
+	// A build-time constant, not an env lookup: it lets rolldown delete the demo
+	// branch in `$lib/actions/submit.ts` outright, so the production bundle never
+	// carries PGlite.
+	define: { __DEMO__: JSON.stringify(DEMO) },
 	plugins: [
 		tailwindcss(),
 		sveltekit({

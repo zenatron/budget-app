@@ -35,3 +35,4 @@ coverage/
 # Generated demo route tree (scripts/demo-build.ts)
 .demo/
 build-demo/
+demo-assets/

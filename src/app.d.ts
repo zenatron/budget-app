@@ -4,6 +4,9 @@ import type { Db } from '$lib/db/types';
 import type { AppDeps } from '$lib/ports/deps';
 
 declare global {
+	/** Injected by vite `define`. True only in the static demo build. */
+	const __DEMO__: boolean;
+
 	namespace App {
 		interface Locals {
 			user: SessionUser | null;
