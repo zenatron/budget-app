@@ -35,6 +35,7 @@ export const DEMO_ROUTES = [
 	'w/[workspace]/calendar',
 	'w/[workspace]/recurring',
 	'w/[workspace]/settings/categories',
+	'w/[workspace]/statement',
 	'w/[workspace]'
 ];
 

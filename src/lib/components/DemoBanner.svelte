@@ -1,7 +1,10 @@
 <script lang="ts">
-	import { clearDemoContext } from '$lib/demo/context';
-	import { resetDemoDb } from '$lib/demo/db';
 	import { requestConfirm } from '$lib/confirm-state.svelte';
+
+	// Imported at click time, not at module scope. A static import here reaches
+	// $lib/demo/db and drags the whole PGlite WASM runtime into the production
+	// workspace layout — the `{#if __DEMO__}` guard removes the *usage*, not the
+	// module from the graph.
 
 	let resetting = $state(false);
 
@@ -13,6 +16,10 @@
 		});
 		if (!ok) return;
 		resetting = true;
+		const [{ resetDemoDb }, { clearDemoContext }] = await Promise.all([
+			import('$lib/demo/db'),
+			import('$lib/demo/context')
+		]);
 		await resetDemoDb();
 		clearDemoContext();
 		// A full reload rather than invalidateAll: the loads have already closed
