@@ -23,6 +23,36 @@ PostgreSQL 17 + Drizzle, auth via an external [Pocket ID](https://pocket-id.org)
 > Add a demo video before release. Suggested flow: dictate a purchase, request
 > approval, approve it from a partner's phone, check the month statement.
 
+### Static demo build
+
+The app also builds as a static site with no server and no database, for
+GitHub Pages. It is the same app, not a mock: the real routes, use cases and
+repositories run against Postgres compiled to WASM in the tab, over a seeded
+snapshot. Excluded by construction: auth, the AI assistant, MCP, the API, and
+anything else that needs a backend.
+
+```bash
+bun run db:start     # a local postgres, for building the seed only
+bun run demo:seed    # seeds a throwaway db, dumps it into a PGlite snapshot
+bun run demo:build   # generates .demo/routes, builds to build-demo/
+bun run demo:preview # both of the above, then serves it
+```
+
+`demo:seed` reuses `scripts/seed-workspace.ts` unchanged, so the demo's data
+cannot drift from the seeder the dev environment uses. `demo:build` generates a
+parallel route tree at `.demo/routes` rather than touching `src/routes`; routes
+enter the demo by being listed in `DEMO_ROUTES` in `scripts/demo-build.ts`, and
+only once they have a `handlers.ts`.
+
+Deploying to a project site (`user.github.io/repo`) needs the base path:
+
+```bash
+DEMO_BASE=/repo bun run demo:build
+```
+
+`build-demo/404.html` is a copy of the fallback page — GitHub Pages serves it
+for any path it has no file for, which is what makes deep links work.
+
 ## Features
 
 - **Workspaces.** Create or join via invite codes. Owner and member roles,
@@ -153,15 +183,25 @@ src/lib/application/   use-cases: create/join workspace, submit/approve/deny/
 src/lib/intelligence/  intent parser for the command palette (pure TS, no network)
 src/lib/ports/         Clock, IdGenerator, Notifier, BlobStore, LlmAssist,
                        Geocoder (the last two default to null adapters — the app
-                       is fully usable with neither configured)
+                       is fully usable with neither configured); AppDeps and
+                       AppContext, the composition root's output
+src/lib/db/            schema and the `Db` type — the persistence port
+src/lib/repo/          repositories over `Db` (every purchase read takes
+                       workspaceId + viewerId); driver-agnostic, so the demo
+                       runs them unchanged against Postgres-in-WASM
+src/lib/demo/          the demo build's driven adapters: PGlite, in-memory
+                       blobs, a null notifier, and the browser's context
 src/lib/infra/         system clock, UUIDv7, filesystem blob store, image pipeline,
                        notifiers (web push, ntfy, composite), in-process SSE bus,
                        geocoding adapters
 src/lib/actions/       Svelte actions — money input masking, use:submit, use:dismiss
-src/lib/server/        env validation, db client, migrations, auth (OIDC, sessions),
-                       rate limiting, basemap tile cache, repositories (every
-                       purchase read takes workspaceId + viewerId)
-src/routes/            thin routes; authorization resolved once in hooks.server.ts
+src/lib/server/        things that genuinely need a server: env validation, the
+                       postgres-js client, migrations, auth (OIDC, sessions),
+                       rate limiting, basemap tile cache, MCP
+src/routes/            thin routes; authorization resolved once in hooks.server.ts.
+                       Converted routes keep their logic in a neutral handlers.ts
+                       taking an AppContext, with +page.server.ts a few lines of
+                       binding — the same handlers the demo build runs
 ```
 
 The periodic sweep lives in `hooks.server.ts`: unseal due purchases, materialize
