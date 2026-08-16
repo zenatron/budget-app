@@ -7,7 +7,9 @@ import { demoDeps } from './deps';
 /** Where the build-time seed snapshot is served from, relative to the app base. */
 export const DEMO_SEED_URL = 'demo-seed.tar.gz';
 
-let cached: WorkspaceContext | undefined;
+// Cached as a promise for the same reason as the database handle: concurrent
+// layout and page loads both arrive here before either has resolved.
+let resolving: Promise<WorkspaceContext> | undefined;
 
 /**
  * The demo's stand-in for `hooks.server.ts`.
@@ -21,10 +23,13 @@ let cached: WorkspaceContext | undefined;
  * The shape it produces is identical, which is the point — every handler
  * downstream cannot tell which one built it.
  */
-export async function getDemoContext(base = ''): Promise<WorkspaceContext> {
-	if (cached) return cached;
+export function getDemoContext(base = ''): Promise<WorkspaceContext> {
+	resolving ??= resolve(base);
+	return resolving;
+}
 
-	const db = await getDemoDb({ dataDir: `${base}/${DEMO_SEED_URL}` });
+async function resolve(base: string): Promise<WorkspaceContext> {
+	const db = await getDemoDb({ seedUrl: `${base}/${DEMO_SEED_URL}` });
 
 	const [ws] = await db.select().from(workspace).limit(1);
 	if (!ws) throw new Error('demo: seed contains no workspace');
@@ -39,11 +44,10 @@ export async function getDemoContext(base = ''): Promise<WorkspaceContext> {
 	const [u] = await db.select().from(userTable).where(eq(userTable.id, member.userId)).limit(1);
 	if (!u) throw new Error('demo: seed member has no user');
 
-	cached = { db, deps: demoDeps(), user: u, workspace: ws, member };
-	return cached;
+	return { db, deps: demoDeps(), user: u, workspace: ws, member };
 }
 
 /** Forget the resolved context, so the next load re-reads a reset database. */
 export function clearDemoContext(): void {
-	cached = undefined;
+	resolving = undefined;
 }
