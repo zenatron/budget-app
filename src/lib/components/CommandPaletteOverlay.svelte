@@ -130,13 +130,13 @@
 					onkeydown={(e) => {
 						if (e.key === 'Enter' && canSubmit) submit();
 					}}
-					placeholder="Ask Harmony…"
+					placeholder="Ask Harmony..."
 					autocomplete="off"
 					autocapitalize="off"
 					spellcheck="false"
 					aria-label="Ask Harmony"
-					class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] leading-tight outline-none placeholder:text-(--accent-ink) focus:ring-0"
-					style="color: var(--ink); box-shadow: none"
+					class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] leading-tight outline-none placeholder-shimmer"
+					style="color: var(--ink)"
 				/>
 				{#if paletteQuery.value}
 					<button

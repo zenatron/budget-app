@@ -466,8 +466,8 @@
 						}
 					}}
 					aria-label="Describe the purchase in words"
-					placeholder="Describe it, or dictate"
-					class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:text-(--accent-ink)"
+					placeholder="Describe it, or dictate..."
+					class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder-shimmer"
 					style="color: var(--ink)"
 				/>
 				<button
