@@ -19,6 +19,14 @@ import * as analytics from '../src/lib/repo/analytics';
 import * as buckets from '../src/lib/repo/buckets';
 import * as ledger from '../src/lib/repo/ledger';
 import * as forecast from '../src/lib/repo/forecast';
+import { demoDeps } from '../src/lib/demo/deps';
+
+/** A Request carrying a form body, the way SvelteKit hands one to an action. */
+function formRequest(fields: Record<string, string>): Request {
+	const body = new FormData();
+	for (const [k, v] of Object.entries(fields)) body.append(k, v);
+	return new Request('http://demo.local/', { method: 'POST', body });
+}
 
 const MIGRATIONS = new URL('../drizzle', import.meta.url).pathname;
 
@@ -117,7 +125,42 @@ async function main() {
 	const total = await analytics.periodTotal(db, scope, period, now);
 	if (total !== 1234n) throw new Error(`expected periodTotal 1234n, got ${total}`);
 
-	console.log('\nPASS — repo layer runs unchanged on PGlite');
+	// The real proof: the *route handler* — not just the repo layer — running
+	// against PGlite with a browser-shaped context. This is the same module
+	// +page.server.ts binds on the server; nothing about it is duplicated.
+	const h = await import('../src/routes/w/[workspace]/recurring/handlers');
+	const ctx = {
+		db,
+		deps: demoDeps(),
+		user: { id: userId } as never,
+		workspace: (await db.select().from(schema.workspace).limit(1))[0],
+		member: (await db.select().from(schema.workspaceMember).limit(1))[0]
+	};
+
+	await h.actions.create(ctx, {
+		request: formRequest({
+			itemName: 'Streaming',
+			amount: '12.99',
+			freq: 'monthly',
+			interval: '1',
+			monthDay: '4',
+			startDate: '2026-08-04'
+		})
+	});
+
+	const page = await h.load(ctx, { params: { workspace: 'probe-ws' } });
+	console.log('\nroute handler on PGlite:');
+	console.log(`  rules            : ${page.rules.length}`);
+	console.log(`  first rule       : ${page.rules[0]?.itemName} — ${page.rules[0]?.cadence}`);
+	console.log(`  monthlyTotalMinor: ${page.monthlyTotalMinor}`);
+	console.log(`  currency         : ${page.currency}`);
+
+	if (page.rules.length !== 1) throw new Error('expected the created rule to come back');
+	if (page.monthlyTotalMinor !== 1299n) {
+		throw new Error(`expected monthlyTotalMinor 1299n, got ${page.monthlyTotalMinor}`);
+	}
+
+	console.log('\nPASS — repo layer AND route handler run unchanged on PGlite');
 	await client.close();
 }
 
