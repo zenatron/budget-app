@@ -1,5 +1,5 @@
 import { getDb } from '$lib/server/db';
-import { listLedger } from '$lib/server/repo/ledger';
+import { listLedger } from '$lib/repo/ledger';
 import { toLedgerView } from '$lib/server/ledger-view';
 import { ledgerOptsFromUrl } from '$lib/server/ledger-query';
 import { systemClock } from '$lib/infra/time/system-clock';

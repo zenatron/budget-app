@@ -3,7 +3,7 @@ import * as v from 'valibot';
 import { createWorkspace } from '$lib/application/create-workspace';
 import { JoinWorkspaceError, joinWorkspace } from '$lib/application/join-workspace';
 import { getDb } from '$lib/server/db';
-import { listWorkspacesForUser } from '$lib/server/repo/workspaces';
+import { listWorkspacesForUser } from '$lib/repo/workspaces';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import type { Actions, PageServerLoad } from './$types';

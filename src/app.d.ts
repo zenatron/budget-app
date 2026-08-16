@@ -1,5 +1,5 @@
 import type { SessionRow, SessionUser } from '$lib/server/auth/session';
-import type { MemberRow, WorkspaceRow } from '$lib/server/repo/workspaces';
+import type { MemberRow, WorkspaceRow } from '$lib/repo/workspaces';
 
 declare global {
 	namespace App {

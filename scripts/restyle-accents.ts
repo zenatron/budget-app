@@ -11,7 +11,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq } from 'drizzle-orm';
 import postgres from 'postgres';
-import * as schema from '../src/lib/server/db/schema';
+import * as schema from '../src/lib/db/schema';
 import { RETIRED_ACCENTS } from '../src/lib/accent';
 
 const url = process.env.DATABASE_URL;

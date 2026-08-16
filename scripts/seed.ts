@@ -10,7 +10,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq, sql } from 'drizzle-orm';
 import postgres from 'postgres';
-import * as schema from '../src/lib/server/db/schema';
+import * as schema from '../src/lib/db/schema';
 import { parseRRule, nextOccurrence } from '../src/lib/domain/recurrence/rrule';
 
 const url = process.env.DATABASE_URL;

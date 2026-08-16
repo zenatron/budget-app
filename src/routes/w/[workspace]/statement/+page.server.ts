@@ -14,10 +14,10 @@ import {
 	memberBreakdown,
 	periodCount,
 	periodTotal
-} from '$lib/server/repo/analytics';
-import { incomeInPeriod } from '$lib/server/repo/income';
-import { bucketFlowsInPeriod } from '$lib/server/repo/buckets';
-import { listLedger } from '$lib/server/repo/ledger';
+} from '$lib/repo/analytics';
+import { incomeInPeriod } from '$lib/repo/income';
+import { bucketFlowsInPeriod } from '$lib/repo/buckets';
+import { listLedger } from '$lib/repo/ledger';
 import { formatMinor } from '$lib/money-format';
 import {
 	narrateMonth,

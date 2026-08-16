@@ -2,9 +2,9 @@ import { error, fail } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
-import { workspaceMember } from '$lib/server/db/schema';
+import { workspaceMember } from '$lib/db/schema';
 import { createInvite, listOpenInvites } from '$lib/server/repo/invites';
-import { listMembers } from '$lib/server/repo/workspaces';
+import { listMembers } from '$lib/repo/workspaces';
 import {
 	BUCKET_CHARGE_RULES,
 	InvalidPolicyError,

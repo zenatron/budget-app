@@ -21,10 +21,10 @@
  * tap. Nothing here writes anything.
  */
 
-import type { Db } from '$lib/server/db';
+import type { Db } from '$lib/db/types';
 import type { LlmAssist } from '$lib/ports/llm-assist';
-import { listCategories } from '$lib/server/repo/workspaces';
-import { lastCategoryForMerchant } from '$lib/server/repo/purchases';
+import { listCategories } from '$lib/repo/workspaces';
+import { lastCategoryForMerchant } from '$lib/repo/purchases';
 import { normalizeMerchantName } from '$lib/domain/purchase/merchant';
 
 type CategoryRow = Awaited<ReturnType<typeof listCategories>>[number];

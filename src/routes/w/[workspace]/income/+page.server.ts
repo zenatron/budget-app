@@ -9,7 +9,7 @@ import {
 	parseRRule
 } from '$lib/domain/recurrence/rrule';
 import { zonedTimeToUtc } from '$lib/domain/time/zoned';
-import { addIncome, deleteIncome, listIncome, updateIncome } from '$lib/server/repo/income';
+import { addIncome, deleteIncome, listIncome, updateIncome } from '$lib/repo/income';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import type { Actions, PageServerLoad } from './$types';

@@ -1,6 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
-import { getImport, listLines, matchCandidates } from '$lib/server/repo/statements';
+import { getImport, listLines, matchCandidates } from '$lib/repo/statements';
 import {
 	ReconcileError,
 	confirmMatch,

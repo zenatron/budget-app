@@ -1,6 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { bucket, income, purchase, recurringRule } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { bucket, income, purchase, recurringRule } from '$lib/db/schema';
 import { monthPeriod, periodBoundsUtc } from '$lib/domain/analytics/period';
 import { calDateInZone } from '$lib/domain/time/zoned';
 import { compareDates, parseRRule } from '$lib/domain/recurrence/rrule';

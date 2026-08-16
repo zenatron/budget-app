@@ -1,6 +1,6 @@
 import { subscribe } from '$lib/infra/events/bus';
 import { getDb } from '$lib/server/db';
-import { findWorkspaceForMember } from '$lib/server/repo/workspaces';
+import { findWorkspaceForMember } from '$lib/repo/workspaces';
 import type { RequestHandler } from './$types';
 
 const PING_INTERVAL_MS = 30_000;

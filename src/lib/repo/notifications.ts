@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { notificationPref, ntfyTarget, pushSubscription } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { notificationPref, ntfyTarget, pushSubscription } from '$lib/db/schema';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 

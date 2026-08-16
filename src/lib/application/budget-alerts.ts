@@ -1,5 +1,5 @@
 import { and, eq, gt, gte, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
+import type { Db } from '$lib/db/types';
 import {
 	budget,
 	budgetAlertLog,
@@ -7,12 +7,12 @@ import {
 	purchase,
 	workspace,
 	workspaceMember
-} from '$lib/server/db/schema';
+} from '$lib/db/schema';
 import { calDateInZone } from '$lib/domain/time/zoned';
 import { monthPeriod, periodBoundsUtc, type Period } from '$lib/domain/analytics/period';
 import { decideBudgetAlert, type BudgetAlertLevel } from '$lib/domain/budget/alert';
 import { Money } from '$lib/domain/money/money';
-import { visibleTo } from '$lib/server/repo/purchases';
+import { visibleTo } from '$lib/repo/purchases';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 import type { Notifier, Recipient } from '$lib/ports/notifier';

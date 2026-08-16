@@ -1,7 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { getDb } from '$lib/server/db';
-import { category, purchase, user, workspaceMember } from '$lib/server/db/schema';
-import { visibleTo } from '$lib/server/repo/purchases';
+import { category, purchase, user, workspaceMember } from '$lib/db/schema';
+import { visibleTo } from '$lib/repo/purchases';
 import { Money } from '$lib/domain/money/money';
 import { systemClock } from '$lib/infra/time/system-clock';
 import type { RequestHandler } from './$types';

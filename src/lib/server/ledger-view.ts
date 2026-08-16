@@ -1,5 +1,5 @@
 import { isStale, waitingDays } from '$lib/domain/approval/staleness';
-import type { LedgerEntry } from '$lib/server/repo/ledger';
+import type { LedgerEntry } from '$lib/repo/ledger';
 
 /**
  * Shapes a ledger entry for the client. Shared by the page load and the

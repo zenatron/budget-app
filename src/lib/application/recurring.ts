@@ -1,11 +1,11 @@
 import { and, eq, lte } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { bucket, recurringRule, user, workspace, workspaceMember } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { bucket, recurringRule, user, workspace, workspaceMember } from '$lib/db/schema';
 import { Money } from '$lib/domain/money/money';
 import type { Purchase, TransitionEvent } from '$lib/domain/purchase/purchase';
 import { addDays, nextOccurrence, parseRRule } from '$lib/domain/recurrence/rrule';
 import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
-import { insertPurchase } from '$lib/server/repo/purchases';
+import { insertPurchase } from '$lib/repo/purchases';
 import { announcePurchaseChange } from '$lib/application/notify-dispatch';
 import { withdrawFromBucket } from '$lib/application/purchases';
 import type { Clock } from '$lib/ports/clock';

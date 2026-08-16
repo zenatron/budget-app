@@ -1,6 +1,6 @@
 import { and, eq, ne } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { workspace, workspaceMember } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { workspace, workspaceMember } from '$lib/db/schema';
 import {
 	monthPeriod,
 	previousMonthPeriod,
@@ -9,9 +9,9 @@ import {
 	type Period
 } from '$lib/domain/analytics/period';
 import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
-import { categoryBreakdown, periodTotal, type AnalyticsScope } from '$lib/server/repo/analytics';
-import { incomeInPeriod } from '$lib/server/repo/income';
-import { bucketFlowsInPeriod } from '$lib/server/repo/buckets';
+import { categoryBreakdown, periodTotal, type AnalyticsScope } from '$lib/repo/analytics';
+import { incomeInPeriod } from '$lib/repo/income';
+import { bucketFlowsInPeriod } from '$lib/repo/buckets';
 import { formatMinor } from '$lib/money-format';
 import type { Clock } from '$lib/ports/clock';
 import type { Notifier, NotificationMessage } from '$lib/ports/notifier';

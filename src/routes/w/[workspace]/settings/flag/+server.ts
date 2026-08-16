@@ -1,7 +1,7 @@
 import { error, json } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { getDb } from '$lib/server/db';
-import { workspace } from '$lib/server/db/schema';
+import { workspace } from '$lib/db/schema';
 import { getEnv } from '$lib/server/env';
 import type { RequestHandler } from './$types';
 

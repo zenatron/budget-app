@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Db } from '$lib/server/db';
+import type { Db } from '$lib/db/types';
 import { fakeAssist } from '$lib/ports/fake-assist';
 import type { LlmAssist } from '$lib/ports/llm-assist';
 
@@ -12,10 +12,10 @@ import type { LlmAssist } from '$lib/ports/llm-assist';
 const listCategories = vi.fn();
 const lastCategoryForMerchant = vi.fn();
 
-vi.mock('$lib/server/repo/workspaces', () => ({
+vi.mock('$lib/repo/workspaces', () => ({
 	listCategories: (...a: unknown[]) => listCategories(...a)
 }));
-vi.mock('$lib/server/repo/purchases', () => ({
+vi.mock('$lib/repo/purchases', () => ({
 	lastCategoryForMerchant: (...a: unknown[]) => lastCategoryForMerchant(...a)
 }));
 

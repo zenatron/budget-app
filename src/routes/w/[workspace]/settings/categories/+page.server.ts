@@ -2,7 +2,7 @@ import { and, eq, count as drizzleCount } from 'drizzle-orm';
 import { error, fail } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
-import { category, purchase } from '$lib/server/db/schema';
+import { category, purchase } from '$lib/db/schema';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import type { Actions, PageServerLoad } from './$types';

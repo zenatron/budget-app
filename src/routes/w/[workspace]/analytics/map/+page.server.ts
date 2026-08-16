@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
-import { locatedSpending } from '$lib/server/repo/analytics';
+import { locatedSpending } from '$lib/repo/analytics';
 import { addDays } from '$lib/domain/recurrence/rrule';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { pad, periodFromUrl } from '$lib/server/analytics-period';

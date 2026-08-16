@@ -2,13 +2,13 @@ import { error, redirect } from '@sveltejs/kit';
 import { finishLogin } from '$lib/server/auth/oidc';
 import { createSession, setSessionCookie } from '$lib/server/auth/session';
 import { getDb } from '$lib/server/db';
-import { upsertUserFromOidc } from '$lib/server/repo/users';
+import { upsertUserFromOidc } from '$lib/repo/users';
 import { processAvatar } from '$lib/infra/images/process';
 import { getBlobStore } from '$lib/server/blobs';
 import { getEnv } from '$lib/server/env';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
-import { user } from '$lib/server/db/schema';
+import { user } from '$lib/db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 

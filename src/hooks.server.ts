@@ -11,7 +11,7 @@ import {
 	setSessionCookie,
 	validateSession
 } from '$lib/server/auth/session';
-import { findWorkspaceForMember } from '$lib/server/repo/workspaces';
+import { findWorkspaceForMember } from '$lib/repo/workspaces';
 import { rateLimitOk } from '$lib/server/rate-limit';
 import { unsealDuePurchases } from '$lib/application/unseal-due';
 import { releaseDueHolds } from '$lib/application/release-holds';
@@ -24,7 +24,7 @@ import { materializeBucketAccruals } from '$lib/application/buckets';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { getNotifier } from '$lib/server/notify';
-import { user } from '$lib/server/db/schema';
+import { user } from '$lib/db/schema';
 import { eq } from 'drizzle-orm';
 
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;

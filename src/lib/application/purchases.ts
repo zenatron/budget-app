@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
+import type { Db } from '$lib/db/types';
 import {
 	purchase as purchaseTable,
 	workspace,
@@ -10,7 +10,7 @@ import {
 	purchaseImage,
 	purchaseApprover,
 	approvalEvent
-} from '$lib/server/db/schema';
+} from '$lib/db/schema';
 import { Money } from '$lib/domain/money/money';
 import type { ApprovalPolicy } from '$lib/domain/approval/policy';
 import { approvalRequired, resolveApprovers } from '$lib/domain/approval/evaluate';
@@ -33,12 +33,7 @@ import {
 	validateSeal,
 	type SealSpec
 } from '$lib/domain/visibility/seal';
-import {
-	appendEvent,
-	applyTransition,
-	insertPurchase,
-	loadPurchase
-} from '$lib/server/repo/purchases';
+import { appendEvent, applyTransition, insertPurchase, loadPurchase } from '$lib/repo/purchases';
 import { normalizeMerchantName } from '$lib/domain/purchase/merchant';
 import {
 	isObservedPlace,

@@ -1,5 +1,5 @@
 import { getDb } from '$lib/server/db';
-import { calendarSources } from '$lib/server/repo/calendar';
+import { calendarSources } from '$lib/repo/calendar';
 import { buildMonth } from '$lib/domain/calendar/month';
 import { calDateInZone } from '$lib/domain/time/zoned';
 import { daysInMonth } from '$lib/domain/recurrence/rrule';

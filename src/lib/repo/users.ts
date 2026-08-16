@@ -1,9 +1,21 @@
 import { eq } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { user } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { user } from '$lib/db/schema';
 import type { IdGenerator } from '$lib/ports/id-generator';
 import type { Clock } from '$lib/ports/clock';
-import type { OidcIdentity } from '$lib/server/auth/oidc';
+
+/**
+ * The identity an OIDC provider vouches for. Declared here, beside the only
+ * thing that persists it, so the identity adapter depends on this contract
+ * rather than the other way round — `$lib/server/auth/oidc` re-exports it.
+ */
+export interface OidcIdentity {
+	subject: string;
+	email: string;
+	displayName: string;
+	/** Profile picture URL from the IdP, if any. */
+	picture?: string;
+}
 
 /**
  * First login creates an orphan user row and nothing else — no workspace,

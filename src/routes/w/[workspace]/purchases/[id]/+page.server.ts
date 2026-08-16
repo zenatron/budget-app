@@ -34,10 +34,10 @@ import {
 import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
 import { addDays } from '$lib/domain/recurrence/rrule';
 import { getDb } from '$lib/server/db';
-import { listEvents, loadPurchase, memberNames } from '$lib/server/repo/purchases';
-import { listCategories } from '$lib/server/repo/workspaces';
-import { bucketBalance, loadBucket } from '$lib/server/repo/buckets';
-import { merchant, purchase as purchaseTable } from '$lib/server/db/schema';
+import { listEvents, loadPurchase, memberNames } from '$lib/repo/purchases';
+import { listCategories } from '$lib/repo/workspaces';
+import { bucketBalance, loadBucket } from '$lib/repo/buckets';
+import { merchant, purchase as purchaseTable } from '$lib/db/schema';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { getNotifier } from '$lib/server/notify';

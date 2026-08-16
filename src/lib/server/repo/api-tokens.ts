@@ -1,7 +1,7 @@
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { and, desc, eq, isNull } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { apiToken, workspace, workspaceMember, user } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { apiToken, workspace, workspaceMember, user } from '$lib/db/schema';
 
 export type ApiScope = 'read' | 'write' | 'approve';
 export const API_SCOPES: readonly ApiScope[] = ['read', 'write', 'approve'];

@@ -10,7 +10,7 @@
  */
 
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, lte, ne, sql } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
+import type { Db } from '$lib/db/types';
 import {
 	category,
 	merchant,
@@ -19,7 +19,7 @@ import {
 	statementLine,
 	user,
 	workspaceMember
-} from '$lib/server/db/schema';
+} from '$lib/db/schema';
 import { visibleTo } from './purchases';
 import type { MatchCandidate } from '$lib/domain/reconcile/match';
 

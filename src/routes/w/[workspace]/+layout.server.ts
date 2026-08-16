@@ -1,5 +1,5 @@
 import { getDb } from '$lib/server/db';
-import { listWorkspacesForUser } from '$lib/server/repo/workspaces';
+import { listWorkspacesForUser } from '$lib/repo/workspaces';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ locals, params }) => {

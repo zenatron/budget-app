@@ -1,6 +1,6 @@
 import { and, desc, eq, ilike, inArray, lte, or, sql, type SQL } from 'drizzle-orm';
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
-import type { Db } from '$lib/server/db';
+import type { Db } from '$lib/db/types';
 import {
 	approvalEvent,
 	category,
@@ -10,7 +10,7 @@ import {
 	purchaseImage,
 	user,
 	workspaceMember
-} from '$lib/server/db/schema';
+} from '$lib/db/schema';
 import { Money } from '$lib/domain/money/money';
 import { eligibleApprovers } from '$lib/domain/approval/evaluate';
 import type { ApprovalPolicy } from '$lib/domain/approval/policy';

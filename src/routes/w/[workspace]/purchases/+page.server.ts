@@ -1,12 +1,12 @@
 import { and, eq } from 'drizzle-orm';
 import { toDiscretionMode } from '$lib/domain/visibility/discretion';
 import { getDb } from '$lib/server/db';
-import { purchase } from '$lib/server/db/schema';
-import { listLedger } from '$lib/server/repo/ledger';
-import { listPurchases } from '$lib/server/repo/purchases';
-import { safeToSpend } from '$lib/server/repo/forecast';
+import { purchase } from '$lib/db/schema';
+import { listLedger } from '$lib/repo/ledger';
+import { listPurchases } from '$lib/repo/purchases';
+import { safeToSpend } from '$lib/repo/forecast';
 import { toLedgerView } from '$lib/server/ledger-view';
-import { listCategories, listMembers } from '$lib/server/repo/workspaces';
+import { listCategories, listMembers } from '$lib/repo/workspaces';
 import { ledgerOptsFromUrl } from '$lib/server/ledger-query';
 import { systemClock } from '$lib/infra/time/system-clock';
 import type { PageServerLoad } from './$types';

@@ -16,8 +16,8 @@
  */
 
 import { and, eq, gte, isNotNull, lt, sql } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { bucket, income, purchase, recurringRule } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { bucket, income, purchase, recurringRule } from '$lib/db/schema';
 import { visibleTo } from './purchases';
 import { calDateInZone } from '$lib/domain/time/zoned';
 import type { CalendarInput, DatedSource, ScheduledSource } from '$lib/domain/calendar/month';

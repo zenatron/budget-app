@@ -2,7 +2,7 @@ import { error, json } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { isDiscretionMode } from '$lib/domain/visibility/discretion';
 import { getDb } from '$lib/server/db';
-import { workspaceMember } from '$lib/server/db/schema';
+import { workspaceMember } from '$lib/db/schema';
 import type { RequestHandler } from './$types';
 
 /**

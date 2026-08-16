@@ -21,7 +21,7 @@ import {
 	resumeBucket,
 	archiveBucket,
 	addTransaction
-} from '$lib/server/repo/buckets';
+} from '$lib/repo/buckets';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import type { Actions, PageServerLoad } from './$types';

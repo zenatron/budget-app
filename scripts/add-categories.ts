@@ -12,7 +12,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq } from 'drizzle-orm';
 import postgres from 'postgres';
-import * as schema from '../src/lib/server/db/schema';
+import * as schema from '../src/lib/db/schema';
 import { DEFAULT_CATEGORIES } from '../src/lib/application/create-workspace';
 import { uuidv7 } from '../src/lib/infra/id/uuidv7';
 

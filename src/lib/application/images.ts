@@ -1,7 +1,7 @@
 import { and, asc, eq, or } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { purchase, purchaseImage } from '$lib/server/db/schema';
-import { loadPurchase, visibleTo } from '$lib/server/repo/purchases';
+import type { Db } from '$lib/db/types';
+import { purchase, purchaseImage } from '$lib/db/schema';
+import { loadPurchase, visibleTo } from '$lib/repo/purchases';
 import { PurchaseNotFoundError } from '$lib/application/purchases';
 import { PurchaseStateError } from '$lib/domain/purchase/purchase';
 import { processUpload } from '$lib/infra/images/process';

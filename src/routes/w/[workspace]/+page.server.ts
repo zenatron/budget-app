@@ -1,9 +1,9 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { and, eq, sql } from 'drizzle-orm';
 import { getDb } from '$lib/server/db';
-import { purchase, user, workspace } from '$lib/server/db/schema';
-import { listMembers } from '$lib/server/repo/workspaces';
-import { visibleTo } from '$lib/server/repo/purchases';
+import { purchase, user, workspace } from '$lib/db/schema';
+import { listMembers } from '$lib/repo/workspaces';
+import { visibleTo } from '$lib/repo/purchases';
 import { deleteWorkspace } from '$lib/application/delete-workspace';
 import { ACCENTS } from '$lib/accent';
 import { processAvatar, ImageValidationError, MAX_AVATAR_BYTES } from '$lib/infra/images/process';

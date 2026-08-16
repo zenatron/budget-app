@@ -1,13 +1,7 @@
 import { and, eq, lt, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import type { Db } from '$lib/server/db';
-import {
-	purchase,
-	purchaseApprover,
-	user,
-	workspace,
-	workspaceMember
-} from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { purchase, purchaseApprover, user, workspace, workspaceMember } from '$lib/db/schema';
 import { Money } from '$lib/domain/money/money';
 import { nextNudgeAt, waitingDays } from '$lib/domain/approval/staleness';
 import type { Clock } from '$lib/ports/clock';

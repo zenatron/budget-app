@@ -17,11 +17,11 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq, sql } from 'drizzle-orm';
 import postgres from 'postgres';
-import * as schema from '../src/lib/server/db/schema';
+import * as schema from '../src/lib/db/schema';
 import { parseRRule, nextOccurrence, formatRRule } from '../src/lib/domain/recurrence/rrule';
 import { deleteWorkspace } from '../src/lib/application/delete-workspace';
 import { EVENT_TYPES, CHANNELS } from '../src/lib/notification-events';
-import type { Db } from '../src/lib/server/db';
+import type { Db } from '../src/lib/db/types';
 
 // ── CLI args ──────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);

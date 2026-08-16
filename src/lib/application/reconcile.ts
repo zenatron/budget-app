@@ -14,8 +14,8 @@
 
 import { createHash } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { purchase, statementImport, statementLine } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { purchase, statementImport, statementLine } from '$lib/db/schema';
 import { dedupKey, parseCsv, type CsvColumnMap } from '$lib/domain/reconcile/parse-csv';
 import { matchLines } from '$lib/domain/reconcile/match';
 import {
@@ -25,7 +25,7 @@ import {
 	matchCandidates,
 	refreshMatchedCount,
 	sealedCandidateKeys
-} from '$lib/server/repo/statements';
+} from '$lib/repo/statements';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 

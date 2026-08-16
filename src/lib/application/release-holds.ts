@@ -1,6 +1,6 @@
 import { and, eq, isNull, lte } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { purchase, user, workspace, workspaceMember } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { purchase, user, workspace, workspaceMember } from '$lib/db/schema';
 import { Money } from '$lib/domain/money/money';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';

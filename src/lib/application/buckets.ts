@@ -1,6 +1,6 @@
 import { and, eq, isNull, lte, or } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { bucket, workspace } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { bucket, workspace } from '$lib/db/schema';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 import {
@@ -11,7 +11,7 @@ import {
 	type CalDate
 } from '$lib/domain/recurrence/rrule';
 import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
-import { addTransaction } from '$lib/server/repo/buckets';
+import { addTransaction } from '$lib/repo/buckets';
 
 /** Accruals land at 09:00 workspace-local — the same hour recurring charges materialize. */
 const ACCRUAL_HOUR = 9;

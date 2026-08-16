@@ -22,7 +22,7 @@ import {
 	type Period
 } from '$lib/domain/analytics/period';
 import { formatMinor } from '$lib/money-format';
-import type { Db } from '$lib/server/db';
+import type { Db } from '$lib/db/types';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 import type { Notifier } from '$lib/ports/notifier';
@@ -54,9 +54,9 @@ import {
 	addTransaction,
 	bucketBalance,
 	loadOwnBucket
-} from '$lib/server/repo/buckets';
-import { addIncome, listIncome, updateIncome, deleteIncome } from '$lib/server/repo/income';
-import { setBudget, schedulableBudgetMonths } from '$lib/server/repo/budgets';
+} from '$lib/repo/buckets';
+import { addIncome, listIncome, updateIncome, deleteIncome } from '$lib/repo/income';
+import { setBudget, schedulableBudgetMonths } from '$lib/repo/budgets';
 import {
 	createRule,
 	updateRule,
@@ -73,12 +73,12 @@ import {
 	RecurrenceError,
 	type Recurrence
 } from '$lib/domain/recurrence/rrule';
-import { listLedger } from '$lib/server/repo/ledger';
-import { listPurchases, loadPurchase, listEvents, memberNames } from '$lib/server/repo/purchases';
-import { listCategories, listMembers } from '$lib/server/repo/workspaces';
-import { accountLabel, listAccounts } from '$lib/server/repo/accounts';
-import { listBuckets } from '$lib/server/repo/buckets';
-import { safeToSpend } from '$lib/server/repo/forecast';
+import { listLedger } from '$lib/repo/ledger';
+import { listPurchases, loadPurchase, listEvents, memberNames } from '$lib/repo/purchases';
+import { listCategories, listMembers } from '$lib/repo/workspaces';
+import { accountLabel, listAccounts } from '$lib/repo/accounts';
+import { listBuckets } from '$lib/repo/buckets';
+import { safeToSpend } from '$lib/repo/forecast';
 import { narrateSafeToSpend } from '$lib/domain/forecast/safe-to-spend';
 import {
 	periodTotal,
@@ -87,8 +87,8 @@ import {
 	placeBreakdown,
 	budgetVsActual,
 	monthlyTrend
-} from '$lib/server/repo/analytics';
-import { recurringRule } from '$lib/server/db/schema';
+} from '$lib/repo/analytics';
+import { recurringRule } from '$lib/db/schema';
 import { and, eq, ne } from 'drizzle-orm';
 import type { ApiScope, AuthedToken } from '$lib/server/repo/api-tokens';
 
