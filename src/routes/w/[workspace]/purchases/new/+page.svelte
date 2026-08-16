@@ -467,7 +467,7 @@
 					}}
 					aria-label="Describe the purchase in words"
 					placeholder="Describe it, or dictate"
-					class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:opacity-40"
+					class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:text-(--accent-ink)"
 					style="color: var(--ink)"
 				/>
 				<button
@@ -497,8 +497,8 @@
 				</p>
 			{:else if !describeText}
 				<p class="mt-2 pl-[30px] text-[12px] leading-snug" style="color: var(--ink-3)">
-					Type or dictate a sentence like "23 on lunch at Krusty Krab yesterday". Harmony fills in the
-					fields. You confirm before saving.
+					Type or dictate a sentence like "23 on lunch at Krusty Krab yesterday". Harmony fills in
+					the fields. You confirm before saving.
 				</p>
 			{/if}
 		</div>
@@ -507,11 +507,19 @@
 		<div class="card-lg card px-6 py-8 text-center">
 			<label class="block">
 				<span class="section-label">Amount</span>
-				<div class="mt-3 flex items-center justify-center">
+				<!-- The symbol settles with the number, not beside it: they are one
+				     figure, and scaling only the digits reads as a glitch. -->
+				<div class="amount-figure mt-3 flex items-center justify-center">
 					<span
-						class="font-[family-name:var(--font-display)] text-[34px] font-bold"
+						class="amount-symbol font-[family-name:var(--font-display)] text-[34px] font-bold"
 						style="color: var(--ink-3)">{symbol}</span
 					>
+					<!--
+						The zero placeholder is ink-4, not the ink-3 every other placeholder
+						on this form uses. At 56px bold it is large text, where 3:1 is the
+						bar rather than 4.5 — and ink-3 at that size stops reading as an
+						empty field and starts reading as a typed $0.
+					-->
 					<input
 						name="amount"
 						aria-label="Amount"
@@ -522,16 +530,27 @@
 						pattern="[0-9]*\.?[0-9]*"
 						placeholder="0"
 						autocomplete="off"
-						class="w-[6ch] border-none bg-transparent p-0 text-center font-[family-name:var(--font-display)] text-[56px] leading-none font-bold tracking-tight tabular-nums outline-none placeholder:opacity-30"
+						class="w-[6ch] border-none bg-transparent p-0 text-center font-[family-name:var(--font-display)] text-[56px] leading-none font-bold tracking-tight tabular-nums outline-none placeholder:text-(--ink-4)"
 						style="color: var(--ink)"
 					/>
+					<!--
+						A hidden twin of the currency symbol, balancing its width on the
+						other side. Without it the flex row centres *symbol plus digits*,
+						which pushes the digits right of centre by half the symbol — the
+						number, not the pair, is what should look centred.
+					-->
+					<span
+						aria-hidden="true"
+						class="amount-symbol invisible font-[family-name:var(--font-display)] text-[34px] font-bold"
+						>{symbol}</span
+					>
 				</div>
 			</label>
 		</div>
 
 		<div class="card p-2">
 			<label class="row">
-				<ShoppingBag class="h-5 w-5" style="color: var(--ink-4)" />
+				<ShoppingBag class="h-5 w-5" style="color: var(--ink-3)" />
 				<input
 					name="itemName"
 					aria-label="Item"
@@ -540,7 +559,7 @@
 					required
 					maxlength="120"
 					placeholder="What did you buy?"
-					class="flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:opacity-40"
+					class="flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:text-(--ink-3)"
 					style="color: var(--ink)"
 				/>
 			</label>
@@ -552,7 +571,7 @@
 				`merchant`. See the note on the merchant table.
 			-->
 			<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
-				<Store class="h-5 w-5" style="color: var(--ink-4)" />
+				<Store class="h-5 w-5" style="color: var(--ink-3)" />
 				<input
 					name="merchantName"
 					aria-label="Paid to"
@@ -560,7 +579,7 @@
 					onblur={suggestCategory}
 					maxlength="200"
 					placeholder="Who did you pay?"
-					class="flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:opacity-40"
+					class="flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:text-(--ink-3)"
 					style="color: var(--ink)"
 				/>
 			</div>
@@ -568,7 +587,7 @@
 				<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
 					<MapPin
 						class="h-5 w-5 shrink-0"
-						style="color: {placeField.place ? 'var(--ws-accent)' : 'var(--ink-4)'}"
+						style="color: {placeField.place ? 'var(--ws-accent)' : 'var(--ink-3)'}"
 					/>
 					{#if placeField.place}
 						<!-- Resolved: a fact now, so it reads as a line rather than a field. -->
@@ -612,7 +631,7 @@
 							placeholder={data.geocoderEnabled
 								? 'Address, map link, or coordinates'
 								: 'Map link or coordinates'}
-							class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:opacity-40"
+							class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder:text-(--ink-3)"
 							style="color: var(--ink)"
 						/>
 						<button
@@ -662,13 +681,15 @@
 				{/if}
 			{/if}
 			<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
-				<CreditCard class="h-5 w-5" style="color: var(--ink-4)" />
+				<CreditCard class="h-5 w-5" style="color: var(--ink-3)" />
 				<select
 					name="categoryId"
 					bind:value={categoryId}
 					onchange={() => (suggested = null)}
 					class="-mx-1 flex-1 border-none bg-transparent p-0 text-[17px] outline-none"
-					style="color: var(--ink); appearance: none; background-image: none"
+					style="color: {categoryId
+						? 'var(--ink)'
+						: 'var(--ink-3)'}; appearance: none; background-image: none"
 				>
 					<option value="">No category</option>
 					{#each data.categories as c (c.id)}<option value={c.id}>{c.icon} {c.name}</option>{/each}
@@ -711,12 +732,14 @@
 				     submit is the backstop; seeing "Travel · $0.00 left" while you pick
 				     is what actually prevents the surprise. -->
 				<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
-					<Landmark class="h-5 w-5" style="color: var(--ink-4)" />
+					<Landmark class="h-5 w-5" style="color: var(--ink-3)" />
 					<select
 						name="bucketId"
 						bind:value={bucketId}
 						class="-mx-1 flex-1 border-none bg-transparent p-0 text-[17px] outline-none"
-						style="color: var(--ink); appearance: none; background-image: none"
+						style="color: {bucketId
+							? 'var(--ink)'
+							: 'var(--ink-3)'}; appearance: none; background-image: none"
 					>
 						<option value="">Charge to bucket</option>
 						{#each data.buckets as b (b.id)}<option value={b.id}
@@ -745,12 +768,14 @@
 				<!-- Which card. Optional, and usually left alone: reconciling a
 				     statement fills it in for you. -->
 				<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
-					<CreditCard class="h-5 w-5" style="color: var(--ink-4)" />
+					<CreditCard class="h-5 w-5" style="color: var(--ink-3)" />
 					<select
 						name="accountId"
 						bind:value={accountId}
 						class="-mx-1 flex-1 border-none bg-transparent p-0 text-[17px] outline-none"
-						style="color: var(--ink); appearance: none; background-image: none"
+						style="color: {accountId
+							? 'var(--ink)'
+							: 'var(--ink-3)'}; appearance: none; background-image: none"
 					>
 						<option value="">Card</option>
 						{#each data.accounts as a (a.id)}<option value={a.id}
@@ -770,7 +795,7 @@
 					<span class="flex-1 text-[17px]" style="color: var(--ink)">Photo attached</span>
 					<span class="text-[14px]" style="color: var(--ink-3)">Change</span>
 				{:else}
-					<Camera class="h-5 w-5" style="color: var(--ink-4)" />
+					<Camera class="h-5 w-5" style="color: var(--ink-3)" />
 					<span class="flex-1 text-[17px]" style="color: var(--ink-3)">Add a photo (optional)</span>
 				{/if}
 				<input
@@ -818,7 +843,7 @@
 					rows="1"
 					maxlength="2000"
 					placeholder="Add a note (optional)"
-					class="flex-1 resize-none border-none bg-transparent p-0 pt-0.5 text-[16px] outline-none placeholder:opacity-40"
+					class="flex-1 resize-none border-none bg-transparent p-0 pt-0.5 text-[17px] outline-none placeholder:text-(--ink-3)"
 					style="color: var(--ink)"></textarea>
 			</div>
 			<!--
@@ -827,8 +852,8 @@
 				means "now", so the everyday case needs no interaction.
 			-->
 			<label class="row" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
-				<Calendar class="h-5 w-5" style="color: var(--ink-4)" />
-				<span class="flex-1 text-[16px]" style="color: var(--ink-3)">When</span>
+				<Calendar class="h-5 w-5" style="color: var(--ink-3)" />
+				<span class="flex-1 text-[17px]" style="color: var(--ink-3)">When</span>
 				<input
 					type="date"
 					name="spentAt"
@@ -1039,3 +1064,12 @@
 		{/if}
 	</form>
 </div>
+
+<style>
+	/*
+	 * One settle, ~320ms: a small overshoot and a landing, not a bounce. The
+	 * figure is 56px, so even 4% of scale is ~2px of travel at the cap height —
+	 * enough to catch the eye that was on the keypad, not enough to shove the
+	 * card around. `prefers-reduced-motion` is handled globally in layout.css.
+	 */
+</style>

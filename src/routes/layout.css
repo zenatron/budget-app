@@ -47,8 +47,22 @@
 	--seal: light-dark(oklch(0.5 0.19 305), oklch(0.7 0.18 305));
 	--info: light-dark(oklch(0.52 0.16 250), oklch(0.7 0.15 250));
 
-	/* Accent — default; workspace layout sets a literal on its wrapper. */
+	/* Accent — the fallback for pages with no workspace behind them, which is
+	   the only place it is ever the value that wins. Every /w/ route overwrites
+	   it with the workspace's own colour on the layout wrapper, and / and the
+	   error page set their own literal, so the one route left reading this is
+	   /welcome. It is still load-bearing there: NavProgress paints with
+	   var(--accent) on every page, and --accent-ink below names it explicitly as
+	   its fallback. Removing it would leave both transparent on /welcome. */
 	--accent: light-dark(oklch(0.55 0.2 25), oklch(0.68 0.2 25));
+
+	/* Accent as TEXT. --ws-accent is a hex the workspace picked, so its contrast
+	   is whatever they chose — the demo teal reads 3.25:1 on paper, under the
+	   4.5 floor, and a paler pick would be worse. Pulling it toward --ink-2
+	   keeps the hue unmistakably theirs while putting a floor under it (4.7:1
+	   light, 6.8:1 dark on the tinted card). Use this wherever accent has to be
+	   read as words; --ws-accent stays the colour for icons, fills and rules. */
+	--accent-ink: color-mix(in oklab, var(--ws-accent, var(--accent)) 60%, var(--ink-2));
 
 	/* Editorial type scale */
 	--fs-mega: clamp(3.6rem, 3rem + 3vw, 4.6rem);
@@ -178,6 +192,20 @@
 	input[type='checkbox']:focus-visible,
 	input[type='radio']:focus-visible {
 		box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 32%, transparent);
+	}
+
+	/* The dropped-open option list does NOT follow `color-scheme` the way the
+	   closed control does: once a select is `appearance: none`, Chrome paints the
+	   popup with the select's own background and lets the options inherit its
+	   `color`. A row select styled `background: transparent` therefore drops a
+	   white popup after dusk, with near-white --ink text inside it — invisible.
+	   (An installed PWA hands the list to the platform menu instead, which is why
+	   it only breaks in the browser.) Naming both colours here is inert on the
+	   selects that already sit on a surface, and fixes the transparent ones. */
+	option,
+	optgroup {
+		background-color: var(--surface);
+		color: var(--ink);
 	}
 
 	/* Native date/time fields render the picker glyph in the UA's own color —

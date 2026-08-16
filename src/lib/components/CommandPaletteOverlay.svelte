@@ -135,7 +135,7 @@
 					autocapitalize="off"
 					spellcheck="false"
 					aria-label="Ask Harmony"
-					class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] leading-tight outline-none placeholder:opacity-35 focus:ring-0"
+					class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] leading-tight outline-none placeholder:text-(--accent-ink) focus:ring-0"
 					style="color: var(--ink); box-shadow: none"
 				/>
 				{#if paletteQuery.value}
