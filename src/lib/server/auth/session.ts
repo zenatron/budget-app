@@ -10,7 +10,8 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** Sliding renewal: extend when less than half the TTL remains. */
 const RENEW_BELOW_MS = SESSION_TTL_MS / 2;
 
-export type SessionUser = typeof user.$inferSelect;
+export type { UserRow as SessionUser } from '$lib/repo/users';
+type SessionUser = typeof user.$inferSelect;
 export type SessionRow = typeof session.$inferSelect;
 
 export async function createSession(

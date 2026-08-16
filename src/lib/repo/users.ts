@@ -4,6 +4,10 @@ import { user } from '$lib/db/schema';
 import type { IdGenerator } from '$lib/ports/id-generator';
 import type { Clock } from '$lib/ports/clock';
 
+/** A user as stored. Schema-derived, so it carries no server-only baggage —
+ *  `$lib/server/auth/session` aliases its `SessionUser` to this. */
+export type UserRow = typeof user.$inferSelect;
+
 /**
  * The identity an OIDC provider vouches for. Declared here, beside the only
  * thing that persists it, so the identity adapter depends on this contract

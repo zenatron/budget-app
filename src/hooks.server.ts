@@ -24,6 +24,7 @@ import { materializeBucketAccruals } from '$lib/application/buckets';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { getNotifier } from '$lib/server/notify';
+import { serverDeps } from '$lib/server/deps';
 import { user } from '$lib/db/schema';
 import { eq } from 'drizzle-orm';
 
@@ -69,7 +70,7 @@ export const init: ServerInit = async () => {
 	};
 
 	const runSweep = async () => {
-		const deps = { clock: systemClock, ids: uuidv7, notifier: getNotifier() };
+		const deps = serverDeps();
 		try {
 			const opened = await unsealDuePurchases(getDb(), deps);
 			if (opened > 0) {
@@ -228,6 +229,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.session = null;
 	event.locals.workspace = null;
 	event.locals.member = null;
+	// The composition root: bind the ports to their server adapters once, here,
+	// so no route module has to name a concrete implementation.
+	event.locals.db = getDb();
+	event.locals.deps = serverDeps();
 
 	const sid = event.cookies.get(SESSION_COOKIE);
 	if (sid) {
