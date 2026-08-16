@@ -56,7 +56,7 @@ Deploying to a project site (`user.github.io/repo`) needs the base path:
 DEMO_BASE=/repo bun run demo:build
 ```
 
-`build-demo/404.html` is a copy of the fallback page — GitHub Pages serves it
+`build-demo/404.html` is a copy of the fallback page. GitHub Pages serves it
 for any path it has no file for, which is what makes deep links work.
 
 ## Features
@@ -133,12 +133,12 @@ bun run dev
 The fake IdP auto-approves logins. Switch identities with
 `curl http://localhost:9443/_as/bob` (alice / bob / carol).
 
-- `bun run test` — domain unit tests (vitest)
-- `bun run test:e2e` — Playwright: approval, sealing and places flows (needs the db container)
-- `bun run seed` — demo workspace for the fake-IdP users
-- `bun run check` — svelte-check
+- `bun run test` - domain unit tests (vitest)
+- `bun run test:e2e` - Playwright: approval, sealing and places flows (needs the db container)
+- `bun run seed` - demo workspace for the fake-IdP users
+- `bun run check` - svelte-check
 - `bun run lint` / `bun run format`
-- `bun run db:generate` — create a migration after editing `src/lib/server/db/schema.ts`
+- `bun run db:generate` - create a migration after editing `src/lib/server/db/schema.ts`
 
 Migrations run automatically on app boot (single-flight via Postgres advisory lock).
 
@@ -179,19 +179,19 @@ docker run --rm -v budget-app_blobs:/data/blobs -v "$PWD/backup:/backup" \
 ## Architecture
 
 ```
-src/lib/domain/        pure TS, no I/O — money, purchase state machine,
+src/lib/domain/        pure TS, no I/O - money, purchase state machine,
                        approval policy evaluation, staleness, and the location
                        maths (Web Mercator, bubble clustering, map-link
-                       parsing) — all unit-tested
+                       parsing) - all unit-tested
 src/lib/application/   use-cases: create/join workspace, submit/approve/deny/
                        cancel/complete/edit purchase (transactional + audit event),
                        recurring materialization, bucket accruals, budget alerts
 src/lib/intelligence/  intent parser for the command palette (pure TS, no network)
 src/lib/ports/         Clock, IdGenerator, Notifier, BlobStore, LlmAssist,
-                       Geocoder (the last two default to null adapters — the app
+                       Geocoder (the last two default to null adapters - the app
                        is fully usable with neither configured); AppDeps and
                        AppContext, the composition root's output
-src/lib/db/            schema and the `Db` type — the persistence port
+src/lib/db/            schema and the `Db` type - the persistence port
 src/lib/repo/          repositories over `Db` (every purchase read takes
                        workspaceId + viewerId); driver-agnostic, so the demo
                        runs them unchanged against Postgres-in-WASM
@@ -200,14 +200,14 @@ src/lib/demo/          the demo build's driven adapters: PGlite, in-memory
 src/lib/infra/         system clock, UUIDv7, filesystem blob store, image pipeline,
                        notifiers (web push, ntfy, composite), in-process SSE bus,
                        geocoding adapters
-src/lib/actions/       Svelte actions — money input masking, use:submit, use:dismiss
+src/lib/actions/       Svelte actions - money input masking, use:submit, use:dismiss
 src/lib/server/        things that genuinely need a server: env validation, the
                        postgres-js client, migrations, auth (OIDC, sessions),
                        rate limiting, basemap tile cache, MCP
 src/routes/            thin routes; authorization resolved once in hooks.server.ts.
                        Converted routes keep their logic in a neutral handlers.ts
                        taking an AppContext, with +page.server.ts a few lines of
-                       binding — the same handlers the demo build runs
+                       binding - the same handlers the demo build runs
 ```
 
 The periodic sweep lives in `hooks.server.ts`: unseal due purchases, materialize

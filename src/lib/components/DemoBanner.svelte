@@ -30,8 +30,7 @@
 
 <aside class="demo-banner">
 	<p>
-		<strong>Demo.</strong> Everything runs in your browser — no account, no server. Changes are saved
-		locally and never leave this device.
+		<strong>Demo.</strong> Everything runs in your browser with no account or server. Mobile recommended.
 	</p>
 	<button type="button" onclick={reset} disabled={resetting}>
 		{resetting ? 'Resetting…' : 'Reset demo'}
