@@ -22,10 +22,16 @@ import type { Db } from '$lib/db/types';
 /**
  * IndexedDB, not localStorage: localStorage is synchronous, string-only and
  * capped around 5 MB, and the seeded database is bigger than that before anyone
- * adds a purchase. The name is versioned so a rebuilt seed doesn't try to open
- * a data directory written by an older schema.
+ * adds a purchase.
+ *
+ * The name carries a fingerprint of the seed (see `seedId` in vite.config.ts).
+ * The snapshot is only downloaded when no local database exists, so a returning
+ * visitor would otherwise keep whatever they first received — including across
+ * a deploy that changed the schema. Tying the name to the seed's contents means
+ * a new seed starts clean, while a redeploy that leaves the seed alone leaves
+ * their edits alone too.
  */
-const IDB_NAME = 'ledger-demo-v1';
+const IDB_NAME = `ledger-demo-${__DEMO_SEED_ID__}`;
 const DATA_DIR = `idb://${IDB_NAME}`;
 
 /**
@@ -50,6 +56,7 @@ export interface DemoDbOptions {
  */
 export function getDemoDb(opts: DemoDbOptions = {}): Promise<Db> {
 	opening ??= (async () => {
+		await dropSupersededDbs();
 		client = (await hasExistingDb())
 			? await PGlite.create({ dataDir: DATA_DIR })
 			: await PGlite.create({
@@ -112,6 +119,27 @@ async function hasExistingDb(): Promise<boolean> {
 		};
 		req.onerror = () => resolve(false);
 	});
+}
+
+/**
+ * Remove data directories from older seeds, so a visitor who has been here
+ * across several deploys is not carrying a stack of dead databases.
+ */
+async function dropSupersededDbs(): Promise<void> {
+	if (typeof indexedDB === 'undefined' || typeof indexedDB.databases !== 'function') return;
+	try {
+		for (const db of await indexedDB.databases()) {
+			const name = db.name ?? '';
+			if (name.startsWith('/pglite/ledger-demo-') && name !== `/pglite/${IDB_NAME}`) {
+				await new Promise<void>((resolve) => {
+					const req = indexedDB.deleteDatabase(name);
+					req.onsuccess = req.onerror = req.onblocked = () => resolve();
+				});
+			}
+		}
+	} catch {
+		/* best effort — a stale database costs space, not correctness */
+	}
 }
 
 function deleteIdb(name: string): Promise<void> {

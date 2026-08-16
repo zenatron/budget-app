@@ -3,30 +3,29 @@ name: Deploy demo
 # The static demo: the real app running against Postgres-compiled-to-WASM, with
 # no server and no database behind it. See the README's "Static demo build".
 #
-# The seed is built here rather than committed, so it can never drift from the
-# schema: a throwaway Postgres is migrated and seeded with the same
-# scripts/seed-workspace.ts the dev environment uses, dumped, and replayed into
-# a PGlite snapshot the browser loads once.
+# The build runs here rather than in Cloudflare's own Git integration because
+# the seed needs a real Postgres to migrate, seed and pg_dump — which a Pages
+# build container does not provide. Cloudflare only receives the finished
+# directory, uploaded with Wrangler.
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
 # Never let two deploys race; queue instead of cancelling, so a run that is
 # already publishing is allowed to finish.
 concurrency:
-  group: pages
+  group: demo-deploy
   cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # Lets wrangler-action report the deployment back onto the commit.
+      deployments: write
 
     services:
       postgres:
@@ -55,7 +54,7 @@ jobs:
       - run: bun install --frozen-lockfile
 
       # scripts/demo-seed.ts shells out to psql and pg_dump. The runner already
-      # has a 16 client, but say so explicitly so a runner-image change can't
+      # has a 16 client, but say so explicitly so a runner-image change cannot
       # silently swap the version out from under the service above.
       - name: Install postgres client
         run: |
@@ -73,24 +72,18 @@ jobs:
           DEMO_SEED_ADMIN_URL: postgres://postgres:postgres@localhost:5432/postgres
         run: bun run demo:seed
 
+      # No DEMO_BASE: ledger.pvi.sh serves the demo from its root.
+      # DEMO_HOST=cloudflare is the default, and matters — a 404.html would turn
+      # Cloudflare's SPA fallback off and break every deep link.
       - name: Build the demo
         env:
-          # A project site is served from /<repo>, so every asset path needs it.
-          DEMO_BASE: /${{ github.event.repository.name }}
+          DEMO_HOST: cloudflare
         run: bun run demo:build
 
-      - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v4
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v4
         with:
-          path: build-demo
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-24.04
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          command: pages deploy build-demo --project-name=ledger-demo --branch=main

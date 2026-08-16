@@ -88,7 +88,16 @@ async function main() {
 	console.log(`\ndemo seed written to demo-assets/demo-seed.tar.gz (${mb} MB)`);
 }
 
-main().catch((e) => {
-	console.error('demo-seed failed:', e?.message ?? e);
-	process.exit(1);
-});
+/*
+ * PGlite's embedded Postgres leaves a non-zero exit status behind (99) once it
+ * has been instantiated, whether or not the client is closed — it is the wasm
+ * runtime's own exit code surfacing, not a failure of this script. Left alone
+ * it fails CI on a run that did everything correctly, so success exits
+ * explicitly. Failures still go through the catch below.
+ */
+main()
+	.then(() => process.exit(0))
+	.catch((e) => {
+		console.error('demo-seed failed:', e?.message ?? e);
+		process.exit(1);
+	});

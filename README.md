@@ -63,21 +63,44 @@ web manifest's `scope`, `start_url` and icons for the base path.
 
 ### Deploying it
 
-`.github/workflows/demo.yml` builds and publishes to GitHub Pages on every push
-to `main`, and on demand from the Actions tab. It seeds against a throwaway
-Postgres service container, so the snapshot is rebuilt from the current schema
-every time and never has to be committed.
+`.github/workflows/demo.yml` builds and publishes to **Cloudflare Pages** on
+every push to `main`, and on demand from the Actions tab.
 
-One-time setup: **Settings → Pages → Source: GitHub Actions**. Nothing else — no
-secrets, no tokens. `DEMO_BASE` is derived from the repository name.
+The build runs in GitHub Actions rather than Cloudflare's Git integration
+because the seed needs a real Postgres to migrate, seed and `pg_dump`, which a
+Pages build container does not provide. Cloudflare only receives the finished
+directory, uploaded with Wrangler — so the snapshot is rebuilt from the current
+schema every run and never has to be committed.
+
+One-time setup:
+
+1. Cloudflare dashboard → **Workers & Pages** → **Create** → **Pages** →
+   **Upload assets**, name the project `ledger-demo`, and create it. (The first
+   real deploy comes from CI; this only reserves the name.)
+2. **Custom domains** → add `ledger.pvi.sh`. The DNS record is created for you
+   when the zone is already on Cloudflare.
+3. Create an API token with the **Cloudflare Pages: Edit** permission.
+4. In GitHub → Settings → Secrets and variables → Actions, add
+   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+
+`DEMO_BASE` is left empty: the demo is served from the root of its own
+subdomain, not a subpath.
+
+`DEMO_HOST` decides how the client-routed app is served, and the two hosts
+disagree in a way that is easy to get backwards:
+
+|                        | fallback                               | note                                                          |
+| ---------------------- | -------------------------------------- | ------------------------------------------------------------- |
+| `cloudflare` (default) | `_redirects` with `/* /index.html 200` | a top-level `404.html` **disables** Cloudflare's SPA fallback |
+| `github`               | `404.html`                             | GitHub Pages has no rewrite rules                             |
 
 The workflow runs `check` and the unit tests before building, so a broken build
 cannot replace a working demo. It deliberately does not run the e2e suite: that
 needs Postgres, a fake identity provider and browsers, and belongs in its own
 workflow.
 
-Note that the demo is **public** once Pages is enabled. The seeded data is
-entirely fictional — the generator invents every name, merchant and amount.
+Note that the demo is **public**. The seeded data is entirely fictional — the
+generator invents every name, merchant and amount.
 
 ## Features
 

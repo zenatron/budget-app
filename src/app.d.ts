@@ -6,6 +6,8 @@ import type { AppDeps } from '$lib/ports/deps';
 declare global {
 	/** Injected by vite `define`. True only in the static demo build. */
 	const __DEMO__: boolean;
+	/** Injected by vite `define`. Fingerprint of the demo's seed snapshot. */
+	const __DEMO_SEED_ID__: string;
 
 	namespace App {
 		interface Locals {

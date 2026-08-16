@@ -16,6 +16,20 @@ const SEED = `${ROOT}/demo-assets/demo-seed.tar.gz`;
 /** Matches vite.config.ts — a project site is served from /<repo>. */
 const BASE = process.env.DEMO_BASE ?? '';
 
+/**
+ * Which static host this build is for. The two disagree about how to serve a
+ * client-routed app, and the disagreement is not symmetric:
+ *
+ *   cloudflare  Falls back to index.html for unmatched paths *only when there
+ *               is no top-level 404.html*. Shipping one silently turns SPA
+ *               routing off and every deep link 404s. We write an explicit
+ *               `_redirects` rewrite instead, which also answers 200 rather
+ *               than 404.
+ *   github      Has no rewrite rules at all and serves 404.html for anything
+ *               it cannot find, so that file *is* the fallback.
+ */
+const HOST = (process.env.DEMO_HOST ?? 'cloudflare') as 'cloudflare' | 'github';
+
 async function exists(p: string): Promise<boolean> {
 	try {
 		await access(p);
@@ -37,14 +51,24 @@ async function main() {
 	}
 	await copyFile(SEED, `${OUT}/demo-seed.tar.gz`);
 
-	// GitHub Pages serves 404.html for any path it has no file for. Making it the
-	// SPA fallback is what lets a deep link like /w/demo/buckets resolve.
-	await copyFile(`${OUT}/index.html`, `${OUT}/404.html`);
+	if (HOST === 'github') {
+		// The fallback *is* 404.html here — GitHub Pages has no rewrite rules.
+		await copyFile(`${OUT}/index.html`, `${OUT}/404.html`);
+		// Jekyll would skip SvelteKit's _app/ directory outright.
+		await writeFile(`${OUT}/.nojekyll`, '');
+	} else {
+		// A rewrite, not a redirect: the URL is preserved and the status is 200,
+		// so a deep link is not reported as missing. Deliberately no 404.html —
+		// its presence is what disables Cloudflare's SPA fallback.
+		await writeFile(`${OUT}/_redirects`, '/* /index.html 200\n');
 
-	// Pages' Actions deployment serves the artifact as-is rather than running
-	// Jekyll, but Jekyll would skip SvelteKit's _app/ directory outright, so this
-	// removes any doubt for other static hosts too.
-	await writeFile(`${OUT}/.nojekyll`, '');
+		// The hashed bundles never change under their own name; the seed can, so
+		// it is left on the default revalidating policy.
+		await writeFile(
+			`${OUT}/_headers`,
+			['/_app/immutable/*', '  Cache-Control: public, max-age=31536000, immutable', ''].join('\n')
+		);
+	}
 
 	// The manifest is static JSON, so it cannot use %sveltekit.assets%. Under a
 	// project-site base its scope and icons would point at the domain root.
@@ -62,7 +86,7 @@ async function main() {
 		await writeFile(manifestPath, JSON.stringify(manifest, null, '\t') + '\n');
 	}
 
-	console.log(`demo finalized in build-demo/${BASE ? ` (base ${BASE})` : ''}`);
+	console.log(`demo finalized in build-demo/ for ${HOST}${BASE ? ` (base ${BASE})` : ''}`);
 }
 
 main().catch((e) => {
