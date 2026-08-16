@@ -14,6 +14,6 @@ export interface LoadEvent {
 
 export interface ActionEvent {
 	request: Request;
-	params?: Record<string, string>;
+	params: Record<string, string>;
 	url?: URL;
 }

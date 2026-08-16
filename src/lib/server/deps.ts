@@ -3,6 +3,9 @@ import { systemClock } from '$lib/infra/time/system-clock';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { getNotifier } from '$lib/server/notify';
 import { getBlobStore } from '$lib/server/blobs';
+import { processAvatar, processUpload } from '$lib/infra/images/process';
+import { getEnv } from '$lib/server/env';
+import { visionGate } from '$lib/server/vision-gate';
 
 let instance: AppDeps | undefined;
 
@@ -23,7 +26,13 @@ export function serverDeps(): AppDeps {
 			clock: systemClock,
 			ids: uuidv7,
 			notifier: getNotifier(),
-			blobs: getBlobStore()
+			blobs: getBlobStore(),
+			images: { processUpload, processAvatar },
+			capabilities: {
+				vision: visionGate,
+				geocoder: !!getEnv().GEOCODER_URL,
+				barcode: !!getEnv().BARCODE_LOOKUP_URL
+			}
 		};
 	}
 	return instance;

@@ -4,7 +4,7 @@ import { purchase, purchaseImage } from '$lib/db/schema';
 import { loadPurchase, visibleTo } from '$lib/repo/purchases';
 import { PurchaseNotFoundError } from '$lib/application/purchases';
 import { PurchaseStateError } from '$lib/domain/purchase/purchase';
-import { processUpload } from '$lib/infra/images/process';
+import type { ImageProcessor } from '$lib/ports/image-processor';
 import type { BlobStore } from '$lib/ports/blob-store';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
@@ -13,6 +13,7 @@ interface Deps {
 	clock: Clock;
 	ids: IdGenerator;
 	blobs: BlobStore;
+	images: ImageProcessor;
 }
 
 interface Scope {
@@ -55,7 +56,7 @@ export async function setPurchaseImage(
 
 	// Process before touching the DB: an invalid upload must not clear the
 	// existing photo.
-	const processed = await processUpload(upload);
+	const processed = await deps.images.processUpload(upload);
 	const [display, thumb] = await Promise.all([
 		deps.blobs.put(processed.display.data, 'webp'),
 		deps.blobs.put(processed.thumb.data, 'webp')

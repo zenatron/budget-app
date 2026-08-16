@@ -3,6 +3,7 @@ import { systemClock } from '$lib/infra/time/system-clock';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { nullNotifier } from '$lib/ports/notifier';
 import { createMemoryBlobStore } from './blob-store';
+import { createCanvasImageProcessor } from './image-processor';
 
 let instance: AppDeps | undefined;
 
@@ -20,7 +21,18 @@ export function demoDeps(): AppDeps {
 			clock: systemClock,
 			ids: uuidv7,
 			notifier: nullNotifier,
-			blobs: createMemoryBlobStore()
+			blobs: createMemoryBlobStore(),
+			images: createCanvasImageProcessor(),
+			// The demo ships no model and no geocoder, so both answer no — with
+			// the same wording the server would use when they are unconfigured.
+			capabilities: {
+				vision: async () => ({
+					allowed: false,
+					reason: 'Reading images needs an AI model, which the demo does not include.'
+				}),
+				geocoder: false,
+				barcode: false
+			}
 		};
 	}
 	return instance;

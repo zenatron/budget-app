@@ -27,10 +27,15 @@ const OUT = `${ROOT}/.demo/routes`;
  */
 export const DEMO_ROUTES = [
 	'w/[workspace]/purchases',
+	'w/[workspace]/purchases/new',
+	'w/[workspace]/purchases/[id]',
 	'w/[workspace]/buckets',
 	'w/[workspace]/income',
 	'w/[workspace]/analytics',
-	'w/[workspace]/recurring'
+	'w/[workspace]/calendar',
+	'w/[workspace]/recurring',
+	'w/[workspace]/settings/categories',
+	'w/[workspace]'
 ];
 
 /** Files that only make sense with a server behind them. */
@@ -120,7 +125,7 @@ export const prerender = false;
 
 export const load = async () => {
 	const ctx = await getDemoContext(base);
-	redirect(307, \`\${base}/w/\${ctx.workspace.slug}/${DEMO_ROUTES[0].split('/').slice(2).join('/')}\`);
+	redirect(307, \`\${base}/w/\${ctx.workspace.slug}/purchases\`);
 };
 `
 	);
