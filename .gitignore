@@ -31,3 +31,7 @@ vite.config.ts.timestamp-*
 test-results
 playwright-report
 coverage/
+
+# Generated demo route tree (scripts/demo-build.ts)
+.demo/
+build-demo/

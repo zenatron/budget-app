@@ -1,7 +1,19 @@
 import tailwindcss from '@tailwindcss/vite';
 import adapter from '@sveltejs/adapter-node';
+import adapterStatic from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
+
+/**
+ * The demo build: the same app with a different driving adapter — no server,
+ * no database, Postgres compiled to WASM in the tab. It builds from the
+ * generated route tree at `.demo/routes` (see scripts/demo-build.ts), which
+ * holds only the demo's routes with their `+page.server.ts` replaced by a
+ * `+page.ts` binding the same handlers to a browser context.
+ */
+const DEMO = !!process.env.DEMO;
+/** GitHub Pages serves a project site from a subpath. */
+const DEMO_BASE = process.env.DEMO_BASE ?? '';
 
 export default defineConfig({
 	plugins: [
@@ -13,7 +25,19 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 
-			adapter: adapter(),
+			adapter: DEMO
+				? adapterStatic({ pages: 'build-demo', assets: 'build-demo', fallback: 'index.html' })
+				: adapter(),
+
+			...(DEMO
+				? {
+						files: { routes: '.demo/routes', hooks: { server: 'src/demo-hooks.server' } },
+						paths: { base: DEMO_BASE, relative: false },
+						// Nothing to prerender against: every load opens the in-tab
+						// database, which only exists once the page is running.
+						prerender: { entries: [] }
+					}
+				: {}),
 
 			csp: {
 				directives: {
