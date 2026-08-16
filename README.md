@@ -38,6 +38,12 @@ bun run demo:build   # generates .demo/routes, builds to build-demo/
 bun run demo:preview # both of the above, then serves it
 ```
 
+The demo ships the ledger, a purchase's detail and the new-purchase form,
+buckets, income, analytics, the calendar, the month statement, recurring,
+categories and the workspace overview. Left out because they need a backend:
+auth, Harmony, MCP, the API, reconciliation, the map, CSV export and the
+notification/member/model settings.
+
 `demo:seed` reuses `scripts/seed-workspace.ts` unchanged, so the demo's data
 cannot drift from the seeder the dev environment uses. `demo:build` generates a
 parallel route tree at `.demo/routes` rather than touching `src/routes`; routes
