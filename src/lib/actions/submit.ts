@@ -1,6 +1,5 @@
 import { applyAction, enhance } from '$app/forms';
 import { invalidateAll } from '$app/navigation';
-import { page } from '$app/state';
 import type { ActionResult } from '@sveltejs/kit';
 import { toastError, toastSuccess } from '$lib/toast-state.svelte';
 import { requestConfirm, type ConfirmSpec } from '$lib/confirm-state.svelte';
@@ -153,7 +152,7 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 			cancel();
 			void (async () => {
 				const { runDemoAction } = await import('$lib/demo/actions');
-				const result = await runDemoAction(page.route.id, action, formData);
+				const result = await runDemoAction(action, formData);
 				await settle({
 					result,
 					update: async ({ reset = true } = {}) => {

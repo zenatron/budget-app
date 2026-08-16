@@ -26,6 +26,18 @@ type Bound<F> = F extends (ctx: WorkspaceContext, event: infer E) => infer R
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Handler = (ctx: WorkspaceContext, event: any) => any;
 
+/**
+ * `export const GET = bindEndpoint(h.GET)`
+ *
+ * The same binding as a page's, for `+server.ts`. Endpoints answer with a
+ * Response rather than data, but they are otherwise the same shape — and the
+ * demo needs them just as much, since a handful of the app's interactions
+ * (ledger paging, the settings switches) are plain fetches rather than forms.
+ */
+export function bindEndpoint<F extends Handler>(fn: F): Bound<F> {
+	return bindLoad(fn);
+}
+
 /** `export const load = bindLoad(h.load)` */
 export function bindLoad<F extends Handler>(fn: F): Bound<F> {
 	return ((event: Parameters<F>[1]) => fn(wsContext(event.locals), event)) as Bound<F>;

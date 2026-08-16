@@ -305,7 +305,9 @@
 					/>
 				</button>
 				<div class="flex items-center gap-2">
-					<CommandPalette />
+					{#if !__DEMO__}
+						<CommandPalette />
+					{/if}
 					<a
 						href="/w/{slug}"
 						class="press flex h-8 w-8 items-center justify-center rounded-full"
@@ -348,19 +350,21 @@
 								{/if}
 							</a>
 						{/each}
-						<div class="my-1 h-px" style="background: var(--hairline)"></div>
-						<a
-							href="/welcome"
-							onclick={() => (showSwitcher = false)}
-							class="press flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5"
-						>
-							<span
-								class="flex h-8 w-8 items-center justify-center rounded-[10px]"
-								style="box-shadow: inset 0 0 0 1.5px var(--hairline-strong)"
-								><Plus class="h-4 w-4" style="color: var(--ink-3)" /></span
+						{#if !__DEMO__}
+							<div class="my-1 h-px" style="background: var(--hairline)"></div>
+							<a
+								href="/welcome"
+								onclick={() => (showSwitcher = false)}
+								class="press flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5"
 							>
-							<span class="text-[17px]" style="color: var(--ink-3)">New workspace</span>
-						</a>
+								<span
+									class="flex h-8 w-8 items-center justify-center rounded-[10px]"
+									style="box-shadow: inset 0 0 0 1.5px var(--hairline-strong)"
+									><Plus class="h-4 w-4" style="color: var(--ink-3)" /></span
+								>
+								<span class="text-[17px]" style="color: var(--ink-3)">New workspace</span>
+							</a>
+						{/if}
 					</div>
 				{/if}
 			</div>

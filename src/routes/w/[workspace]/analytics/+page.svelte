@@ -385,9 +385,15 @@
 				/w/{slug}/map and 404s. Every other link in the app is absolute or
 				query-only; this was the one exception, and it was wrong.
 			-->
-			<a href="/w/{slug}/analytics/map{mapSearch}" class="icon-btn press" aria-label="Spending map">
-				<MapIcon class="h-[18px] w-[18px]" />
-			</a>
+			{#if !__DEMO__}
+				<a
+					href="/w/{slug}/analytics/map{mapSearch}"
+					class="icon-btn press"
+					aria-label="Spending map"
+				>
+					<MapIcon class="h-[18px] w-[18px]" />
+				</a>
+			{/if}
 		{/if}
 	</div>
 

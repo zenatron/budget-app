@@ -16,12 +16,8 @@
 		});
 		if (!ok) return;
 		resetting = true;
-		const [{ resetDemoDb }, { clearDemoContext }] = await Promise.all([
-			import('$lib/demo/db'),
-			import('$lib/demo/context')
-		]);
+		const { resetDemoDb } = await import('$lib/demo/db');
 		await resetDemoDb();
-		clearDemoContext();
 		// A full reload rather than invalidateAll: the loads have already closed
 		// over the old database handle, and nothing should survive the reset.
 		location.reload();

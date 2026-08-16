@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { workspace, workspaceMember, user as userTable } from '$lib/db/schema';
 import type { WorkspaceContext } from '$lib/ports/context';
 import { getDemoDb } from './db';
@@ -6,10 +6,6 @@ import { demoDeps } from './deps';
 
 /** Where the build-time seed snapshot is served from, relative to the app base. */
 export const DEMO_SEED_URL = 'demo-seed.tar.gz';
-
-// Cached as a promise for the same reason as the database handle: concurrent
-// layout and page loads both arrive here before either has resolved.
-let resolving: Promise<WorkspaceContext> | undefined;
 
 /**
  * The demo's stand-in for `hooks.server.ts`.
@@ -23,31 +19,33 @@ let resolving: Promise<WorkspaceContext> | undefined;
  * The shape it produces is identical, which is the point — every handler
  * downstream cannot tell which one built it.
  */
-export function getDemoContext(base = ''): Promise<WorkspaceContext> {
-	resolving ??= resolve(base);
-	return resolving;
-}
-
-async function resolve(base: string): Promise<WorkspaceContext> {
+export async function getDemoContext(base = ''): Promise<WorkspaceContext> {
+	// Deliberately *not* cached. `hooks.server.ts` re-reads the workspace and
+	// member on every request, and settings write to exactly those two rows — a
+	// cached context reports a stale copy, so a toggle saves and then appears to
+	// do nothing. The database handle is the expensive part and `getDemoDb`
+	// already single-flights it, so re-reading three rows per call is cheap.
 	const db = await getDemoDb({ seedUrl: `${base}/${DEMO_SEED_URL}` });
 
-	const [ws] = await db.select().from(workspace).limit(1);
+	// Ordered, because `limit(1)` without one is whatever Postgres hands back
+	// first — and that is free to change after an UPDATE rewrites a row. The
+	// seed has three members, so an unordered pick silently switched *which
+	// member you were* between a write and the next read: settings saved onto
+	// one row and were read back from another, looking like nothing happened.
+	const [ws] = await db.select().from(workspace).orderBy(asc(workspace.createdAt)).limit(1);
 	if (!ws) throw new Error('demo: seed contains no workspace');
 
+	// The visitor is the workspace's owner — the account the demo is written
+	// from, and the one with nothing hidden from it.
 	const [member] = await db
 		.select()
 		.from(workspaceMember)
-		.where(eq(workspaceMember.workspaceId, ws.id))
+		.where(and(eq(workspaceMember.workspaceId, ws.id), eq(workspaceMember.userId, ws.ownerUserId)))
 		.limit(1);
-	if (!member) throw new Error('demo: seed workspace has no members');
+	if (!member) throw new Error('demo: seed workspace has no owning member');
 
 	const [u] = await db.select().from(userTable).where(eq(userTable.id, member.userId)).limit(1);
 	if (!u) throw new Error('demo: seed member has no user');
 
 	return { db, deps: demoDeps(), user: u, workspace: ws, member };
-}
-
-/** Forget the resolved context, so the next load re-reads a reset database. */
-export function clearDemoContext(): void {
-	resolving = undefined;
 }

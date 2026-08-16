@@ -157,19 +157,21 @@
 	{/if}
 
 	<!-- Workspace -->
-	<a href="/w/{slug}/settings/members" class="press card flex items-center gap-3.5 p-4">
-		<span
-			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
-		>
-			<Users class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
-		</span>
-		<div class="flex-1">
-			<p class="text-[15px] font-medium" style="color: var(--ink)">Members</p>
-			<p class="text-[13px]" style="color: var(--ink-3)">{memberSummary}</p>
-		</div>
-		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
-	</a>
+	{#if !__DEMO__}
+		<a href="/w/{slug}/settings/members" class="press card flex items-center gap-3.5 p-4">
+			<span
+				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+				style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+			>
+				<Users class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+			</span>
+			<div class="flex-1">
+				<p class="text-[15px] font-medium" style="color: var(--ink)">Members</p>
+				<p class="text-[13px]" style="color: var(--ink-3)">{memberSummary}</p>
+			</div>
+			<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
+		</a>
+	{/if}
 
 	<a href="/w/{slug}/settings/categories" class="press card flex items-center gap-3.5 p-4">
 		<span
@@ -185,100 +187,112 @@
 		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
 	</a>
 
-	<a href="/w/{slug}/settings/notifications" class="press card flex items-center gap-3.5 p-4">
-		<span
-			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
-		>
-			<Bell class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
-		</span>
-		<div class="flex-1">
-			<p class="text-[15px] font-medium" style="color: var(--ink)">Notifications</p>
-			<p class="text-[13px]" style="color: var(--ink-3)">Push, ntfy, and per-event routing</p>
-		</div>
-		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
-	</a>
+	{#if !__DEMO__}
+		<a href="/w/{slug}/settings/notifications" class="press card flex items-center gap-3.5 p-4">
+			<span
+				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+				style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+			>
+				<Bell class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+			</span>
+			<div class="flex-1">
+				<p class="text-[15px] font-medium" style="color: var(--ink)">Notifications</p>
+				<p class="text-[13px]" style="color: var(--ink-3)">Push, ntfy, and per-event routing</p>
+			</div>
+			<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
+		</a>
+	{/if}
 
-	<a href="/w/{slug}/settings/intelligence" class="press card flex items-center gap-3.5 p-4">
-		<span
-			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
-		>
-			<Sparkles class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
-		</span>
-		<div class="flex-1">
-			<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
-				Harmony Intelligence
-				<span
-					class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
-					style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
-					>Alpha</span
-				>
-			</p>
-			<p class="text-[13px]" style="color: var(--ink-3)">
-				Safe to Spend, bill reading, and optional AI assistance
-			</p>
-		</div>
-		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
-	</a>
+	{#if !__DEMO__}
+		<a href="/w/{slug}/settings/intelligence" class="press card flex items-center gap-3.5 p-4">
+			<span
+				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+				style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+			>
+				<Sparkles class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+			</span>
+			<div class="flex-1">
+				<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
+					Harmony Intelligence
+					<span
+						class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
+						style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
+						>Alpha</span
+					>
+				</p>
+				<p class="text-[13px]" style="color: var(--ink-3)">
+					Safe to Spend, bill reading, and optional AI assistance
+				</p>
+			</div>
+			<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
+		</a>
+	{/if}
 
-	<a href="/w/{slug}/reconcile" class="press card flex items-center gap-3.5 p-4">
-		<span
-			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
-		>
-			<FileCheck class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
-		</span>
-		<div class="flex-1">
-			<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
-				Reconcile
-				<span
-					class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
-					style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
-					>Alpha</span
-				>
-			</p>
-			<p class="text-[13px]" style="color: var(--ink-3)">
-				Tick a bank statement against this ledger
-			</p>
-		</div>
-		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
-	</a>
+	{#if !__DEMO__}
+		<a href="/w/{slug}/reconcile" class="press card flex items-center gap-3.5 p-4">
+			<span
+				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+				style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+			>
+				<FileCheck class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+			</span>
+			<div class="flex-1">
+				<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
+					Reconcile
+					<span
+						class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
+						style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
+						>Alpha</span
+					>
+				</p>
+				<p class="text-[13px]" style="color: var(--ink-3)">
+					Tick a bank statement against this ledger
+				</p>
+			</div>
+			<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
+		</a>
+	{/if}
 
-	<a href="/w/{slug}/settings/advanced" class="press card flex items-center gap-3.5 p-4">
-		<span
-			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
-		>
-			<Settings class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
-		</span>
-		<div class="flex-1">
-			<p class="text-[15px] font-medium" style="color: var(--ink)">Advanced</p>
-			<p class="text-[13px]" style="color: var(--ink-3)">Timing, thresholds, nudges, and limits</p>
-		</div>
-		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
-	</a>
+	{#if !__DEMO__}
+		<a href="/w/{slug}/settings/advanced" class="press card flex items-center gap-3.5 p-4">
+			<span
+				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+				style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+			>
+				<Settings class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+			</span>
+			<div class="flex-1">
+				<p class="text-[15px] font-medium" style="color: var(--ink)">Advanced</p>
+				<p class="text-[13px]" style="color: var(--ink-3)">
+					Timing, thresholds, nudges, and limits
+				</p>
+			</div>
+			<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
+		</a>
+	{/if}
 
-	<a href="/w/{slug}/settings/api" class="press card flex items-center gap-3.5 p-4">
-		<span
-			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
-		>
-			<Webhook class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
-		</span>
-		<div class="flex-1">
-			<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
-				API &amp; MCP
-				<span
-					class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
-					style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
-					>Alpha</span
-				>
-			</p>
-			<p class="text-[13px]" style="color: var(--ink-3)">Connect Claude or another assistant</p>
-		</div>
-		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
-	</a>
+	{#if !__DEMO__}
+		<a href="/w/{slug}/settings/api" class="press card flex items-center gap-3.5 p-4">
+			<span
+				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+				style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+			>
+				<Webhook class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+			</span>
+			<div class="flex-1">
+				<p class="flex items-center gap-2 text-[15px] font-medium" style="color: var(--ink)">
+					API &amp; MCP
+					<span
+						class="rounded-[var(--r-full)] px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.06em] uppercase"
+						style="background: color-mix(in oklab, var(--pending) 16%, var(--surface)); color: var(--pending)"
+						>Alpha</span
+					>
+				</p>
+				<p class="text-[13px]" style="color: var(--ink-3)">Connect Claude or another assistant</p>
+			</div>
+			<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
+		</a>
+	{/if}
 
 	{#if form?.error && form?.section !== 'avatar'}
 		<div
