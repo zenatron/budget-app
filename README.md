@@ -56,8 +56,28 @@ Deploying to a project site (`user.github.io/repo`) needs the base path:
 DEMO_BASE=/repo bun run demo:build
 ```
 
-`build-demo/404.html` is a copy of the fallback page. GitHub Pages serves it
-for any path it has no file for, which is what makes deep links work.
+`bun run demo:build` finishes with `scripts/demo-finalize.ts`, which copies the
+seed in, writes `404.html` (GitHub Pages serves it for any path it has no file
+for, which is what makes deep links work), adds `.nojekyll`, and rewrites the
+web manifest's `scope`, `start_url` and icons for the base path.
+
+### Deploying it
+
+`.github/workflows/demo.yml` builds and publishes to GitHub Pages on every push
+to `main`, and on demand from the Actions tab. It seeds against a throwaway
+Postgres service container, so the snapshot is rebuilt from the current schema
+every time and never has to be committed.
+
+One-time setup: **Settings → Pages → Source: GitHub Actions**. Nothing else — no
+secrets, no tokens. `DEMO_BASE` is derived from the repository name.
+
+The workflow runs `check` and the unit tests before building, so a broken build
+cannot replace a working demo. It deliberately does not run the e2e suite: that
+needs Postgres, a fake identity provider and browsers, and belongs in its own
+workflow.
+
+Note that the demo is **public** once Pages is enabled. The seeded data is
+entirely fictional — the generator invents every name, merchant and amount.
 
 ## Features
 
