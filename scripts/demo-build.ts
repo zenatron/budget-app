@@ -25,7 +25,13 @@ const OUT = `${ROOT}/.demo/routes`;
  * Routes the demo ships. Everything absent is excluded by construction rather
  * than by filtering, so adding a route to the demo is a deliberate act.
  */
-export const DEMO_ROUTES = ['w/[workspace]/recurring'];
+export const DEMO_ROUTES = [
+	'w/[workspace]/purchases',
+	'w/[workspace]/buckets',
+	'w/[workspace]/income',
+	'w/[workspace]/analytics',
+	'w/[workspace]/recurring'
+];
 
 /** Files that only make sense with a server behind them. */
 const SERVER_FILE = /^\+(page|layout)\.server\.ts$/;
