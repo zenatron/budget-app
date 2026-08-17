@@ -9,6 +9,7 @@
 		ChevronLeft,
 		ChevronRight,
 		CreditCard,
+		Shapes,
 		Gift,
 		Landmark,
 		LocateFixed,
@@ -467,7 +468,7 @@
 					}}
 					aria-label="Describe the purchase in words"
 					placeholder="Describe it, or dictate..."
-					class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] outline-none placeholder-shimmer"
+					class="placeholder-shimmer min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] outline-none"
 					style="color: var(--ink)"
 				/>
 				<button
@@ -681,7 +682,7 @@
 				{/if}
 			{/if}
 			<div class="row hairline" style="box-shadow: inset 0 0.5px 0 var(--hairline)">
-				<CreditCard class="h-5 w-5" style="color: var(--ink-3)" />
+				<Shapes class="h-5 w-5" style="color: var(--ink-3)" />
 				<select
 					name="categoryId"
 					bind:value={categoryId}
@@ -691,7 +692,7 @@
 						? 'var(--ink)'
 						: 'var(--ink-3)'}; appearance: none; background-image: none"
 				>
-					<option value="">No category</option>
+					<option value="">Other (no category)</option>
 					{#each data.categories as c (c.id)}<option value={c.id}>{c.icon} {c.name}</option>{/each}
 				</select>
 				<ChevronDown class="h-4 w-4" style="color: var(--ink-4)" />

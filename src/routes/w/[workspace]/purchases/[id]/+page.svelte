@@ -895,7 +895,7 @@
 								class="ledger-input min-w-0 flex-1 text-right text-[16px] font-medium"
 								style="color: var(--ink)"
 							>
-								<option value="">None</option>
+								<option value="">Other (no category)</option>
 								{#each data.categories as c (c.id)}
 									<option value={c.id} selected={c.id === p.categoryId}>{c.icon} {c.name}</option>
 								{/each}

@@ -368,7 +368,7 @@
 			<RecurrencePicker bind:freq bind:interval bind:weekDays bind:monthDay bind:startDate />
 
 			<select name="categoryId" class="field text-[16px]">
-				<option value="">No category</option>
+				<option value="">Other (no category)</option>
 				{#each data.categories as c (c.id)}<option value={c.id}>{c.icon} {c.name}</option>{/each}
 			</select>
 			{#if data.buckets.length > 0}
@@ -536,7 +536,7 @@
 											bind:startDate={editStart}
 										/>
 										<select name="categoryId" class="field text-[16px]">
-											<option value="">No category</option>
+											<option value="">Other (no category)</option>
 											{#each data.categories as c (c.id)}
 												<option value={c.id} selected={c.id === r.categoryId}
 													>{c.icon} {c.name}</option
