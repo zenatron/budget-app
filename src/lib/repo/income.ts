@@ -1,6 +1,6 @@
 import { and, eq, gte, isNotNull, isNull, lt } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { income, user, workspaceMember } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { income, user, workspaceMember } from '$lib/db/schema';
 import type { Period } from '$lib/domain/analytics/period';
 import {
 	compareDates,

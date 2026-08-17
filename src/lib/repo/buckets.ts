@@ -1,6 +1,6 @@
 import { and, eq, gte, lt, ne, sql } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { bucket, bucketTransaction, user, workspaceMember } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { bucket, bucketTransaction, user, workspaceMember } from '$lib/db/schema';
 import type { Period } from '$lib/domain/analytics/period';
 import { bucketFlows, type BucketFlows } from '$lib/domain/bucket/flows';
 import { zonedTimeToUtc } from '$lib/domain/time/zoned';

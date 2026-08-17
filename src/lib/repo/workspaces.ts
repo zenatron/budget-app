@@ -1,6 +1,6 @@
 import { and, asc, eq } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { category, user, workspace, workspaceMember } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { category, user, workspace, workspaceMember } from '$lib/db/schema';
 
 export type WorkspaceRow = typeof workspace.$inferSelect;
 export type MemberRow = typeof workspaceMember.$inferSelect;

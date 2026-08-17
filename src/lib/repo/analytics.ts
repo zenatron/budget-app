@@ -1,5 +1,5 @@
 import { and, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
+import type { Db } from '$lib/db/types';
 import {
 	approvalEvent,
 	budget,
@@ -8,7 +8,7 @@ import {
 	purchase,
 	user,
 	workspaceMember
-} from '$lib/server/db/schema';
+} from '$lib/db/schema';
 import { periodBoundsUtc, type Period } from '$lib/domain/analytics/period';
 import { visibleTo } from './purchases';
 

@@ -69,13 +69,8 @@ export async function startLogin(): Promise<LoginStart> {
 	return { url, state, nonce, codeVerifier };
 }
 
-export interface OidcIdentity {
-	subject: string;
-	email: string;
-	displayName: string;
-	/** Profile picture URL from the IdP, if any. */
-	picture?: string;
-}
+export type { OidcIdentity } from '$lib/repo/users';
+import type { OidcIdentity } from '$lib/repo/users';
 
 export interface OidcTokens {
 	identity: OidcIdentity;

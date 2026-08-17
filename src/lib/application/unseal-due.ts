@@ -1,7 +1,7 @@
 import { and, lte, sql } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { purchase } from '$lib/server/db/schema';
-import { appendEvent, mapPurchaseRow } from '$lib/server/repo/purchases';
+import type { Db } from '$lib/db/types';
+import { purchase } from '$lib/db/schema';
+import { appendEvent, mapPurchaseRow } from '$lib/repo/purchases';
 import { announcePurchaseChange } from '$lib/application/notify-dispatch';
 import { unsealEvent } from '$lib/application/purchases';
 import type { Clock } from '$lib/ports/clock';

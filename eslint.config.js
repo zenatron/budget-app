@@ -34,12 +34,6 @@ export default defineConfig(
 		}
 	},
 	{
-		// Server code gets the project service so type-aware rules can run on it.
-		// Only no-floating-promises is enabled, not the full recommendedTypeChecked
-		// set: the generated `./$types` modules don't resolve under the service, so
-		// the no-unsafe-* rules fire on well-typed code and drown the signal.
-		// A dropped promise in the sweep or a notify path is an unhandled
-		// rejection, which takes the whole process down — that one is worth it.
 		files: ['src/lib/**/*.ts', 'src/hooks.server.ts'],
 		languageOptions: {
 			parserOptions: { projectService: true, parser: ts.parser }

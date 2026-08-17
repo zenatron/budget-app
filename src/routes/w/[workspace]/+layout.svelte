@@ -1,4 +1,5 @@
 <script lang="ts">
+	import DemoBanner from '$lib/components/DemoBanner.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { slide } from 'svelte/transition';
 	import { page, navigating } from '$app/state';
@@ -50,6 +51,12 @@
 	});
 
 	$effect(() => {
+		// The live-refresh stream needs a server to stream from. In the demo there
+		// is one tab and one writer, and every write already invalidates on its way
+		// out — so there is nothing to hear, and an EventSource here would just
+		// retry a 404 forever.
+		if (__DEMO__) return;
+
 		const source = new EventSource(`/w/${slug}/events`);
 		let t: ReturnType<typeof setTimeout> | undefined;
 		// A purchase action publishes its SSE event before it finishes and then
@@ -76,6 +83,8 @@
 	});
 
 	$effect(() => {
+		// No /push endpoint without a server, and nothing to push from.
+		if (__DEMO__) return;
 		if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 		if (Notification.permission !== 'granted') return;
 		void navigator.serviceWorker.ready.then(async (reg) => {
@@ -265,6 +274,9 @@
 		class="min-h-viewport flex flex-col"
 		style="--ws-accent-base: {accent}; --ws-accent: light-dark(var(--ws-accent-base), color-mix(in oklch, var(--ws-accent-base), white 18%)); --accent: var(--ws-accent); --header-h: {headerH}px; --nav-h: 5.75rem"
 	>
+		{#if __DEMO__}
+			<DemoBanner />
+		{/if}
 		<header
 			bind:clientHeight={headerH}
 			class="material sticky top-0 z-20"
@@ -293,7 +305,9 @@
 					/>
 				</button>
 				<div class="flex items-center gap-2">
-					<CommandPalette />
+					{#if !__DEMO__}
+						<CommandPalette />
+					{/if}
 					<a
 						href="/w/{slug}"
 						class="press flex h-8 w-8 items-center justify-center rounded-full"
@@ -336,19 +350,21 @@
 								{/if}
 							</a>
 						{/each}
-						<div class="my-1 h-px" style="background: var(--hairline)"></div>
-						<a
-							href="/welcome"
-							onclick={() => (showSwitcher = false)}
-							class="press flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5"
-						>
-							<span
-								class="flex h-8 w-8 items-center justify-center rounded-[10px]"
-								style="box-shadow: inset 0 0 0 1.5px var(--hairline-strong)"
-								><Plus class="h-4 w-4" style="color: var(--ink-3)" /></span
+						{#if !__DEMO__}
+							<div class="my-1 h-px" style="background: var(--hairline)"></div>
+							<a
+								href="/welcome"
+								onclick={() => (showSwitcher = false)}
+								class="press flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5"
 							>
-							<span class="text-[17px]" style="color: var(--ink-3)">New workspace</span>
-						</a>
+								<span
+									class="flex h-8 w-8 items-center justify-center rounded-[10px]"
+									style="box-shadow: inset 0 0 0 1.5px var(--hairline-strong)"
+									><Plus class="h-4 w-4" style="color: var(--ink-3)" /></span
+								>
+								<span class="text-[17px]" style="color: var(--ink-3)">New workspace</span>
+							</a>
+						{/if}
 					</div>
 				{/if}
 			</div>

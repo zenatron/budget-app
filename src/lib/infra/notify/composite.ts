@@ -1,4 +1,4 @@
-import type { Db } from '$lib/server/db';
+import type { Db } from '$lib/db/types';
 import type {
 	NotificationEventType,
 	NotificationMessage,
@@ -11,7 +11,7 @@ import {
 	listNtfyTargets,
 	listPushSubscriptions,
 	recordPushFailure
-} from '$lib/server/repo/notifications';
+} from '$lib/repo/notifications';
 import { sendNtfy } from './ntfy';
 import { sendWebPush, type WebPushConfig } from './webpush';
 

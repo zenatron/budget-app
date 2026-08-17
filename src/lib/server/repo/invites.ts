@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { and, eq, gt, isNull } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { invite } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { invite } from '$lib/db/schema';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 

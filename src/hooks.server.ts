@@ -11,7 +11,7 @@ import {
 	setSessionCookie,
 	validateSession
 } from '$lib/server/auth/session';
-import { findWorkspaceForMember } from '$lib/server/repo/workspaces';
+import { findWorkspaceForMember } from '$lib/repo/workspaces';
 import { rateLimitOk } from '$lib/server/rate-limit';
 import { unsealDuePurchases } from '$lib/application/unseal-due';
 import { releaseDueHolds } from '$lib/application/release-holds';
@@ -24,7 +24,8 @@ import { materializeBucketAccruals } from '$lib/application/buckets';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { getNotifier } from '$lib/server/notify';
-import { user } from '$lib/server/db/schema';
+import { serverDeps } from '$lib/server/deps';
+import { user } from '$lib/db/schema';
 import { eq } from 'drizzle-orm';
 
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
@@ -69,7 +70,7 @@ export const init: ServerInit = async () => {
 	};
 
 	const runSweep = async () => {
-		const deps = { clock: systemClock, ids: uuidv7, notifier: getNotifier() };
+		const deps = serverDeps();
 		try {
 			const opened = await unsealDuePurchases(getDb(), deps);
 			if (opened > 0) {
@@ -228,6 +229,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.session = null;
 	event.locals.workspace = null;
 	event.locals.member = null;
+	// The composition root: bind the ports to their server adapters once, here,
+	// so no route module has to name a concrete implementation.
+	event.locals.db = getDb();
+	event.locals.deps = serverDeps();
 
 	const sid = event.cookies.get(SESSION_COOKIE);
 	if (sid) {

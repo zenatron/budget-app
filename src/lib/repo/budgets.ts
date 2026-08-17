@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, isNull, lt, or } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { budget } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { budget } from '$lib/db/schema';
 import type { IdGenerator } from '$lib/ports/id-generator';
 
 /** This month through +12 — the window a budget may be scheduled for. */

@@ -47,8 +47,16 @@
 	--seal: light-dark(oklch(0.5 0.19 305), oklch(0.7 0.18 305));
 	--info: light-dark(oklch(0.52 0.16 250), oklch(0.7 0.15 250));
 
-	/* Accent — default; workspace layout sets a literal on its wrapper. */
-	--accent: light-dark(oklch(0.55 0.2 25), oklch(0.68 0.2 25));
+	/* Accent — the fallback for pages with no workspace behind them */
+	--accent: var(--pending);
+
+	/* Accent as TEXT. --ws-accent is a hex the workspace picked, so its contrast
+	   is whatever they chose — the demo teal reads 3.25:1 on paper, under the
+	   4.5 floor, and a paler pick would be worse. Pulling it toward --ink-2
+	   keeps the hue unmistakably theirs while putting a floor under it (4.7:1
+	   light, 6.8:1 dark on the tinted card). Use this wherever accent has to be
+	   read as words; --ws-accent stays the colour for icons, fills and rules. */
+	--accent-ink: color-mix(in oklab, var(--ws-accent, var(--accent)) 80%, var(--ink-2));
 
 	/* Editorial type scale */
 	--fs-mega: clamp(3.6rem, 3rem + 3vw, 4.6rem);
@@ -178,6 +186,20 @@
 	input[type='checkbox']:focus-visible,
 	input[type='radio']:focus-visible {
 		box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 32%, transparent);
+	}
+
+	/* The dropped-open option list does NOT follow `color-scheme` the way the
+	   closed control does: once a select is `appearance: none`, Chrome paints the
+	   popup with the select's own background and lets the options inherit its
+	   `color`. A row select styled `background: transparent` therefore drops a
+	   white popup after dusk, with near-white --ink text inside it — invisible.
+	   (An installed PWA hands the list to the platform menu instead, which is why
+	   it only breaks in the browser.) Naming both colours here is inert on the
+	   selects that already sit on a surface, and fixes the transparent ones. */
+	option,
+	optgroup {
+		background-color: var(--surface);
+		color: var(--ink);
 	}
 
 	/* Native date/time fields render the picker glyph in the UA's own color —
@@ -338,6 +360,46 @@
 		padding-right: 40px;
 	}
 
+	/*
+	 * Harmony's invitation — a slow gloss drifting through the placeholder of
+	 * the two ask-Harmony fields (describe-it on the purchase form, the
+	 * palette). It lives on ::placeholder, so the moment words land the
+	 * shimmer retires with them; there is no field state to manage.
+	 *
+	 * The gradient is flat accent-ink for its outer fifths and the keyframes
+	 * stop where the band sits just outside the box, so the loop seam — and
+	 * the reduced-motion freeze, which lands on the final frame — both read
+	 * as the ordinary static placeholder. The glint lightens accent toward
+	 * white; the base never moves off accent-ink, keeping its contrast floor.
+	 */
+	.placeholder-shimmer::placeholder {
+		background: linear-gradient(
+			100deg,
+			var(--accent-ink) 40%,
+			light-dark(
+				color-mix(in oklab, var(--ws-accent, var(--accent)) 55%, white),
+				color-mix(in oklab, var(--ws-accent, var(--accent)) 48%, white)
+			) 50%,
+			var(--accent-ink) 60%
+		);
+		background-size: 250% 100%;
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+		-webkit-text-fill-color: transparent;
+		animation: placeholder-shimmer 3.2s linear infinite;
+	}
+	/* 100% → 0% runs the band left to right: it enters at the caret and
+	   leaves stage right, the way a line is read. */
+	@keyframes placeholder-shimmer {
+		from {
+			background-position: 100% 0;
+		}
+		to {
+			background-position: 0% 0;
+		}
+	}
+
 	.btn {
 		display: inline-flex;
 		align-items: center;
@@ -396,6 +458,60 @@
 		background: color-mix(in oklab, var(--paper) 82%, transparent);
 		backdrop-filter: saturate(1.2) blur(20px);
 		-webkit-backdrop-filter: saturate(1.2) blur(20px);
+	}
+
+	/*
+	 * @tailwindcss/forms paints every text control with a blue-600 ring on
+	 * :focus. Those rules live in @layer base at (0,1,1) — and base is
+	 * emitted after the app's own base block, so they outrank the bare
+	 * :focus-visible there too. The square blue ring is what actually showed
+	 * on the borderless inline inputs: describe, amount, the palette,
+	 * filters, ledger rows. These two rules sit in components — the layer
+	 * that already shelters `.field` — so they outrank the plugin without
+	 * specificity tricks; the selector list mirrors the plugin's own so
+	 * nothing outside its reach is touched. Same arrangement as the checkbox
+	 * rules in base: nothing on mere :focus, our accent ring once focus is
+	 * visible. Borders are left alone — every text control here carries
+	 * border: none from a higher rule, so the plugin's blue border-color
+	 * never paints.
+	 */
+	input:where(
+			[type='text'],
+			:not([type]),
+			[type='email'],
+			[type='url'],
+			[type='password'],
+			[type='number'],
+			[type='date'],
+			[type='datetime-local'],
+			[type='month'],
+			[type='search'],
+			[type='tel'],
+			[type='time'],
+			[type='week']
+		):focus,
+	select:focus,
+	textarea:focus {
+		box-shadow: none;
+	}
+	input:where(
+			[type='text'],
+			:not([type]),
+			[type='email'],
+			[type='url'],
+			[type='password'],
+			[type='number'],
+			[type='date'],
+			[type='datetime-local'],
+			[type='month'],
+			[type='search'],
+			[type='tel'],
+			[type='time'],
+			[type='week']
+		):focus-visible,
+	select:focus-visible,
+	textarea:focus-visible {
+		box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 32%, transparent);
 	}
 }
 

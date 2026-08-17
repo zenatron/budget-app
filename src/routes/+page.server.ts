@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
-import { listWorkspacesForUser } from '$lib/server/repo/workspaces';
+import { listWorkspacesForUser } from '$lib/repo/workspaces';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {

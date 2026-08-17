@@ -2,7 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
-import { workspace } from '$lib/server/db/schema';
+import { workspace } from '$lib/db/schema';
 import type { Actions, PageServerLoad } from './$types';
 
 const SaveSchema = v.object({

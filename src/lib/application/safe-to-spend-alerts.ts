@@ -1,7 +1,7 @@
 import { and, eq, isNull, lt, ne, or } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { workspace, workspaceMember } from '$lib/server/db/schema';
-import { safeToSpend } from '$lib/server/repo/forecast';
+import type { Db } from '$lib/db/types';
+import { workspace, workspaceMember } from '$lib/db/schema';
+import { safeToSpend } from '$lib/repo/forecast';
 import { statusLevel } from '$lib/domain/forecast/safe-to-spend';
 import { monthPeriod } from '$lib/domain/analytics/period';
 import { calDateInZone } from '$lib/domain/time/zoned';

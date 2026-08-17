@@ -1,6 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
-import { listImports } from '$lib/server/repo/statements';
+import { listImports } from '$lib/repo/statements';
 import {
 	MAX_CSV_BYTES,
 	ReconcileError,
@@ -8,7 +8,7 @@ import {
 	importStatement
 } from '$lib/application/reconcile';
 import { detectColumns } from '$lib/domain/reconcile/parse-csv';
-import { createAccount, listAccounts } from '$lib/server/repo/accounts';
+import { createAccount, listAccounts } from '$lib/repo/accounts';
 import { rateLimitOk } from '$lib/server/rate-limit';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';

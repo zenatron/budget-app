@@ -2,7 +2,7 @@ import { error, json } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
 import { getEnv } from '$lib/server/env';
-import { deletePushSubscription, upsertPushSubscription } from '$lib/server/repo/notifications';
+import { deletePushSubscription, upsertPushSubscription } from '$lib/repo/notifications';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import type { RequestHandler } from './$types';

@@ -1,7 +1,7 @@
 import { error, json } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
 import { getEnv } from '$lib/server/env';
-import { getImport, getLine, matchCandidates } from '$lib/server/repo/statements';
+import { getImport, getLine, matchCandidates } from '$lib/repo/statements';
 import { suggestMatch } from '$lib/application/suggest-match';
 import { getLlmAssist } from '$lib/infra/llm';
 import { systemClock } from '$lib/infra/time/system-clock';

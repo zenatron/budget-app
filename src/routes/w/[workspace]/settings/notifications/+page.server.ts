@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import * as v from 'valibot';
 import { getDb } from '$lib/server/db';
-import { workspaceMember } from '$lib/server/db/schema';
+import { workspaceMember } from '$lib/db/schema';
 import { getEnv } from '$lib/server/env';
 import {
 	deleteNtfyTarget,
@@ -12,7 +12,7 @@ import {
 	listPushSubscriptions,
 	setNtfyTarget,
 	setPref
-} from '$lib/server/repo/notifications';
+} from '$lib/repo/notifications';
 import { sendNtfy } from '$lib/infra/notify/ntfy';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';

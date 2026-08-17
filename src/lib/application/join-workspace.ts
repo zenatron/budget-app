@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { invite, workspace, workspaceMember } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { invite, workspace, workspaceMember } from '$lib/db/schema';
 import { defaultApprovalPolicy } from '$lib/domain/approval/policy';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';

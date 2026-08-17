@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { purchase as purchaseTable } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { purchase as purchaseTable } from '$lib/db/schema';
 import {
 	hold,
 	extendHold,
@@ -9,7 +9,7 @@ import {
 	PurchaseStateError,
 	type Purchase
 } from '$lib/domain/purchase/purchase';
-import { applyTransition, loadPurchase } from '$lib/server/repo/purchases';
+import { applyTransition, loadPurchase } from '$lib/repo/purchases';
 import { announcePurchaseChange } from '$lib/application/notify-dispatch';
 import { PurchaseNotFoundError } from '$lib/application/purchases';
 import type { Clock } from '$lib/ports/clock';

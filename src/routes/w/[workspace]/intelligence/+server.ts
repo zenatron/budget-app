@@ -1,11 +1,11 @@
 import { error } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
 import { getEnv } from '$lib/server/env';
-import { bucketFlowsInPeriod } from '$lib/server/repo/buckets';
+import { bucketFlowsInPeriod } from '$lib/repo/buckets';
 import { Money } from '$lib/domain/money/money';
-import { periodTotal, categoryBreakdown, memberBreakdown } from '$lib/server/repo/analytics';
-import { incomeInPeriod } from '$lib/server/repo/income';
-import { safeToSpend } from '$lib/server/repo/forecast';
+import { periodTotal, categoryBreakdown, memberBreakdown } from '$lib/repo/analytics';
+import { incomeInPeriod } from '$lib/repo/income';
+import { safeToSpend } from '$lib/repo/forecast';
 import {
 	monthPeriod,
 	yearPeriod,
@@ -20,7 +20,7 @@ import { answerAsk, askOutcomeToWire, ASK_FALLBACK } from '$lib/application/ask'
 import { formatPct } from '$lib/format';
 import { getLlmAssist } from '$lib/infra/llm';
 import { briefingField } from '$lib/infra/llm/prompt';
-import type { WorkspaceRow } from '$lib/server/repo/workspaces';
+import type { WorkspaceRow } from '$lib/repo/workspaces';
 import type { RequestHandler } from './$types';
 
 /** Amounts cross the wire as bigint minor units; JSON.stringify can't do those. */

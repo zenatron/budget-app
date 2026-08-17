@@ -9,8 +9,8 @@
  */
 
 import { and, asc, eq } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { account } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { account } from '$lib/db/schema';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 

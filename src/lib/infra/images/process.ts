@@ -1,4 +1,21 @@
 import sharp from 'sharp';
+import {
+	ImageValidationError,
+	MAX_AVATAR_BYTES,
+	MAX_UPLOAD_BYTES,
+	type Derivative,
+	type ProcessedImage
+} from '$lib/ports/image-processor';
+
+// Re-exported so existing server-side importers keep working; the definitions
+// live in the port so client code can name them without importing sharp.
+export {
+	ImageValidationError,
+	MAX_AVATAR_BYTES,
+	MAX_UPLOAD_BYTES,
+	type Derivative,
+	type ProcessedImage
+};
 
 /**
  * Untrusted-upload pipeline: verify magic bytes (never the client's
@@ -8,19 +25,11 @@ import sharp from 'sharp';
  * Originals are discarded; only the two derivatives are stored.
  */
 
-export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 const MAX_INPUT_PIXELS = 40_000_000; // ~40MP
 /** Bounds on the *long* edge, not on width — see `derive`. */
 const DISPLAY_EDGE = 1600;
 const THUMB_EDGE = 400;
 const WEBP_QUALITY = 78;
-
-export class ImageValidationError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = 'ImageValidationError';
-	}
-}
 
 function sniffFormat(data: Uint8Array): 'jpeg' | 'png' | 'webp' | null {
 	if (data.length < 12) return null;
@@ -39,17 +48,6 @@ function sniffFormat(data: Uint8Array): 'jpeg' | 'png' | 'webp' | null {
 		return 'webp';
 	}
 	return null;
-}
-
-export interface Derivative {
-	data: Uint8Array;
-	width: number;
-	height: number;
-}
-
-export interface ProcessedImage {
-	display: Derivative;
-	thumb: Derivative;
 }
 
 export async function processUpload(input: Uint8Array): Promise<ProcessedImage> {
@@ -131,7 +129,6 @@ export async function toModelImage(
 }
 
 /** Max bytes for a user-uploaded avatar (10 MB). */
-export const MAX_AVATAR_BYTES = 10 * 1024 * 1024;
 const AVATAR_EDGE = 256;
 const AVATAR_QUALITY = 72;
 /** Decode cap: a 10 MB file can easily be a 20 MP phone photo. */

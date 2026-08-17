@@ -2,15 +2,16 @@ import { randomBytes } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import type { Cookies } from '@sveltejs/kit';
 import { dev } from '$app/environment';
-import type { Db } from '$lib/server/db';
-import { session, user } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { session, user } from '$lib/db/schema';
 
 export const SESSION_COOKIE = 'sid';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** Sliding renewal: extend when less than half the TTL remains. */
 const RENEW_BELOW_MS = SESSION_TTL_MS / 2;
 
-export type SessionUser = typeof user.$inferSelect;
+export type { UserRow as SessionUser } from '$lib/repo/users';
+type SessionUser = typeof user.$inferSelect;
 export type SessionRow = typeof session.$inferSelect;
 
 export async function createSession(

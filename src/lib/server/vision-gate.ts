@@ -19,7 +19,7 @@
 
 import { gateFor, entryFor, type Gate } from '$lib/domain/intelligence/capability-gate';
 import { listModels } from '$lib/infra/llm/model-catalog';
-import type { WorkspaceRow } from '$lib/server/repo/workspaces';
+import type { WorkspaceRow } from '$lib/repo/workspaces';
 
 export async function visionGate(ws: WorkspaceRow): Promise<Gate> {
 	if (ws.aiMode === 'off') {

@@ -1,9 +1,10 @@
-import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as schema from './schema';
+import * as schema from '$lib/db/schema';
+import type { Db } from '$lib/db/types';
 import { getEnv } from '$lib/server/env';
 
-export type Db = PostgresJsDatabase<typeof schema>;
+export type { Db };
 
 let instance: Db | undefined;
 

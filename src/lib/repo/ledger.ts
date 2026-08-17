@@ -1,7 +1,7 @@
 import { and, count, eq, gte, ilike, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { unionAll } from 'drizzle-orm/pg-core';
-import type { Db } from '$lib/server/db';
-import { bucket, bucketTransaction, merchant, purchase } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { bucket, bucketTransaction, merchant, purchase } from '$lib/db/schema';
 import { listPurchases, visibleTo, type PurchaseListItem } from './purchases';
 
 /**

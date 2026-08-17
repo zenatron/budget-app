@@ -10,7 +10,7 @@
 import { periodBoundsUtc } from '$lib/domain/analytics/period';
 import { addDays, type CalDate } from '$lib/domain/recurrence/rrule';
 import { NO_CATEGORY, parseBboxParam } from '$lib/ledger-filters';
-import type { LedgerBasis, LedgerOpts } from '$lib/server/repo/ledger';
+import type { LedgerBasis, LedgerOpts } from '$lib/repo/ledger';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 

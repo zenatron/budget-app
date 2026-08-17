@@ -1,5 +1,5 @@
 import { eq, inArray } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
+import type { Db } from '$lib/db/types';
 import {
 	approvalEvent,
 	budget,
@@ -18,7 +18,7 @@ import {
 	session,
 	workspace,
 	workspaceMember
-} from '$lib/server/db/schema';
+} from '$lib/db/schema';
 
 /**
  * Erase a workspace and everything under it, in one transaction.

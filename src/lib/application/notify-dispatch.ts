@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import type { Db } from '$lib/server/db';
-import { user, workspace, workspaceMember } from '$lib/server/db/schema';
+import type { Db } from '$lib/db/types';
+import { user, workspace, workspaceMember } from '$lib/db/schema';
 import type { Purchase, TransitionEvent } from '$lib/domain/purchase/purchase';
 import { publish } from '$lib/infra/events/bus';
 import type { NotificationEventType, Notifier, Recipient } from '$lib/ports/notifier';
