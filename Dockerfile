@@ -5,8 +5,17 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 COPY . .
 RUN bun run build
-# Prune to production dependencies for the runtime image.
-RUN rm -rf node_modules && bun install --frozen-lockfile --production
+
+# Prune to the runtime dependency set.
+#
+# --omit=peer matters as much as --production here. drizzle-orm declares 28
+# peerDependencies — every driver it supports — and valibot declares typescript;
+# all optional, and package managers install optional peers by default. That
+# alone was pulling PGlite and the TypeScript compiler into the runtime image,
+# ~50 MB of things the server never imports, and it looked like --production
+# being ignored. Nothing here needs a peer resolved: the drivers we actually use
+# are direct dependencies.
+RUN rm -rf node_modules && bun install --frozen-lockfile --production --omit=peer
 
 # Runtime stage
 FROM oven/bun:1.3
