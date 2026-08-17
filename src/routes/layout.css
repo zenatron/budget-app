@@ -377,9 +377,10 @@
 			100deg,
 			var(--accent-ink) 40%,
 			light-dark(
-				color-mix(in oklab, var(--ws-accent, var(--accent)) 55%, white),
-				color-mix(in oklab, var(--ws-accent, var(--accent)) 48%, white)
-			) 50%,
+					color-mix(in oklab, var(--ws-accent, var(--accent)) 55%, white),
+					color-mix(in oklab, var(--ws-accent, var(--accent)) 48%, white)
+				)
+				50%,
 			var(--accent-ink) 60%
 		);
 		background-size: 250% 100%;
@@ -512,6 +513,75 @@
 	select:focus-visible,
 	textarea:focus-visible {
 		box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 32%, transparent);
+	}
+
+	/*
+	 * ...but not when a pointer put the caret there.
+	 *
+	 * `:focus-visible` settles this correctly for buttons and links — click one
+	 * and it does not match. Text controls are deliberately exempt from that
+	 * heuristic: a focused field always matches, however it was reached, on the
+	 * grounds that you are about to type and should see where. On a phone, where
+	 * every field is opened by tapping it, that means a ring around everything
+	 * you touch.
+	 *
+	 * `data-input` (see $lib/input-modality) carries the missing bit — what the
+	 * last input actually was — so the ring stays for tab-to-field and goes for
+	 * tap-to-field. Keyed on modality rather than on viewport width or
+	 * display-mode: neither of those says anything about how someone is
+	 * navigating, and a keyboard user on a small screen would lose their focus
+	 * indicator entirely, which is a WCAG 2.4.7 failure and not a tidier UI.
+	 *
+	 * Absent the attribute the ring shows, so the first interaction of a session
+	 * and any browser that never fires pointerdown both fail safe.
+	 */
+	:root[data-input='pointer']
+		input:where(
+			[type='text'],
+			:not([type]),
+			[type='email'],
+			[type='url'],
+			[type='password'],
+			[type='number'],
+			[type='date'],
+			[type='datetime-local'],
+			[type='month'],
+			[type='search'],
+			[type='tel'],
+			[type='time'],
+			[type='week']
+		):focus-visible,
+	:root[data-input='pointer'] select:focus-visible,
+	:root[data-input='pointer'] textarea:focus-visible {
+		box-shadow: none;
+	}
+
+	/* Windows High Contrast and friends: the person has asked the OS for strong
+	   affordances, so the ring comes back regardless of how the field was
+	   reached. */
+	@media (forced-colors: active) {
+		:root[data-input='pointer']
+			input:where(
+				[type='text'],
+				:not([type]),
+				[type='email'],
+				[type='url'],
+				[type='password'],
+				[type='number'],
+				[type='date'],
+				[type='datetime-local'],
+				[type='month'],
+				[type='search'],
+				[type='tel'],
+				[type='time'],
+				[type='week']
+			):focus-visible,
+		:root[data-input='pointer'] select:focus-visible,
+		:root[data-input='pointer'] textarea:focus-visible {
+			box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 32%, transparent);
+			outline: 2px solid CanvasText;
+			outline-offset: 2px;
+		}
 	}
 }
 

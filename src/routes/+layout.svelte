@@ -8,6 +8,7 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import NavProgress from '$lib/components/NavProgress.svelte';
 	import Toaster from '$lib/components/Toaster.svelte';
+	import { trackInputModality } from '$lib/input-modality';
 	import { onMount } from 'svelte';
 
 	let { children } = $props();
@@ -43,6 +44,10 @@
 			for (const type of events) document.removeEventListener(type, block);
 		};
 	});
+
+	// Publishes `data-input` on <html>; layout.css uses it to keep the focus ring
+	// on text fields for keyboard navigation and off it for taps and clicks.
+	$effect(trackInputModality);
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
