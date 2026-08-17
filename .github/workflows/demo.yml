@@ -51,7 +51,19 @@ jobs:
         with:
           bun-version: '1.3.14'
 
-      - run: bun install --frozen-lockfile
+      # bun's tarball extraction fails intermittently on the larger packages —
+      # the first run of this workflow died on "Fail extracting tarball for
+      # pdfjs-dist" before it reached anything of ours. Retry before giving up,
+      # rather than re-running the whole job by hand.
+      - name: Install dependencies
+        run: |
+          for attempt in 1 2 3; do
+            if bun install --frozen-lockfile; then exit 0; fi
+            echo "bun install failed (attempt $attempt) — retrying"
+            rm -rf node_modules
+            sleep 5
+          done
+          exit 1
 
       # scripts/demo-seed.ts shells out to psql and pg_dump. The runner already
       # has a 16 client, but say so explicitly so a runner-image change cannot
