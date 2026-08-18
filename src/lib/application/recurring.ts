@@ -263,7 +263,31 @@ export async function materializeDueRules(db: Db, deps: Deps): Promise<number> {
 				if (!r || r.status !== 'active' || !r.nextOccurrenceAt || r.nextOccurrenceAt > now) {
 					return null;
 				}
-				const rec = parseRRule(r.rrule);
+
+				// A malformed rule must not wedge the sweep: parsing throws, the
+				// transaction rolls back with next_occurrence_at unadvanced, and the
+				// row re-throws every sweep — starving every rule after it. Pause it
+				// instead. The candidate query filters status='active', so a paused
+				// rule leaves the queue for good; it shows as paused and resumes in one
+				// tap once corrected.
+				let rec;
+				try {
+					rec = parseRRule(r.rrule);
+				} catch (e) {
+					await tx
+						.update(recurringRule)
+						.set({ status: 'paused' })
+						.where(eq(recurringRule.id, r.id));
+					console.log(
+						JSON.stringify({
+							level: 'warn',
+							msg: 'sweep: recurring paused (unparseable rule)',
+							ruleId: r.id,
+							err: (e as Error).message
+						})
+					);
+					return null;
+				}
 				const occurrenceAt = r.nextOccurrenceAt;
 				const amount = Money.of(r.amountMinor, r.currency);
 				const p: Purchase = {

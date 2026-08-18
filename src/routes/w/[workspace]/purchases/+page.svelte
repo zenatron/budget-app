@@ -333,6 +333,25 @@
 	// from under the user mid-typing.
 	const f = $derived(data.forecast);
 
+	// The months after this one: projected free cash, shown inside the expanded
+	// breakdown. Every figure is a projection; the caption says so.
+	const runway = $derived(data.runway);
+	const runwayHasSignal = $derived(
+		runway.months.some((m) => m.incomeMinor !== 0n || m.billsMinor !== 0n || m.savingsMinor !== 0n)
+	);
+	const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+	function monthLabel(m: { y: number; m: number }): string {
+		// Append a short year only when the horizon crosses into a new one.
+		const rollsYear = runway.months[0].month.y !== m.y;
+		return `${MON[m.m - 1]}${rollsYear ? ` ’${String(m.y).slice(2)}` : ''}`;
+	}
+	const runwaySummary = $derived.by(() => {
+		if (!runwayHasSignal) return '';
+		if (runway.firstShortMonth) return `Tight in ${monthLabel(runway.firstShortMonth)}`;
+		const last = runway.months[runway.months.length - 1];
+		return `On track through ${monthLabel(last.month)}`;
+	});
+
 	/*
 	 * Discretion. The one number on this page that reads across a café from the
 	 * next table, so it's the one you get to turn down: shown, masked until you
@@ -795,6 +814,34 @@
 							The dotted figure is an estimate. Some of those bills ask you to confirm the real
 							price, so it's what they came to last time.
 						</p>
+					{/if}
+					{#if runwayHasSignal}
+						<!-- The months after this one: projected free cash left each month, after
+						     income, bills and saving. A projection, not a commitment. -->
+						<div class="mt-4 border-t pt-3" style="border-color: var(--hairline)">
+							<span class="section-label">The months after</span>
+							<div class="mt-1.5 text-[14px]">
+								{#each runway.months as m (`${m.month.y}-${m.month.m}`)}
+									<div class="flex items-center justify-between py-0.5">
+										<span style="color: var(--ink-2)">{monthLabel(m.month)}</span>
+										<span
+											class="num"
+											style="color: {m.freeMinor < 0n ? 'var(--deny)' : 'var(--ink)'}"
+											>{m.freeMinor >= 0n ? '' : '−'}{formatMinor(
+												m.freeMinor < 0n ? -m.freeMinor : m.freeMinor,
+												data.currency
+											)}</span
+										>
+									</div>
+								{/each}
+							</div>
+							{#if runwaySummary}
+								<p class="mt-2 text-[12px] leading-relaxed" style="color: var(--ink-3)">
+									{runwaySummary}. Projected from what repeats each month. Nothing here is
+									spent yet.
+								</p>
+							{/if}
+						</div>
 					{/if}
 				</div>
 			{/if}
