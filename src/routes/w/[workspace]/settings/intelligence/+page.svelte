@@ -101,7 +101,7 @@
 		<a
 			href="/w/{slug}/settings/help?s=safe-to-spend"
 			class="press mt-1 inline-block text-[13px] font-medium"
-			style="color: var(--ws-accent)">How it works</a
+			style="color: var(--accent-ink)">How it works</a
 		>
 	</div>
 
@@ -138,7 +138,7 @@
 					target="_blank"
 					rel="noopener noreferrer"
 					class="underline decoration-dotted"
-					style="color: var(--ws-accent)">Open Food Facts</a
+					style="color: var(--accent-ink)">Open Food Facts</a
 				> and set the URL in your deployment's environment.
 			</p>
 			{#if !data.barcodeConfigured}

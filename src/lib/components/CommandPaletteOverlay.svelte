@@ -135,7 +135,7 @@
 					autocapitalize="off"
 					spellcheck="false"
 					aria-label="Ask Harmony"
-					class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] leading-tight outline-none placeholder-shimmer"
+					class="placeholder-shimmer min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] leading-tight outline-none"
 					style="color: var(--ink)"
 				/>
 				{#if paletteQuery.value}
@@ -270,7 +270,7 @@
 								paletteInputEl.value?.focus();
 							}}
 							class="mt-3 text-[13px] font-medium"
-							style="color: var(--ws-accent)"
+							style="color: var(--accent-ink)"
 						>
 							Ask something else
 						</button>

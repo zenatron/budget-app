@@ -256,7 +256,7 @@
 									<button
 										onclick={() => openPolicy(m)}
 										class="press text-[13px] font-medium"
-										style="color: var(--ws-accent)"
+										style="color: var(--accent-ink)"
 										>{editingPolicy === m.id ? 'Done' : 'Policy'}</button
 									>
 								{/if}

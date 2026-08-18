@@ -715,7 +715,7 @@
 						>
 							Suggested
 							<strong style="color: var(--ink)">{suggested.icon} {suggested.name}</strong>
-							<span style="color: var(--ws-accent)">· Apply</span>
+							<span style="color: var(--accent-ink)">· Apply</span>
 						</button>
 						<button
 							type="button"
@@ -826,7 +826,7 @@
 						onclick={readPhoto}
 						disabled={readingPhoto}
 						class="press flex items-center gap-2 text-[15px]"
-						style="color: var(--ws-accent)"
+						style="color: var(--accent-ink)"
 					>
 						<Sparkles class="h-4 w-4" />
 						{readingPhoto ? 'Reading the receipt…' : 'Read this receipt'}

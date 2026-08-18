@@ -291,7 +291,7 @@
 						onclick={() => askForHelp(l.id)}
 						disabled={asking !== null}
 						class="btn btn-ghost px-3.5 py-1.5 text-[13px]"
-						style="color: var(--ws-accent)"
+						style="color: var(--accent-ink)"
 					>
 						<Sparkles class="h-3.5 w-3.5" />
 						{asking === l.id ? 'Looking…' : 'Help me find this'}
@@ -494,7 +494,7 @@
 											<!-- Labelled, not styled-as-chosen: this row is a question. -->
 											<span
 												class="chip shrink-0"
-												style="color: var(--ws-accent); background: color-mix(in oklab, var(--ws-accent) 14%, transparent)"
+												style="color: var(--accent-ink); background: color-mix(in oklab, var(--ws-accent) 14%, transparent)"
 												>Guess</span
 											>
 										{/if}

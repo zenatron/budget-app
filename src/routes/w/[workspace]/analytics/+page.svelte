@@ -765,7 +765,7 @@
 					<button
 						onclick={() => (showBudgetForm = !showBudgetForm)}
 						class="press text-[13px] font-semibold"
-						style="color: var(--ws-accent)"
+						style="color: var(--accent-ink)"
 					>
 						{showBudgetForm ? 'Done' : 'Set budget'}
 					</button>

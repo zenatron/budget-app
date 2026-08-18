@@ -837,8 +837,8 @@
 							</div>
 							{#if runwaySummary}
 								<p class="mt-2 text-[12px] leading-relaxed" style="color: var(--ink-3)">
-									{runwaySummary}. Projected from what repeats each month. Nothing here is
-									spent yet.
+									{runwaySummary}. Projected from what repeats each month. Nothing here is spent
+									yet.
 								</p>
 							{/if}
 						</div>
@@ -1169,7 +1169,7 @@
 				<a
 					href="/w/{slug}/settings/help?s=logging"
 					class="press mt-4 flex items-center justify-center gap-1.5 text-[14px] font-medium"
-					style="color: var(--ws-accent)"
+					style="color: var(--accent-ink)"
 				>
 					<CircleHelp class="h-4 w-4" /> How this works
 				</a>

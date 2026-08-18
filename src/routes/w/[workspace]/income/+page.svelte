@@ -102,7 +102,7 @@
 			<a
 				href="/w/{slug}/settings/help?s=income"
 				class="press mt-4 inline-flex items-center gap-1.5 text-[14px] font-medium"
-				style="color: var(--ws-accent)"
+				style="color: var(--accent-ink)"
 			>
 				<CircleHelp class="h-4 w-4" /> How this works
 			</a>
