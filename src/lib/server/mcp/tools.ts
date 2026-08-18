@@ -655,7 +655,7 @@ export const TOOLS: McpTool[] = [
 				'Nov',
 				'Dec'
 			];
-			const data: { month: string; label: string; total: string; totalMinor: number }[] = [];
+			const data: { month: string; label: string; total: string; totalMinor: string }[] = [];
 			for (let i = 0; i < months; i++) {
 				const idx = startMonthIdx + i;
 				const y = Math.floor(idx / 12);
@@ -666,7 +666,9 @@ export const TOOLS: McpTool[] = [
 					month: key,
 					label: `${monthNames[m - 1]} ${y}`,
 					total: fmt(minor, ctx),
-					totalMinor: Number(minor)
+					// A string, not Number(): minor units past 2^53 would lose precision,
+					// and this is a value a client may read and sum.
+					totalMinor: minor.toString()
 				});
 			}
 			const text = data.map((d) => `- ${d.label}: ${d.total}`).join('\n');

@@ -60,6 +60,7 @@ export interface SeededWorkspace {
 	/** Add a second (or third) member; returns the member id. */
 	addMember(opts?: { display?: string }): Promise<string>;
 	addCategory(name?: string): Promise<string>;
+	addMerchant(opts: { name: string; normalizedName?: string }): Promise<string>;
 	addIncome(opts: {
 		memberId?: string;
 		amountMinor: bigint;
@@ -103,6 +104,7 @@ export interface SeededWorkspace {
 		sealedUntil?: Date | null;
 		bucketId?: string | null;
 		parentPurchaseId?: string | null;
+		merchantId?: string | null;
 	}): Promise<string>;
 }
 
@@ -174,6 +176,16 @@ export async function seedWorkspace(
 		async addCategory(name = 'Groceries') {
 			const id = uid();
 			await db.insert(schema.category).values({ id, workspaceId, name });
+			return id;
+		},
+		async addMerchant({ name, normalizedName }) {
+			const id = uid();
+			await db.insert(schema.merchant).values({
+				id,
+				workspaceId,
+				name,
+				normalizedName: normalizedName ?? name.trim().toLowerCase()
+			});
 			return id;
 		},
 		async addIncome({ memberId, amountMinor, receivedAt, rrule }) {
@@ -249,7 +261,8 @@ export async function seedWorkspace(
 			sealedFromMemberIds = [],
 			sealedUntil = null,
 			bucketId = null,
-			parentPurchaseId = null
+			parentPurchaseId = null,
+			merchantId = null
 		}) {
 			const id = uid();
 			await db.insert(schema.purchase).values({
@@ -268,6 +281,7 @@ export async function seedWorkspace(
 				sealedUntil,
 				bucketId,
 				parentPurchaseId,
+				merchantId,
 				createdAt: now,
 				updatedAt: now
 			});

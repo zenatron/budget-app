@@ -48,7 +48,8 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			merchantName: parsed.merchantName,
 			amount: parsed.amount,
 			sentence: text
-		}
+		},
+		{ memberId: locals.member!.id, now: new Date() }
 	);
 
 	return json({

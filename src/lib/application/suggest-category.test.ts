@@ -19,7 +19,20 @@ vi.mock('$lib/repo/purchases', () => ({
 	lastCategoryForMerchant: (...a: unknown[]) => lastCategoryForMerchant(...a)
 }));
 
-const { suggestCategory } = await import('./suggest-category');
+const { suggestCategory: _suggestCategory } = await import('./suggest-category');
+
+// Every test asks as the same viewer; the seal filter behaviour has its own
+// integration test against a real db. A thin wrapper keeps the call sites here
+// unchanged now that suggestCategory takes a viewer.
+const VIEWER = { memberId: 'viewer-1', now: new Date('2026-06-15T00:00:00Z') };
+type SC = typeof _suggestCategory;
+const suggestCategory = (
+	db: Parameters<SC>[0],
+	assist: Parameters<SC>[1],
+	ws: Parameters<SC>[2],
+	cmd: Parameters<SC>[3],
+	viewer: Parameters<SC>[4] = VIEWER
+) => _suggestCategory(db, assist, ws, cmd, viewer);
 
 const db = {} as Db;
 const WS = 'ws-1';
