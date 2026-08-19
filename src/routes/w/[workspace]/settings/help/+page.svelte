@@ -16,7 +16,8 @@
 		Sparkles,
 		Wallet,
 		NotebookText,
-		MessageCircle
+		MessageCircle,
+		PiggyBank
 	} from '@lucide/svelte';
 
 	const HELP_ICONS: Record<string, typeof CreditCard> = {
@@ -33,7 +34,8 @@
 		sparkle: Sparkles,
 		wallet: Wallet,
 		notepad: NotebookText,
-		message: MessageCircle
+		message: MessageCircle,
+		piggy: PiggyBank
 	};
 
 	/**
@@ -100,7 +102,8 @@
 						'A policy is either **never**, **above an amount**, or **always**. You also choose who decides: any one of the approvers, or one specific person.',
 						'Being someone’s approver and needing approval yourself are independent settings.',
 						'**Spending more than approved sends it back.** If the final amount is well over what was approved, the purchase returns to waiting until the approver confirms the real price.',
-						'Editing the item, amount, or category of an approved purchase also sends it back. Purchases that never needed approval just update.'
+						'Editing the item, amount, or category of an approved purchase also sends it back. Purchases that never needed approval just update.',
+						'**A denial is not the end.** The person who asked can **Ask again** with a note saying what changed, which sends it back to whoever can decide now. An approver who said no can **Allow it after all**, also with a note. Both land in the purchase\u2019s history beside the denial, so the record shows it was refused and then answered again.'
 					]
 				},
 				{
@@ -171,6 +174,7 @@
 					body: [
 						'A bucket sets money aside on a schedule, such as a travel fund or an emergency float. Choose the amount and how often it accrues. A start date in the past can backfill accruals you already missed.',
 						'Buckets belong to the person who made them. Only that person can withdraw or adjust one.',
+						'Anyone can charge a purchase to a bucket. Under **Who can charge this**, pick **Only me** or name the people who may, and it disappears from everyone else\u2019s purchase form. Any recurring rule of theirs that charged it stops charging it, and keeps running as ordinary spending.',
 						'You can charge a purchase to a bucket, which draws it down. The workspace sets a default for whether bucket charges skip approval, and each person can override it for their own charges.',
 						'A bucket can go **overdrawn**: a charge bigger than the balance is allowed, since no real money moves. You are warned before it happens and the bucket is marked on this page. The next accrual pays off the shortfall before adding to the balance, and the part the bucket could not cover counts as ordinary spending.'
 					]
@@ -201,7 +205,7 @@
 						'Money charged to a bucket does not count as spending here, because it was set aside in an earlier month. If a bucket is charged past its balance, the uncovered part does count as spending.',
 						'**Pending** requests and ones you’re **sleeping on** are shown but not subtracted, since they might still be denied or let go. If you set a budget, Harmony also marks the point where the budget becomes the limit.',
 						'Every figure is plain arithmetic computed on your server at the moment you view it, so a hidden gift never appears in the total shown to the person it is hidden from.',
-						'Under **Filter** on the Ledger, **Safe to spend** can be **Shown**, **Hidden until tapped**, or **Off**. With **Hidden until tapped**, the digits appear as dots until you tap the eye and hide again the next time you open the app. **Off** removes the headline entirely. The choice is yours alone and changes nothing for anyone else in the workspace.'
+						'In **Settings → Harmony**, the **Safe to Spend** switch decides whether the headline appears at all, and how it reads: **Hidden until tapped** (the default) shows the digits as dots until you tap the eye, and hides them again the next time you open the app; **Always shown** leaves them on screen. **The months after** switches the projection on and off inside the breakdown. All of it is yours alone and changes nothing for anyone else in the workspace.'
 					]
 				},
 				{
@@ -272,6 +276,18 @@
 						'Any owner can make another person an owner, or step someone (including themselves) back down to member, as long as one owner remains. Promote first, then demote yourself to hand a workspace over.',
 						'**Disable** someone to take away their access without erasing their history; **restore** brings them back. You can’t disable yourself, the last owner, or the only person left who can approve someone else’s spending.',
 						'**Deleting the workspace** removes everything in it and cannot be undone. You have to type the workspace name to confirm.'
+					]
+				},
+				{
+					id: 'allowances',
+					icon: 'piggy',
+					title: 'Allowances',
+					body: [
+						'An allowance gives someone a set amount to spend on their own, topped up on a schedule. Open **Settings → Members**, tap **Allowance** beside their name, and choose the amount and how often.',
+						'They get a bucket only they can charge to. Purchases that fit inside it go through without asking. A purchase bigger than the balance comes to an owner as a normal approval request, so the amount is a real limit.',
+						'Everything else they buy needs approval as usual, and they cannot charge to anyone else\u2019s bucket.',
+						'Run the same action again to change the amount or the schedule. The balance stays where it is.',
+						'The pieces are ordinary settings, so you can build the same thing by hand: a bucket set to **Only me** on the Buckets page, plus **Buckets they can charge** set to **Only their own** under **Policy**.'
 					]
 				}
 			]

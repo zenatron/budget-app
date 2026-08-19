@@ -14,6 +14,7 @@ import {
 	setPref
 } from '$lib/repo/notifications';
 import { sendNtfy } from '$lib/infra/notify/ntfy';
+import { sendWebPush } from '$lib/infra/notify/webpush';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { EVENT_TYPES } from '$lib/notification-events';
@@ -111,6 +112,40 @@ export const actions: Actions = {
 		return ok
 			? { section: 'ntfy', ok: true, tested: true }
 			: fail(502, { section: 'ntfy', error: 'The ntfy server did not accept the message' });
+	},
+
+	// The push twin of ntfyTest: same message shape, same "it worked" bar. Sent
+	// to every registered device of this member — the server cannot tell which
+	// device asked, and a test that buzzes the other phone is still a pass.
+	pushTest: async ({ locals }) => {
+		const env = getEnv();
+		if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
+			return fail(400, { section: 'push', error: 'Push is not configured on this server' });
+		}
+		const subs = await listPushSubscriptions(getDb(), [locals.user!.id]);
+		if (subs.length === 0) return fail(400, { section: 'push', error: 'Enable push first' });
+		const config = {
+			publicKey: env.VAPID_PUBLIC_KEY,
+			privateKey: env.VAPID_PRIVATE_KEY,
+			subject: env.VAPID_SUBJECT ?? env.PUBLIC_ORIGIN
+		};
+		let delivered = 0;
+		for (const sub of subs) {
+			const result = await sendWebPush(
+				config,
+				{ endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+				{
+					title: 'Budget test',
+					body: 'Push is wired up correctly.',
+					path: `/w/${locals.workspace!.slug}/purchases`,
+					tag: 'test'
+				}
+			);
+			if (result === 'ok') delivered++;
+		}
+		return delivered > 0
+			? { section: 'push', ok: true, tested: true }
+			: fail(502, { section: 'push', error: 'No device accepted the test message' });
 	},
 
 	prefs: async ({ locals, request }) => {

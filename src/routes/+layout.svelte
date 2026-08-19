@@ -9,6 +9,7 @@
 	import NavProgress from '$lib/components/NavProgress.svelte';
 	import Toaster from '$lib/components/Toaster.svelte';
 	import { trackInputModality } from '$lib/input-modality';
+	import { initInstallPrompt } from '$lib/install-prompt.svelte';
 	import { onMount } from 'svelte';
 
 	let { children } = $props();
@@ -48,6 +49,10 @@
 	// Publishes `data-input` on <html>; layout.css uses it to keep the focus ring
 	// on text fields for keyboard navigation and off it for taps and clicks.
 	$effect(trackInputModality);
+
+	// Captures the browser's install offer so the settings hub can present it;
+	// a no-op everywhere the event never fires (Safari, Firefox).
+	onMount(initInstallPrompt);
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>

@@ -9,7 +9,12 @@ import {
 	workspaceMember
 } from '$lib/db/schema';
 import { calDateInZone } from '$lib/domain/time/zoned';
-import { monthPeriod, periodBoundsUtc, type Period } from '$lib/domain/analytics/period';
+import {
+	monthPeriod,
+	periodBoundsUtc,
+	weekPeriod,
+	type Period
+} from '$lib/domain/analytics/period';
 import { decideBudgetAlert, type BudgetAlertLevel } from '$lib/domain/budget/alert';
 import { Money } from '$lib/domain/money/money';
 import { visibleTo } from '$lib/repo/purchases';
@@ -19,14 +24,17 @@ import type { Notifier, Recipient } from '$lib/ports/notifier';
 
 /**
  * Budget alerts, two triggers sharing one evaluator:
- *  - the sweep (checkBudgetAlerts) walks every workspace's current month;
+ *  - the sweep (checkBudgetAlerts) walks every workspace's current month and
+ *    current week;
  *  - completing a purchase (checkBudgetsForPurchase) checks only the budgets
  *    that purchase touched — its category's and the overall one — against the
- *    month the money was spent in.
+ *    month and the week the money was spent in.
  *
- * Alert state lives in budget_alert_log keyed by (workspace, category, month),
- * so editing a budget amount never resets the cooldown, and every message
- * names its budget — "Groceries budget exceeded", not a bare "Budget exceeded".
+ * Alert state lives in budget_alert_log keyed by (workspace, category, period):
+ * 'YYYY-MM' for monthly budgets, the week's first day for weekly ones, so a
+ * weekly overspend never satisfies a monthly cooldown and vice versa. Editing
+ * a budget amount never resets the cooldown, and every message names its
+ * budget — "Groceries budget exceeded", not a bare "Budget exceeded".
  */
 
 /** Stable key of the all-category budget line in budget_alert_log. */
@@ -56,27 +64,37 @@ const WORKSPACE_COLUMNS = {
 	timezone: workspace.timezone,
 	currency: workspace.currency,
 	ownerUserId: workspace.ownerUserId,
+	weekStartDay: workspace.weekStartDay,
 	budgetAlertPct: workspace.budgetAlertPct,
 	budgetAlertCooldownHours: workspace.budgetAlertCooldownHours
 } as const;
 
-/** Sweep entry point: current month, every workspace, every budget line. */
+/** Sweep entry point: current month and current week, every workspace, every line. */
 export async function checkBudgetAlerts(db: Db, deps: Deps): Promise<number> {
 	const now = deps.clock.now();
 	const workspaces = await db.select(WORKSPACE_COLUMNS).from(workspace);
 
 	let alerted = 0;
 	for (const ws of workspaces) {
-		const period = monthPeriod(calDateInZone(now, ws.timezone));
-		alerted += await evaluateBudgets(db, deps, ws, period, null, now);
+		const today = calDateInZone(now, ws.timezone);
+		alerted += await evaluateBudgets(db, deps, ws, monthPeriod(today), null, now, 'month');
+		alerted += await evaluateBudgets(
+			db,
+			deps,
+			ws,
+			weekPeriod(today, ws.weekStartDay),
+			null,
+			now,
+			'week'
+		);
 	}
 	return alerted;
 }
 
 /**
  * Purchase-time entry point: the budgets a completed purchase actually counts
- * toward, evaluated against the month it was spent in. Never throws — an
- * alert hiccup must not fail the mutation that caused it.
+ * toward, evaluated against the month and the week it was spent in. Never
+ * throws — an alert hiccup must not fail the mutation that caused it.
  */
 export async function checkBudgetsForPurchase(
 	db: Db,
@@ -91,9 +109,10 @@ export async function checkBudgetsForPurchase(
 			.limit(1);
 		if (!ws) return;
 		const now = deps.clock.now();
-		const period = monthPeriod(calDateInZone(p.completedAt, ws.timezone));
+		const spentOn = calDateInZone(p.completedAt, ws.timezone);
 		const keys = new Set([OVERALL_KEY, p.categoryId ?? OVERALL_KEY]);
-		await evaluateBudgets(db, deps, ws, period, keys, now);
+		await evaluateBudgets(db, deps, ws, monthPeriod(spentOn), keys, now, 'month');
+		await evaluateBudgets(db, deps, ws, weekPeriod(spentOn, ws.weekStartDay), keys, now, 'week');
 	} catch (e) {
 		console.log(
 			JSON.stringify({
@@ -112,12 +131,16 @@ async function evaluateBudgets(
 	period: Period,
 	/** When set, only these category keys are evaluated (purchase-time check). */
 	onlyKeys: Set<string> | null,
-	now: Date
+	now: Date,
+	/** Which cadence's budget lines this pass reads — one pass per cadence. */
+	kind: 'month' | 'week'
 ): Promise<number> {
 	const { from, to } = periodBoundsUtc(period, ws.timezone);
 	const pad = (n: number) => String(n).padStart(2, '0');
 	const fromStr = `${period.from.y}-${pad(period.from.m)}-${pad(period.from.d)}`;
-	const month = fromStr.slice(0, 7); // 'YYYY-MM'
+	// The alert-state key: monthly budgets key by month, weekly ones by the
+	// week's first day. The two shapes can't collide.
+	const periodKey = kind === 'month' ? fromStr.slice(0, 7) : fromStr;
 
 	const budgets = await db
 		.select({
@@ -131,7 +154,7 @@ async function evaluateBudgets(
 		.where(
 			and(
 				eq(budget.workspaceId, ws.id),
-				eq(budget.period, 'month'),
+				eq(budget.period, kind),
 				lte(budget.effectiveFrom, fromStr),
 				or(isNull(budget.effectiveTo), gt(budget.effectiveTo, fromStr))
 			)
@@ -157,7 +180,7 @@ async function evaluateBudgets(
 	const logs = await db
 		.select()
 		.from(budgetAlertLog)
-		.where(and(eq(budgetAlertLog.workspaceId, ws.id), eq(budgetAlertLog.month, month)));
+		.where(and(eq(budgetAlertLog.workspaceId, ws.id), eq(budgetAlertLog.periodKey, periodKey)));
 	const logByKey = new Map(logs.map((l) => [l.categoryKey, l]));
 
 	const recipients: Recipient[] = [{ userId: ownerMember.userId, memberId: ownerMember.memberId }];
@@ -225,7 +248,7 @@ async function evaluateBudgets(
 			deps.ids,
 			ws,
 			key,
-			month,
+			periodKey,
 			// decision.fire implies a non-null level.
 			{ level: decision.level!, reason: decision.reason },
 			actualMinor,
@@ -242,9 +265,9 @@ async function evaluateBudgets(
 		await deps.notifier.notify(recipients, 'budget_exceeded', {
 			title:
 				decision.level === 'exceeded' ? `${name} budget exceeded` : `${name} budget nearing limit`,
-			body: `${ws.name}: spent ${actualMoney.format()} of ${budgetMoney.format()} (${pct}%) this month`,
+			body: `${ws.name}: spent ${actualMoney.format()} of ${budgetMoney.format()} (${pct}%) this ${kind}`,
 			path: `/w/${ws.slug}/analytics`,
-			tag: `budget-alert:${key}:${month}`
+			tag: `budget-alert:${key}:${periodKey}`
 		});
 
 		alerted += 1;
@@ -258,7 +281,7 @@ async function claimAlert(
 	ids: IdGenerator,
 	ws: WorkspaceRow,
 	key: string,
-	month: string,
+	periodKey: string,
 	decision: { level: BudgetAlertLevel; reason: string | null },
 	actualMinor: bigint,
 	now: Date,
@@ -271,13 +294,13 @@ async function claimAlert(
 				id: ids.newId(),
 				workspaceId: ws.id,
 				categoryKey: key,
-				month,
+				periodKey,
 				level: decision.level,
 				actualMinor,
 				lastAlertedAt: now
 			})
 			.onConflictDoNothing({
-				target: [budgetAlertLog.workspaceId, budgetAlertLog.categoryKey, budgetAlertLog.month]
+				target: [budgetAlertLog.workspaceId, budgetAlertLog.categoryKey, budgetAlertLog.periodKey]
 			})
 			.returning({ id: budgetAlertLog.id });
 		return inserted.length > 0;

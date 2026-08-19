@@ -84,7 +84,11 @@ export async function suggestCategory(
 	db: Db,
 	assist: LlmAssist,
 	workspaceId: string,
-	cmd: SuggestCategoryCmd
+	cmd: SuggestCategoryCmd,
+	// The person asking, so the merchant-memory lookup only reads purchases they
+	// can see. A category remembered from a gift sealed against them would
+	// otherwise disclose it.
+	viewer: { memberId: string; now: Date }
 ): Promise<CategorySuggestion> {
 	const itemName = cmd.itemName.trim();
 	const merchantName = (cmd.merchantName ?? '').trim();
@@ -103,7 +107,9 @@ export async function suggestCategory(
 		const remembered = await lastCategoryForMerchant(
 			db,
 			workspaceId,
-			normalizeMerchantName(merchantName)
+			normalizeMerchantName(merchantName),
+			viewer.memberId,
+			viewer.now
 		);
 		if (remembered && byId.has(remembered)) return found(remembered, 'memory');
 	}

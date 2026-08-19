@@ -32,7 +32,8 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			aiApiKey: ws.aiApiKey
 		}),
 		ws.id,
-		{ itemName, merchantName }
+		{ itemName, merchantName },
+		{ memberId: locals.member!.id, now: new Date() }
 	);
 
 	return json({

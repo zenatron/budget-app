@@ -1,5 +1,5 @@
 import type { WorkspaceContext } from '$lib/ports/context';
-import type { ActionEvent, LoadEvent } from '$lib/ports/handlers';
+import type { LoadEvent } from '$lib/ports/handlers';
 import { calendarSources } from '$lib/repo/calendar';
 import { buildMonth } from '$lib/domain/calendar/month';
 import { calDateInZone } from '$lib/domain/time/zoned';

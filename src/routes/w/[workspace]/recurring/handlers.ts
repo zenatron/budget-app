@@ -21,6 +21,8 @@ import {
 } from '$lib/application/recurring';
 import { listCategories } from '$lib/repo/workspaces';
 import { listBuckets } from '$lib/repo/buckets';
+import { refuseBucketCharge } from '$lib/domain/bucket/scope';
+import type { ApprovalPolicy } from '$lib/domain/approval/policy';
 import type { WorkspaceContext } from '$lib/ports/context';
 
 /**
@@ -140,9 +142,17 @@ export async function load(ctx: WorkspaceContext, { params }: { params: { worksp
 		needsConfirmingCount: confirmRow[0].count,
 		rules: view,
 		categories: categories.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
-		// Only active buckets can take a charge — same list the new-purchase form offers.
+		// Only active buckets you may spend from — the same list the new-purchase
+		// form offers. Cosmetic: `createRule` refuses the rest whatever is posted.
 		buckets: buckets
-			.filter((b) => b.bucket.status === 'active')
+			.filter(
+				(b) =>
+					b.bucket.status === 'active' &&
+					refuseBucketCharge(b.bucket, {
+						memberId: ctx.member.id,
+						ownBucketsOnly: (ctx.member.approvalPolicy as ApprovalPolicy).own_buckets_only === true
+					}) === null
+			)
 			.map((b) => ({ id: b.bucket.id, name: b.bucket.name }))
 	};
 }

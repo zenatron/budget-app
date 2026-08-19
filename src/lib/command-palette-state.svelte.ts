@@ -32,6 +32,14 @@ export type Proposal =
 			currency: string;
 	  }
 	| {
+			intent: 'set_budget';
+			category: string;
+			amount: number;
+			amountMinor: string;
+			period: 'month' | 'week';
+			currency: string;
+	  }
+	| {
 			intent: 'navigate';
 			target: string;
 			label: string;

@@ -33,6 +33,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const env = getEnv();
 	return {
 		isOwner: locals.member!.role === 'owner',
+		// Two personal reading preferences for the Safe to Spend headline. Per
+		// member, not per workspace: how discreetly you read your own number is
+		// nobody else's setting.
+		safeToSpendDisplay: locals.member!.safeToSpendDisplay,
+		showRunwayMonths: locals.member!.showRunwayMonths,
 		billImportEnabled: ws.billImportEnabled,
 		barcodeEnabled: ws.barcodeEnabled,
 		barcodeConfigured: !!env.BARCODE_LOOKUP_URL,

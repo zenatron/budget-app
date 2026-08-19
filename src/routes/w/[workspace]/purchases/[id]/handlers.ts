@@ -14,7 +14,9 @@ import {
 	cancelPurchase,
 	completePurchase,
 	deletePurchase,
+	appealPurchase,
 	denyPurchase,
+	overrideDenialForPurchase,
 	editPurchase,
 	editPurchaseNote,
 	recategorizePurchase,
@@ -36,6 +38,7 @@ import { addDays } from '$lib/domain/recurrence/rrule';
 import { listEvents, loadPurchase, memberNames } from '$lib/repo/purchases';
 import { listCategories } from '$lib/repo/workspaces';
 import { bucketBalance, loadBucket } from '$lib/repo/buckets';
+import { getNtfyTarget, listPushSubscriptions } from '$lib/repo/notifications';
 import { merchant, purchase as purchaseTable } from '$lib/db/schema';
 
 export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
@@ -47,6 +50,15 @@ export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
 	const scope = { workspaceId: ctx.workspace.id, viewerId: ctx.member.id };
 	const p = await loadPurchase(db, scope, params.id, { now });
 	if (!p) error(404, 'Not found');
+
+	// For the pending-state nudge: whether this member would hear about the
+	// decision (or the request) without staring at this page. Fetched only
+	// when it could matter — a decided purchase has nothing to wait for.
+	const pending = p.state === 'pending_approval';
+	const notifyConfigured = pending
+		? (await listPushSubscriptions(db, [ctx.user.id])).length > 0 ||
+			(await getNtfyTarget(db, ctx.user.id)) !== null
+		: false;
 
 	const [events, names, categories, images, merchants, createdRows] = await Promise.all([
 		listEvents(db, p.id),
@@ -103,9 +115,9 @@ export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
 	}
 
 	const mine = p.memberId === ctx.member.id;
-	const pending = p.state === 'pending_approval';
 	const sealed = isSealed(p, now);
 	return {
+		notifyConfigured,
 		purchase: {
 			id: p.id,
 			state: p.state,
@@ -167,7 +179,12 @@ export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
 			// Sleep on it: either the requester or an approver, on a pending request.
 			hold: pending && (mine || p.approverMemberIds.includes(ctx.member.id)),
 			// While asleep, either side can wake it, extend it, or let it go.
-			manageHold: p.state === 'held' && (mine || p.approverMemberIds.includes(ctx.member.id))
+			manageHold: p.state === 'held' && (mine || p.approverMemberIds.includes(ctx.member.id)),
+			// A denial is answerable from both sides: the requester can ask again
+			// with something new to say, and anyone who was asked can change their
+			// mind. Both write a note into the same history as the denial.
+			appeal: mine && p.state === 'denied',
+			overrideDenial: p.state === 'denied' && p.approverMemberIds.includes(ctx.member.id)
 		},
 		images: images.map((i) => ({
 			id: i.id,
@@ -235,6 +252,18 @@ export const actions = {
 	deny: async (ctx: WorkspaceContext, { request, params }: ActionEvent) => {
 		const reason = String((await request.formData()).get('reason') ?? '').trim() || null;
 		return run(() => denyPurchase(ctx.db, ctx.deps, scopeOf(ctx), params.id, reason));
+	},
+
+	/** Ask again after a denial. The note is what makes it a new question. */
+	appeal: async (ctx: WorkspaceContext, { request, params }: ActionEvent) => {
+		const note = String((await request.formData()).get('note') ?? '').trim();
+		return run(() => appealPurchase(ctx.db, ctx.deps, scopeOf(ctx), params.id, note));
+	},
+
+	/** Overturn a denial, as an approver. Logged with its reason. */
+	overrideDenial: async (ctx: WorkspaceContext, { request, params }: ActionEvent) => {
+		const note = String((await request.formData()).get('note') ?? '').trim();
+		return run(() => overrideDenialForPurchase(ctx.db, ctx.deps, scopeOf(ctx), params.id, note));
 	},
 
 	cancel: async (ctx: WorkspaceContext, { params }: ActionEvent) =>

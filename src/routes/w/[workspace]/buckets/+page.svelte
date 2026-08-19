@@ -1,15 +1,18 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
+	import { swipe } from '$lib/actions/swipe';
 	import { page } from '$app/state';
 	import PlanTabs from '$lib/components/PlanTabs.svelte';
 	import { money } from '$lib/actions/money';
 	import { formatMinor, tryParseMinor } from '$lib/money-format';
 	import { overdraftBy } from '$lib/domain/bucket/flows';
 	import { formatPct } from '$lib/format';
-	import { CircleHelp, Pause, Pencil, Play, Plus, Wallet } from '@lucide/svelte';
+	import { Archive, CircleHelp, Pause, Pencil, Play, Plus, Wallet } from '@lucide/svelte';
 	import Money from '$lib/components/Money.svelte';
 	import RecurrencePicker from '$lib/components/RecurrencePicker.svelte';
 	import CheckField from '$lib/components/CheckField.svelte';
+	import Segmented from '$lib/components/Segmented.svelte';
+	import { describeChargeScope } from '$lib/domain/bucket/scope';
 	import { calDateInZone } from '$lib/domain/time/zoned';
 
 	let { data, form } = $props();
@@ -29,6 +32,40 @@
 
 	let showNew = $state(false);
 	let createColor = $state<string | null>(null);
+	/*
+	 * Who may charge to the bucket: 'anyone', 'only-me', or 'choose' plus the
+	 * people picked. One slot each, like the color, because only one bucket is
+	 * being created or edited at a time.
+	 *
+	 * The owner never appears in the list. They are always allowed, and a stored
+	 * copy of that could only ever go out of sync with the row that owns it.
+	 */
+	let createScope = $state('anyone');
+	let createPicked = $state<string[]>([]);
+	let editScope = $state('anyone');
+	let editPicked = $state<string[]>([]);
+
+	const others = $derived(data.members.filter((m) => m.id !== data.viewerMemberId));
+	const nameOf = (id: string) => data.members.find((m) => m.id === id)?.displayName ?? 'someone';
+
+	const SCOPE_OPTIONS = [
+		{ value: 'anyone', label: 'Anyone' },
+		{ value: 'only-me', label: 'Only me' },
+		{ value: 'choose', label: 'Pick people' }
+	];
+
+	/** The stored value read back as the control's three states. */
+	function scopeOf(ids: string[] | null): string {
+		if (ids === null) return 'anyone';
+		return ids.length === 0 ? 'only-me' : 'choose';
+	}
+
+	const scopeLabel = (b: (typeof data.buckets)[number]) =>
+		describeChargeScope(
+			{ memberId: b.memberId, chargeMemberIds: b.chargeMemberIds },
+			data.viewerMemberId,
+			nameOf
+		);
 	let editing: string | null = $state(null);
 	let editColor: Record<string, string | null> = $state({});
 	let adjusting: string | null = $state(null);
@@ -136,6 +173,8 @@
 		editing = editing === b.id ? null : b.id;
 		if (editing === null) return;
 		editColor = { ...editColor, [b.id]: b.color };
+		editScope = scopeOf(b.chargeMemberIds);
+		editPicked = [...(b.chargeMemberIds ?? [])];
 		editFreq = b.freq;
 		editInterval = b.interval;
 		editWeekDays = [...b.byDay];
@@ -146,6 +185,8 @@
 	function resetNewForm() {
 		showNew = false;
 		createColor = null;
+		createScope = 'anyone';
+		createPicked = [];
 		freq = 'monthly';
 		interval = 1;
 		weekDays = [];
@@ -260,6 +301,42 @@
 					? `Fills in every accrual since ${fmtStart(startDate)}.`
 					: 'Set the start date in the past to fill in accruals you already missed.'}
 			/>
+			<div>
+				<Segmented
+					options={SCOPE_OPTIONS}
+					bind:value={createScope}
+					name="chargeScope"
+					label="Who can charge this bucket"
+					size="sm"
+				/>
+				{#if createScope === 'choose'}
+					<div class="mt-2.5 flex flex-wrap gap-x-4 gap-y-2">
+						{#each others as m (m.id)}
+							<label class="flex items-center gap-1.5 text-[15px]" style="color: var(--ink)">
+								<input
+									type="checkbox"
+									name="chargeMemberId"
+									value={m.id}
+									checked={createPicked.includes(m.id)}
+									onchange={() =>
+										(createPicked = createPicked.includes(m.id)
+											? createPicked.filter((x) => x !== m.id)
+											: [...createPicked, m.id])}
+								/>
+								{m.displayName}
+							</label>
+						{/each}
+					</div>
+				{/if}
+				<p class="mt-1.5 text-[13px]" style="color: var(--ink-3)">
+					{#if createScope === 'anyone'}
+						Anyone in the workspace can charge a purchase to it.
+					{:else}
+						You can always charge it. Anyone left out loses it from their purchase form and from any
+						recurring rule that charged it.
+					{/if}
+				</p>
+			</div>
 			<p class="text-[11px] font-medium tracking-[0.14em] uppercase" style="color: var(--ink-3)">
 				Color
 			</p>
@@ -296,7 +373,7 @@
 			<a
 				href="/w/{slug}/settings/help?s=buckets"
 				class="press mt-4 inline-flex items-center gap-1.5 text-[14px] font-medium"
-				style="color: var(--ws-accent)"
+				style="color: var(--accent-ink)"
 			>
 				<CircleHelp class="h-4 w-4" /> How this works
 			</a>
@@ -304,102 +381,52 @@
 	{:else}
 		<div class="card overflow-hidden">
 			{#each data.buckets as b, i (b.id)}
-				<div class="px-4 py-3.5 {i < data.buckets.length - 1 ? 'hairline' : ''}">
-					<div class="flex items-center gap-3">
-						<div
-							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-							style="background: color-mix(in oklab, {colorFor(b)} 20%, transparent)"
-						>
-							<div class="h-4 w-4 rounded-full" style="background: {colorFor(b)}"></div>
-						</div>
-						<div class="min-w-0 flex-1">
-							<p class="flex items-center gap-1.5 text-[16px]" style="color: var(--ink)">
-								{b.name}
-								{#if b.status === 'paused'}
-									<span class="chip" style="color: var(--ink-3); background: var(--surface-2)"
-										>Paused</span
-									>
-								{/if}
-								{#if b.balanceMinor < 0n}
-									<!-- Overdrawn: more has been charged here than was ever set
-									     aside. Named on the row rather than left to a minus sign,
-									     because the next accrual pays this off before it saves
-									     anything. -->
-									<span
-										class="chip"
-										style="color: var(--pending); background: color-mix(in oklab, var(--pending) 14%, transparent)"
-										>Overdrawn</span
-									>
-								{/if}
-							</p>
-							<p class="text-[13px]" style="color: var(--ink-3)">{cadenceLine(b)}</p>
-						</div>
-						<span
-							class="shrink-0 text-[16px] font-semibold"
-							style="color: {b.balanceMinor < 0n ? 'var(--pending)' : 'var(--ink)'}"
-						>
-							<Money
-								minor={b.balanceMinor}
-								currency={b.currency}
-								class="text-[16px] font-semibold"
-							/>
-						</span>
-					</div>
-
-					{#if b.goalCapMinor && b.goalCapMinor > 0n}
-						<div
-							class="mt-2 h-1.5 overflow-hidden rounded-full"
-							style="background: var(--surface-2)"
-						>
-							<div
-								class="h-full rounded-full transition-all"
-								style="width: {progressPct(b)}%; background: {colorFor(b)}"
-							></div>
-						</div>
-						<div class="mt-1 flex justify-between text-[11px]" style="color: var(--ink-3)">
-							<span>{formatPct(progressPct(b))} of {formatMinor(b.goalCapMinor, b.currency)}</span>
-							<span>{b.memberName}</span>
-						</div>
-					{/if}
-
-					{#if b.mine}
-						<div class="mt-2.5 flex items-center gap-4 text-[13px]">
-							<button
-								onclick={() => startEdit(b)}
-								class="press inline-flex items-center gap-1"
-								style="color: var(--ink-2)"
-							>
-								<Pencil class="h-3.5 w-3.5" /> Edit
-							</button>
+				<!--
+					Swipe parity with the ledger, as a second affordance: the inline
+					actions stay, and a left swipe on your own row reveals the two state
+					changes — Pause/Resume and Archive. Both stand down while the row is
+					expanded into its edit or adjust form, for the same reason the form
+					does: a thing you're typing in shouldn't slide.
+				-->
+				{@const expanded = editing === b.id || adjusting === b.id}
+				{@const swipeable = b.mine && !expanded}
+				<div
+					class="relative overflow-hidden {i < data.buckets.length - 1 ? 'hairline' : ''}"
+					use:swipe={{ width: swipeable ? 176 : 0, enabled: swipeable }}
+				>
+					{#if swipeable}
+						<div class="absolute inset-y-0 right-0 z-0 flex">
 							{#if b.status === 'active'}
-								<form method="POST" action="?/pause" use:submit={{ success: 'Paused' }}>
+								<form
+									method="POST"
+									action="?/pause"
+									use:submit={{ success: 'Paused' }}
+									class="contents"
+								>
 									<input type="hidden" name="bucketId" value={b.id} />
-									<button class="press inline-flex items-center gap-1" style="color: var(--ink-3)">
-										<Pause class="h-3.5 w-3.5" /> Pause
+									<button
+										class="press flex h-full w-[88px] flex-col items-center justify-center gap-1 text-[13px] font-semibold"
+										style="background: var(--pending); color: var(--paper)"
+									>
+										<Pause class="h-4 w-4" /> Pause
 									</button>
 								</form>
 							{:else}
-								<form method="POST" action="?/resume" use:submit={{ success: 'Resumed' }}>
+								<form
+									method="POST"
+									action="?/resume"
+									use:submit={{ success: 'Resumed' }}
+									class="contents"
+								>
 									<input type="hidden" name="bucketId" value={b.id} />
 									<button
-										class="press inline-flex items-center gap-1"
-										style="color: var(--approve)"
+										class="press flex h-full w-[88px] flex-col items-center justify-center gap-1 text-[13px] font-semibold"
+										style="background: var(--approve); color: var(--paper)"
 									>
-										<Play class="h-3.5 w-3.5" /> Resume
+										<Play class="h-4 w-4" /> Resume
 									</button>
 								</form>
 							{/if}
-							<button
-								onclick={() => {
-									const open = adjusting === b.id;
-									resetAdjustForm();
-									if (!open) adjusting = b.id;
-								}}
-								class="press inline-flex items-center gap-1"
-								style="color: var(--ink-2)"
-							>
-								<Plus class="h-3.5 w-3.5" /> Adjust
-							</button>
 							<form
 								method="POST"
 								action="?/archive"
@@ -408,13 +435,149 @@
 										'Archive this bucket? Its balance and history stay, but it stops accruing.',
 									success: 'Bucket archived'
 								}}
-								class="ml-auto"
+								class="contents"
 							>
 								<input type="hidden" name="bucketId" value={b.id} />
-								<button class="press" style="color: var(--deny)">Archive</button>
+								<button
+									class="press flex h-full w-[88px] flex-col items-center justify-center gap-1 text-[13px] font-semibold"
+									style="background: var(--deny); color: var(--paper)"
+								>
+									<Archive class="h-4 w-4" /> Archive
+								</button>
 							</form>
 						</div>
+					{/if}
+					<div
+						data-swipe-content
+						class="relative z-10 px-4 py-3.5"
+						style="background: var(--surface); touch-action: pan-y"
+					>
+						<div class="flex items-center gap-3">
+							<div
+								class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+								style="background: color-mix(in oklab, {colorFor(b)} 20%, transparent)"
+							>
+								<div class="h-4 w-4 rounded-full" style="background: {colorFor(b)}"></div>
+							</div>
+							<div class="min-w-0 flex-1">
+								<p class="flex items-center gap-1.5 text-[16px]" style="color: var(--ink)">
+									{b.name}
+									{#if b.status === 'paused'}
+										<span class="chip" style="color: var(--ink-3); background: var(--surface-2)"
+											>Paused</span
+										>
+									{/if}
+									{#if scopeLabel(b)}
+										<!-- Says why a bucket you can see is missing from your
+									     purchase form, which is otherwise silent about it. An
+									     unrestricted bucket says nothing, so the restricted ones
+									     are the ones that stand out. -->
+										<span class="chip" style="color: var(--ink-3); background: var(--surface-2)"
+											>{scopeLabel(b)}</span
+										>
+									{/if}
+									{#if b.balanceMinor < 0n}
+										<!-- Overdrawn: more has been charged here than was ever set
+									     aside. Named on the row rather than left to a minus sign,
+									     because the next accrual pays this off before it saves
+									     anything. -->
+										<span
+											class="chip"
+											style="color: var(--pending); background: color-mix(in oklab, var(--pending) 14%, transparent)"
+											>Overdrawn</span
+										>
+									{/if}
+								</p>
+								<p class="text-[13px]" style="color: var(--ink-3)">{cadenceLine(b)}</p>
+							</div>
+							<span
+								class="shrink-0 text-[16px] font-semibold"
+								style="color: {b.balanceMinor < 0n ? 'var(--pending)' : 'var(--ink)'}"
+							>
+								<Money
+									minor={b.balanceMinor}
+									currency={b.currency}
+									class="text-[16px] font-semibold"
+								/>
+							</span>
+						</div>
 
+						{#if b.goalCapMinor && b.goalCapMinor > 0n}
+							<div
+								class="mt-2 h-1.5 overflow-hidden rounded-full"
+								style="background: var(--surface-2)"
+							>
+								<div
+									class="h-full rounded-full transition-all"
+									style="width: {progressPct(b)}%; background: {colorFor(b)}"
+								></div>
+							</div>
+							<div class="mt-1 flex justify-between text-[11px]" style="color: var(--ink-3)">
+								<span>{formatPct(progressPct(b))} of {formatMinor(b.goalCapMinor, b.currency)}</span
+								>
+								<span>{b.memberName}</span>
+							</div>
+						{/if}
+
+						{#if b.mine}
+							<div class="mt-2.5 flex items-center gap-4 text-[13px]">
+								<button
+									onclick={() => startEdit(b)}
+									class="press inline-flex items-center gap-1"
+									style="color: var(--ink-2)"
+								>
+									<Pencil class="h-3.5 w-3.5" /> Edit
+								</button>
+								{#if b.status === 'active'}
+									<form method="POST" action="?/pause" use:submit={{ success: 'Paused' }}>
+										<input type="hidden" name="bucketId" value={b.id} />
+										<button
+											class="press inline-flex items-center gap-1"
+											style="color: var(--ink-3)"
+										>
+											<Pause class="h-3.5 w-3.5" /> Pause
+										</button>
+									</form>
+								{:else}
+									<form method="POST" action="?/resume" use:submit={{ success: 'Resumed' }}>
+										<input type="hidden" name="bucketId" value={b.id} />
+										<button
+											class="press inline-flex items-center gap-1"
+											style="color: var(--approve)"
+										>
+											<Play class="h-3.5 w-3.5" /> Resume
+										</button>
+									</form>
+								{/if}
+								<button
+									onclick={() => {
+										const open = adjusting === b.id;
+										resetAdjustForm();
+										if (!open) adjusting = b.id;
+									}}
+									class="press inline-flex items-center gap-1"
+									style="color: var(--ink-2)"
+								>
+									<Plus class="h-3.5 w-3.5" /> Adjust
+								</button>
+								<form
+									method="POST"
+									action="?/archive"
+									use:submit={{
+										confirm:
+											'Archive this bucket? Its balance and history stay, but it stops accruing.',
+										success: 'Bucket archived'
+									}}
+									class="ml-auto"
+								>
+									<input type="hidden" name="bucketId" value={b.id} />
+									<button class="press" style="color: var(--deny)">Archive</button>
+								</form>
+							</div>
+						{/if}
+					</div>
+
+					{#if b.mine}
 						{#if editing === b.id}
 							{@const ec = editColor[b.id]}
 							<form
@@ -452,6 +615,37 @@
 									placeholder="Save up to…"
 									class="field text-[16px]"
 								/>
+								<div>
+									<Segmented
+										options={SCOPE_OPTIONS}
+										bind:value={editScope}
+										name="chargeScope"
+										label="Who can charge this bucket"
+										size="sm"
+									/>
+									{#if editScope === 'choose'}
+										<div class="mt-2.5 flex flex-wrap gap-x-4 gap-y-2">
+											{#each others as m (m.id)}
+												<label
+													class="flex items-center gap-1.5 text-[15px]"
+													style="color: var(--ink)"
+												>
+													<input
+														type="checkbox"
+														name="chargeMemberId"
+														value={m.id}
+														checked={editPicked.includes(m.id)}
+														onchange={() =>
+															(editPicked = editPicked.includes(m.id)
+																? editPicked.filter((x) => x !== m.id)
+																: [...editPicked, m.id])}
+													/>
+													{m.displayName}
+												</label>
+											{/each}
+										</div>
+									{/if}
+								</div>
 								<p
 									class="text-[11px] font-medium tracking-[0.14em] uppercase"
 									style="color: var(--ink-3)"

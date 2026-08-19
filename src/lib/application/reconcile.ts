@@ -8,6 +8,14 @@
  * only thing confirming a match writes is `purchase.cleared_at`: a mark meaning
  * "this appeared on a statement", which is reversible and carries no money.
  *
+ * One deliberate exception, added with care: a person can turn an unmatched
+ * line into a purchase (`createPurchaseFromLine`). It goes through the same
+ * `submitPurchase` every hand-logged purchase does — approval policy, audit
+ * event, notifications, all of it — and it refuses outright on an import whose
+ * rows were read off a *picture* (`modelRead`): that would be the first path
+ * putting a model-derived amount straight into the ledger, which is exactly
+ * what the column was carried to prevent.
+ *
  * Parsing lives in `domain/reconcile/parse-csv`, matching in
  * `domain/reconcile/match`; both are pure. This module is the I/O half.
  */
@@ -18,9 +26,13 @@ import type { Db } from '$lib/db/types';
 import { purchase, statementImport, statementLine } from '$lib/db/schema';
 import { dedupKey, parseCsv, type CsvColumnMap } from '$lib/domain/reconcile/parse-csv';
 import { matchLines } from '$lib/domain/reconcile/match';
+import { Money } from '$lib/domain/money/money';
+import { submitPurchase } from '$lib/application/purchases';
 import {
 	confirmedLineFor,
+	countUnsettled,
 	findImportByHash,
+	getImport,
 	getLine,
 	matchCandidates,
 	refreshMatchedCount,
@@ -28,6 +40,7 @@ import {
 } from '$lib/repo/statements';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
+import type { Notifier } from '$lib/ports/notifier';
 
 export class ReconcileError extends Error {
 	constructor(message: string) {
@@ -324,6 +337,8 @@ export async function unlinkMatch(db: Db, deps: Deps, scope: Scope, lineId: stri
 		}
 	});
 	await refreshMatchedCount(db, line.importId);
+	// Undoing a decision is a question again; a closed statement reopens.
+	await reopenIfClosed(db, line.importId);
 }
 
 /**
@@ -433,6 +448,154 @@ export async function unignoreLine(
 		.set({ matchState: 'unmatched' })
 		.where(eq(statementLine.id, lineId));
 	await refreshMatchedCount(db, line.importId);
+	// A line back in review means the statement has questions again.
+	await reopenIfClosed(db, line.importId);
+}
+
+/**
+ * Turn an unmatched line into a purchase, through the same door every
+ * hand-logged purchase goes through.
+ *
+ * The line is the *evidence*, never the authority: the person pressing the
+ * button is. When the actor's approval policy lets a log stand on its own,
+ * the purchase completes and the line confirms with it (cleared_at lands, the
+ * import's card is attributed). When the policy wants a decision first, the
+ * purchase waits and so does the line — matched to what it created, cleared
+ * only when someone approves and confirms, exactly like any other proposal.
+ *
+ * Refuses a model-read import, per the guard that column was carried for.
+ */
+export async function createPurchaseFromLine(
+	db: Db,
+	deps: Deps & { notifier: Notifier },
+	scope: Scope,
+	lineId: string,
+	input: { itemName?: string | null; categoryId?: string | null } = {}
+): Promise<{ purchaseId: string; state: 'completed' | 'pending_approval' }> {
+	const line = await getLine(db, scope.workspaceId, lineId);
+	if (!line) throw new ReconcileError('That statement line no longer exists.');
+
+	const imp = await getImport(db, scope.workspaceId, line.importId);
+	if (!imp) throw new ReconcileError('That import no longer exists.');
+	if (imp.modelRead) {
+		throw new ReconcileError(
+			'This statement was read from a picture, so its lines can be matched but not turned into purchases. Log the purchase by hand and link it instead.'
+		);
+	}
+	// A matched line already has a purchase proposed; a private one is already
+	// accounted for by something concealed; ignored was answered "not a
+	// purchase". Only a line still waiting for its answer can become one.
+	if (line.matchState !== 'unmatched') {
+		throw new ReconcileError('Only an unanswered line can become a purchase.');
+	}
+	if (line.amountMinor >= 0n) {
+		throw new ReconcileError('That line is money in, not a purchase.');
+	}
+
+	const name = (input.itemName ?? line.rawDescription).trim();
+	if (!name) throw new ReconcileError('Give the purchase a name first.');
+
+	// submitPurchase owns its transaction; the line update below is a second
+	// one. Splitting beats duplicating the whole purchase pipeline here, and
+	// the seam is safe: a crash between the two leaves a purchase with no line
+	// pointing at it, which the review screen shows as an unanswered line with
+	// a new candidate to link — recoverable by hand, never a wrong number.
+	const { purchaseId } = await submitPurchase(db, deps, scope, {
+		itemName: name,
+		amount: Money.of(-line.amountMinor, line.currency),
+		categoryId: input.categoryId ?? null,
+		note: null,
+		intent: 'log',
+		spentAt: line.postedAt,
+		accountId: imp.accountId
+	});
+
+	const [created] = await db
+		.select({ state: purchase.state })
+		.from(purchase)
+		.where(eq(purchase.id, purchaseId))
+		.limit(1);
+	const now = deps.clock.now();
+
+	if (created?.state === 'completed') {
+		await db.transaction(async (tx) => {
+			await tx
+				.update(statementLine)
+				.set({
+					matchState: 'confirmed',
+					matchedPurchaseId: purchaseId,
+					matchReason: 'created from statement'
+				})
+				.where(eq(statementLine.id, lineId));
+			await tx
+				.update(purchase)
+				// The line IS the statement evidence, so the mark lands now — with
+				// the card attribution it arrived on, via submitPurchase's accountId.
+				.set({ clearedAt: now, updatedAt: now })
+				.where(eq(purchase.id, purchaseId));
+		});
+	} else {
+		await db
+			.update(statementLine)
+			.set({
+				matchState: 'matched',
+				matchedPurchaseId: purchaseId,
+				matchReason: 'created from statement; awaiting approval'
+			})
+			.where(eq(statementLine.id, lineId));
+	}
+	await refreshMatchedCount(db, line.importId);
+
+	return { purchaseId, state: created?.state === 'completed' ? 'completed' : 'pending_approval' };
+}
+
+/**
+ * Close a statement: every line answered (confirmed, private, or ignored).
+ * Closing is bookkeeping, not a lock — reopening is one tap, and anything that
+ * puts a line back in review reopens the import on its own.
+ */
+export async function closeImport(
+	db: Db,
+	_deps: Deps,
+	scope: Scope,
+	importId: string
+): Promise<void> {
+	const imp = await getImport(db, scope.workspaceId, importId);
+	if (!imp) throw new ReconcileError('That import no longer exists.');
+
+	const unsettled = await countUnsettled(db, importId);
+	if (unsettled > 0) {
+		throw new ReconcileError(
+			`${unsettled} line${unsettled === 1 ? ' still needs' : 's still need'} an answer before this statement can be closed.`
+		);
+	}
+	await db
+		.update(statementImport)
+		.set({ status: 'reconciled' })
+		.where(eq(statementImport.id, importId));
+}
+
+/** Reopen a closed statement. */
+export async function reopenImport(
+	db: Db,
+	_deps: Deps,
+	scope: Scope,
+	importId: string
+): Promise<void> {
+	const imp = await getImport(db, scope.workspaceId, importId);
+	if (!imp) throw new ReconcileError('That import no longer exists.');
+	await db
+		.update(statementImport)
+		.set({ status: 'reviewing' })
+		.where(eq(statementImport.id, importId));
+}
+
+/** A closed statement must not silently contain lines back in review. */
+async function reopenIfClosed(db: Db, importId: string): Promise<void> {
+	await db
+		.update(statementImport)
+		.set({ status: 'reviewing' })
+		.where(and(eq(statementImport.id, importId), eq(statementImport.status, 'reconciled')));
 }
 
 /**

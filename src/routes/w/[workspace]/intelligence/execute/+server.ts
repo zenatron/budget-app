@@ -4,6 +4,8 @@ import { getDb } from '$lib/server/db';
 import { getEnv } from '$lib/server/env';
 import { createBucket } from '$lib/repo/buckets';
 import { addIncome } from '$lib/repo/income';
+import { setBudget, schedulableBudgetWeeks } from '$lib/repo/budgets';
+import { listCategories } from '$lib/repo/workspaces';
 import { Money, InvalidMoneyError } from '$lib/domain/money/money';
 import { firstAccrualAt, monthlyAccrualRule } from '$lib/application/buckets';
 import { formatRRule } from '$lib/domain/recurrence/rrule';
@@ -62,6 +64,14 @@ const ProposalSchema = v.variant('intent', [
 		currency: v.string()
 	}),
 	v.object({
+		intent: v.literal('set_budget'),
+		category: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(60)),
+		amount: v.number(),
+		amountMinor: v.optional(v.string()),
+		period: v.picklist(['month', 'week']),
+		currency: v.string()
+	}),
+	v.object({
 		intent: v.literal('navigate'),
 		target: v.picklist(['analytics', 'buckets', 'recurring', 'income', 'purchases', 'settings']),
 		label: v.optional(v.string())
@@ -107,13 +117,13 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 		if (!amount.isPositive) {
 			return json({ intent: proposal.intent, answer: 'Amount must be positive.' });
 		}
-		const day = normalizeDay(proposal.dayOfMonth);
 
 		if (proposal.intent === 'create_bucket') {
 			const name = safeName(proposal.name);
 			if (!name) {
 				return json({ intent: 'create_bucket', answer: 'Bucket needs a name.' });
 			}
+			const day = normalizeDay(proposal.dayOfMonth);
 			const rrule = monthlyAccrualRule(day, today);
 			await createBucket(getDb(), deps, {
 				workspaceId: ws.id,
@@ -131,11 +141,62 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			});
 		}
 
+		if (proposal.intent === 'set_budget') {
+			// Same rule as the settings screen and the MCP tool: budgets are the
+			// owner's to set.
+			if (locals.member!.role !== 'owner') {
+				return json({
+					intent: 'set_budget',
+					answer: 'Only the workspace owner can set budgets.'
+				});
+			}
+			// "everything"/"overall" is the all-category cap; anything else must
+			// name a real category — resolved here, so typing "groceries" finds
+			// "Groceries" without the person spelling it the way the list does.
+			const isOverall = /^(everything|overall)$/i.test(proposal.category);
+			let categoryId: string | null = null;
+			let categoryName = 'Everything';
+			if (!isOverall) {
+				const cats = await listCategories(getDb(), ws.id);
+				const needle = proposal.category.toLowerCase();
+				const hit =
+					cats.find((c) => c.name.toLowerCase() === needle) ??
+					cats.find((c) => c.name.toLowerCase().includes(needle));
+				if (!hit) {
+					return json({
+						intent: 'set_budget',
+						answer: `I can't find a category called “${proposal.category}”. The Analytics tab lists them all.`
+					});
+				}
+				categoryId = hit.id;
+				categoryName = hit.name;
+			}
+			// Takes effect now: this month, or this week, on the workspace's own
+			// week-start convention.
+			const from =
+				proposal.period === 'week'
+					? schedulableBudgetWeeks(today, ws.weekStartDay)[0]
+					: `${today.y}-${String(today.m).padStart(2, '0')}-01`;
+			await setBudget(getDb(), deps.ids, {
+				workspaceId: ws.id,
+				categoryId,
+				amountMinor: amount.minor,
+				effectiveFrom: from,
+				period: proposal.period
+			});
+			return json({
+				intent: 'set_budget',
+				answer: `${proposal.period === 'week' ? 'Weekly' : 'Monthly'} budget for ${categoryName} set to ${amount.format()}, from ${from}.`,
+				target: 'analytics'
+			});
+		}
+
 		if (proposal.intent === 'create_income') {
 			const source = safeName(proposal.source);
 			if (!source) {
 				return json({ intent: 'create_income', answer: 'Income needs a source.' });
 			}
+			const day = normalizeDay(proposal.dayOfMonth);
 			const start = proposal.monthly
 				? { y: today.y, m: today.m, d: Math.min(day, 28) }
 				: { y: today.y, m: today.m, d: today.d };

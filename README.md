@@ -6,13 +6,14 @@ PostgreSQL 17 + Drizzle, auth via an external [Pocket ID](https://pocket-id.org)
 
 ## Screenshots
 
-> Add screenshots before release. Suggested subjects: the Ledger with Safe to Spend,
-> an approval request, the Activity breakdown, the spending map.
+Captured from the seeded static demo by `scripts/capture-screenshots.ts`
+(`bun run demo:build && bun scripts/capture-screenshots.ts`); the same PNGs
+feed the manifest's install-sheet screenshots.
 
 |                                                           |                                                    |
 | --------------------------------------------------------- | -------------------------------------------------- |
 | ![Ledger with Safe to Spend](docs/screenshots/ledger.png) | ![Approval request](docs/screenshots/approval.png) |
-| ![Activity breakdown](docs/screenshots/activity.png)      | ![Spending map](docs/screenshots/map.png)          |
+| ![Activity breakdown](docs/screenshots/activity.png)      | ![New purchase form](docs/screenshots/new.png)     |
 
 ## Demo
 
@@ -118,6 +119,11 @@ generator invents every name, merchant and amount.
   stripping, and WebP derivatives (originals discarded).
 - **PWA & notifications.** Web Push (VAPID) and ntfy channels, per-member,
   per-event, per-channel preferences, iOS Add-to-Home-Screen onboarding.
+  Installed from a browser that offers it, the app is installed from Settings
+  with one tap. The manifest carries one `theme_color` (the cream paper) —
+  a platform limitation — but the browser chrome itself flips dark pre-paint
+  via `static/theme-init.js` and at runtime via `$lib/theme.svelte`, and the
+  manifest's screenshots declare their own dark colors for the install sheet.
 - **Recurring charges.** A purpose-built RRULE subset (intervals, BYDAY,
   last-day-of-month) with timezone-correct times, capped catch-up after
   downtime, pause/resume/end, price changes for future occurrences, and

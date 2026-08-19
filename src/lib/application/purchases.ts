@@ -15,12 +15,14 @@ import { Money } from '$lib/domain/money/money';
 import type { ApprovalPolicy } from '$lib/domain/approval/policy';
 import { approvalRequired, resolveApprovers } from '$lib/domain/approval/evaluate';
 import {
+	appeal,
 	approve,
 	cancel,
 	complete,
 	deny,
 	edit,
 	markRefunded,
+	overrideDenial,
 	requestApproval,
 	autoApprove,
 	PurchaseStateError,
@@ -35,6 +37,9 @@ import {
 } from '$lib/domain/visibility/seal';
 import { appendEvent, applyTransition, insertPurchase, loadPurchase } from '$lib/repo/purchases';
 import { normalizeMerchantName } from '$lib/domain/purchase/merchant';
+import { overdraftBy } from '$lib/domain/bucket/flows';
+import { chargeRefusalMessage, refuseBucketCharge } from '$lib/domain/bucket/scope';
+import { bucketBalance } from '$lib/repo/buckets';
 import {
 	isObservedPlace,
 	placeFromColumns,
@@ -251,16 +256,37 @@ export async function submitPurchase(
 			});
 		}
 
-		// Validate bucket if provided — must be active and in this workspace.
+		// Validate bucket if provided — must be active, in this workspace, and one
+		// this member is allowed to spend from. The last of those is the real gate:
+		// the pickers filter to the same set, but a form post, a recurring rule or
+		// an MCP token all arrive here, and only here is it enforced.
+		let bucketWouldOverdraw = false;
 		if (cmd.bucketId) {
 			const [bkt] = await tx
-				.select({ id: bucket.id, status: bucket.status, workspaceId: bucket.workspaceId })
+				.select({
+					id: bucket.id,
+					status: bucket.status,
+					memberId: bucket.memberId,
+					chargeMemberIds: bucket.chargeMemberIds
+				})
 				.from(bucket)
 				.where(and(eq(bucket.id, cmd.bucketId), eq(bucket.workspaceId, scope.workspaceId)))
 				.limit(1);
 			if (!bkt) throw new PurchaseStateError('Bucket not found');
 			if (bkt.status !== 'active')
 				throw new PurchaseStateError('Cannot charge to a paused or archived bucket');
+			const refusal = refuseBucketCharge(bkt, {
+				memberId: scope.memberId,
+				ownBucketsOnly: policy.own_buckets_only === true
+			});
+			if (refusal) throw new PurchaseStateError(chargeRefusalMessage(refusal));
+
+			// Read inside the transaction, so the balance the cap is judged against
+			// is the one the withdrawal will land on. A charge bigger than what the
+			// bucket holds is spending that was never set aside, and for a member on
+			// an allowance that is what turns a free purchase into a request.
+			bucketWouldOverdraw =
+				overdraftBy(await bucketBalance(tx, cmd.bucketId), cmd.amount.minor) > 0n;
 		}
 
 		const isLog = cmd.intent === 'log';
@@ -300,7 +326,8 @@ export async function submitPurchase(
 		// rule can now override the workspace default in either direction.
 		const needed = approvalRequired(policy, cmd.amount, cmd.categoryId, {
 			chargedToBucket: Boolean(cmd.bucketId),
-			workspaceSkipsBucketCharges: ws.bucketChargesSkipApproval
+			workspaceSkipsBucketCharges: ws.bucketChargesSkipApproval,
+			bucketWouldOverdraw
 		});
 		let result;
 		if (needed) {
@@ -955,6 +982,81 @@ export async function denyPurchase(
 ) {
 	await withPurchase(db, deps, scope, purchaseId, (p) =>
 		deny(p, scope.memberId, reason, deps.clock.now())
+	);
+}
+
+/**
+ * Ask again after a denial.
+ *
+ * Approvers are resolved fresh from the requester's current policy, the same
+ * way `submitPurchase` does, rather than reusing the snapshot on the row: the
+ * people who could decide months ago may have left, and an appeal that routed
+ * to them would sit unanswerable. The seal is honoured for the same reason it
+ * is at submit — an appeal must not reveal a hidden purchase to someone it was
+ * hidden from.
+ */
+export async function appealPurchase(
+	db: Db,
+	deps: Deps,
+	scope: Scope,
+	purchaseId: string,
+	note: string
+) {
+	const now = deps.clock.now();
+	const result = await db.transaction(async (tx) => {
+		const p = await loadPurchase(
+			tx,
+			{ workspaceId: scope.workspaceId, viewerId: scope.memberId },
+			purchaseId,
+			{ forUpdate: true, now }
+		);
+		if (!p) throw new PurchaseNotFoundError();
+
+		const members = await tx
+			.select({ id: workspaceMember.id, policy: workspaceMember.approvalPolicy })
+			.from(workspaceMember)
+			.where(
+				and(
+					eq(workspaceMember.workspaceId, scope.workspaceId),
+					eq(workspaceMember.status, 'active')
+				)
+			);
+		const me = members.find((m) => m.id === scope.memberId);
+		if (!me) throw new PurchaseNotFoundError();
+
+		const approvers = resolveApprovers(
+			me.policy as ApprovalPolicy,
+			members.map((m) => m.id)
+		);
+		const eligible = isSealed(p, now)
+			? approvers.filter((id) => !p.sealedFromMemberIds.includes(id))
+			: approvers;
+		if (eligible.length === 0) {
+			throw new PurchaseStateError('Nobody who can decide this is able to see it');
+		}
+
+		const r = appeal(p, scope.memberId, note, eligible, now);
+		await applyTransition(tx, deps.ids, r.purchase, r.event);
+		return r;
+	});
+	await announcePurchaseChange(db, deps.notifier, result.purchase, result.event);
+}
+
+/** Overturn a denial, as an approver, with a note that goes on the record. */
+export async function overrideDenialForPurchase(
+	db: Db,
+	deps: Deps,
+	scope: Scope,
+	purchaseId: string,
+	note: string
+) {
+	await withPurchase(
+		db,
+		deps,
+		scope,
+		purchaseId,
+		(p) => overrideDenial(p, scope.memberId, note, deps.clock.now()),
+		withdrawFromBucket
 	);
 }
 

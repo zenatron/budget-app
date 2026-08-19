@@ -49,7 +49,10 @@ test('approval loop: request → approve → overage re-approval → complete; d
 		await expect(finalAmount).toHaveValue('200.00');
 	}).toPass({ timeout: 15_000 });
 	await bob.getByRole('button', { name: 'Complete purchase' }).click();
-	await expect(bob.getByText(/needs re-approval/)).toBeVisible();
+	// Case-insensitive: the banner reads "Over budget. Needs re-approval", and it
+	// has already been re-cased once by a copy pass. What matters here is that the
+	// overage sent it back, not the shape of the sentence saying so.
+	await expect(bob.getByText(/needs re-approval/i)).toBeVisible();
 
 	// Alice approves the overage → completed at the real price.
 	await alice.goto(detailUrl);

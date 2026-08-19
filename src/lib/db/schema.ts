@@ -87,6 +87,9 @@ export const workspace = pgTable('workspace', {
 	maxSealDays: integer('max_seal_days').notNull().default(90),
 	accentColor: text('accent_color'),
 	bucketChargesSkipApproval: boolean('bucket_charges_skip_approval').notNull().default(false),
+	/** Whether Activity shows "who owes whom". Households that don't split
+	 *  spending have no use for it, and it is a whole section of the page. */
+	settleUpEnabled: boolean('settle_up_enabled').notNull().default(true),
 	keepStatementFiles: boolean('keep_statement_files').notNull().default(false),
 	/** Alpha: read a bill PDF to prefill a purchase. Off until asked for. */
 	billImportEnabled: boolean('bill_import_enabled').notNull().default(false),
@@ -170,8 +173,12 @@ export const workspaceMember = pgTable(
 		includeLedgerMovements: boolean('include_ledger_movements').notNull().default(false),
 		/** How the Safe to Spend headline reads on the ledger for this member:
 		 *  'shown' | 'masked' | 'off' (see domain/visibility/discretion). Discretion
-		 *  over your own shoulder, not access control — per member, like the above. */
-		safeToSpendDisplay: text('safe_to_spend_display').notNull().default('shown'),
+		 *  over your own shoulder, not access control — per member, like the above.
+		 *  Defaults to masked: the number reads across a café from the next table,
+		 *  and a default you have to notice to turn on is the wrong way round. */
+		safeToSpendDisplay: text('safe_to_spend_display').notNull().default('masked'),
+		/** Whether the Safe to Spend breakdown projects the months after this one. */
+		showRunwayMonths: boolean('show_runway_months').notNull().default(true),
 		joinedAt: timestamp('joined_at', { withTimezone: true }).notNull()
 	},
 	(t) => [uniqueIndex('workspace_member_workspace_user_uq').on(t.workspaceId, t.userId)]
@@ -509,7 +516,7 @@ export const budget = pgTable(
 );
 
 /**
- * One row per budget line per month: what the last alert said and when.
+ * One row per budget line per period: what the last alert said and when.
  * Keyed by category, not budget row id — replacing a budget (setBudget
  * deletes and reinserts the row) must not reset the cooldown or the alert
  * would repeat after every edit.
@@ -523,15 +530,20 @@ export const budgetAlertLog = pgTable(
 			.references(() => workspace.id),
 		/** Category id, or 'overall' for the all-category budget. */
 		categoryKey: text('category_key').notNull(),
-		/** The month this alert state belongs to, 'YYYY-MM'. */
-		month: text('month').notNull(),
+		/**
+		 * The period this alert state belongs to: 'YYYY-MM' for a monthly
+		 * budget, the week's first day 'YYYY-MM-DD' for a weekly one. The two
+		 * shapes can't collide, and a weekly overspend never satisfies a monthly
+		 * cooldown.
+		 */
+		periodKey: text('period_key').notNull(),
 		/** 'nearing' | 'exceeded'. */
 		level: text('level').notNull(),
 		/** Spend reported in the last alert; re-alerts measure growth from here. */
 		actualMinor: bigint('actual_minor', { mode: 'bigint' }).notNull(),
 		lastAlertedAt: timestamp('last_alerted_at', { withTimezone: true }).notNull()
 	},
-	(t) => [uniqueIndex('budget_alert_log_scope_idx').on(t.workspaceId, t.categoryKey, t.month)]
+	(t) => [uniqueIndex('budget_alert_log_scope_idx').on(t.workspaceId, t.categoryKey, t.periodKey)]
 );
 
 export const bucket = pgTable(
@@ -552,6 +564,16 @@ export const bucket = pgTable(
 		color: text('color'),
 		icon: text('icon'),
 		status: bucketStatus('status').notNull().default('active'),
+		/**
+		 * Who may charge a purchase to this bucket, besides its owner.
+		 *
+		 * Null means anyone in the workspace, which is what every bucket was
+		 * before this column and stays the default. A list names exactly who else
+		 * may charge it; an empty list is therefore "only me", which is what makes
+		 * a bucket an allowance. The owner is always implied and never stored, so
+		 * the two can't drift apart.
+		 */
+		chargeMemberIds: uuid('charge_member_ids').array(),
 		/** Accrual schedule — the same RRULE subset recurring purchases use. */
 		rrule: text('rrule').notNull(),
 		/** When the next accrual is due. Null = not scheduled yet; the sweep
@@ -744,4 +766,34 @@ export const session = pgTable(
 		ip: text('ip')
 	},
 	(t) => [index('session_user_idx').on(t.userId)]
+);
+
+/*
+ * A receipt photo shared into the app from the OS share sheet (the manifest's
+ * `share_target`), staged for the new-purchase form to pick up. Staging only:
+ * rows are swept an hour after creation, win or lose.
+ *
+ * The blob itself goes through the same content-addressed store as every
+ * other image, but it is NOT served by /blobs/[blobId] — that route gates on
+ * purchase attachment (isBlobVisible), and a share has no purchase yet. It
+ * gets its own member-scoped route instead, so the attachment invariant stays
+ * exactly as strict as it was.
+ */
+export const pendingShare = pgTable(
+	'pending_share',
+	{
+		id: uuid('id').primaryKey(),
+		workspaceId: uuid('workspace_id')
+			.notNull()
+			.references(() => workspace.id),
+		memberId: uuid('member_id')
+			.notNull()
+			.references(() => workspaceMember.id),
+		blobId: text('blob_id').notNull(),
+		filename: text('filename').notNull(),
+		contentType: text('content_type').notNull(),
+		byteSize: integer('byte_size').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull()
+	},
+	(t) => [index('pending_share_member_idx').on(t.workspaceId, t.memberId, t.createdAt)]
 );

@@ -6,9 +6,12 @@ import { Money } from '$lib/domain/money/money';
 import { periodTotal, categoryBreakdown, memberBreakdown } from '$lib/repo/analytics';
 import { incomeInPeriod } from '$lib/repo/income';
 import { safeToSpend } from '$lib/repo/forecast';
+import { narrateSafeToSpend } from '$lib/domain/forecast/safe-to-spend';
+import { mentionedMonthPeriod } from '$lib/domain/intelligence/briefing-scope';
 import {
 	monthPeriod,
 	yearPeriod,
+	weekPeriod,
 	previousMonthPeriod,
 	monthLabel,
 	type Period
@@ -31,7 +34,16 @@ function jsonSafe(data: unknown) {
 	);
 }
 
-function timeToPeriod(tp: TimePeriod) {
+const DAY_MS = 86_400_000;
+
+function timeToPeriod(tp: TimePeriod, now: Date, tz: string, weekStartDay: number): Period {
+	if (tp.type === 'week') {
+		// Stepped from today so "this week" is the week containing it, on the
+		// workspace's own week-start convention — the same one the analytics
+		// screens page by.
+		const base = calDateInZone(new Date(now.getTime() + (tp.weekOffset ?? 0) * 7 * DAY_MS), tz);
+		return weekPeriod(base, weekStartDay);
+	}
 	const date = tp.month ? { y: tp.year, m: tp.month, d: 1 } : { y: tp.year, m: 7, d: 1 };
 	return tp.type === 'year' ? yearPeriod(date) : monthPeriod(date);
 }
@@ -53,6 +65,12 @@ function assertSameOrigin(request: Request): void {
  * truth rather than guessing. Kept short on purpose — a small model reasons more
  * reliably over a tight briefing, and it's cheaper to send.
  *
+ * The window is this month (with last month for comparison), plus — when the
+ * question named a different month the parser didn't recognize — a focus month
+ * the briefing is *also* built around. That third month is the whole of the
+ * "wider window": the model still never answers outside figures the core
+ * computed, it just gets the figures for the month actually being asked about.
+ *
  * Figures are ours; names are the household's. See briefingField.
  */
 async function buildBriefing(
@@ -60,21 +78,34 @@ async function buildBriefing(
 	scope: { workspaceId: string; viewerId: string; timezone: string },
 	ws: WorkspaceRow,
 	now: Date,
-	today: { y: number; m: number; d: number }
+	today: { y: number; m: number; d: number },
+	focus: { period: Period; label: string } | null
 ): Promise<string> {
 	const currency = ws.currency;
 	const fmt = (m: bigint) => Money.of(m, currency).format();
 	const thisMonth: Period = monthPeriod(today);
 	const lastMonth: Period = previousMonthPeriod(today);
+	const isFocusCurrent =
+		focus !== null &&
+		focus.period.from.y === thisMonth.from.y &&
+		focus.period.from.m === thisMonth.from.m;
 
-	const [thisSpent, lastSpent, cats, members, income, bucket, sts] = await Promise.all([
+	const [thisSpent, lastSpent, cats, members, income, bucket, sts, focusData] = await Promise.all([
 		periodTotal(db, scope, thisMonth, now),
 		periodTotal(db, scope, lastMonth, now),
 		categoryBreakdown(db, scope, thisMonth, now),
 		memberBreakdown(db, scope, thisMonth, now),
 		incomeInPeriod(db, ws.id, thisMonth, scope.timezone, today),
 		bucketFlowsInPeriod(db, ws.id, thisMonth, scope.timezone),
-		safeToSpend(db, scope, now)
+		safeToSpend(db, scope, now),
+		// The question's own month, when it named one: totals, categories, members.
+		focus && !isFocusCurrent
+			? Promise.all([
+					periodTotal(db, scope, focus.period, now),
+					categoryBreakdown(db, scope, focus.period, now),
+					memberBreakdown(db, scope, focus.period, now)
+				])
+			: null
 	]);
 
 	// Money into buckets, and the funded part of what came back out. Never a
@@ -97,9 +128,26 @@ async function buildBriefing(
 			? `Spending by category this month: ${topCats}.`
 			: 'No categorized spending this month yet.',
 		members.length > 1 ? `Spending by member this month: ${memberLine}.` : null
-	].filter(Boolean);
+	];
 
-	return lines.join('\n');
+	if (focusData) {
+		const [fSpent, fCats, fMembers] = focusData;
+		const fTop = fCats
+			.slice(0, 6)
+			.map((c) => `${briefingField(c.name)} ${fmt(c.totalMinor)}`)
+			.join(', ');
+		lines.push(
+			`The month asked about (${focus!.label}): spent ${fmt(fSpent)}.`,
+			fTop
+				? `Spending by category in ${focus!.label}: ${fTop}.`
+				: `No categorized spending in ${focus!.label}.`,
+			fMembers.length > 1
+				? `Spending by member in ${focus!.label}: ${fMembers.map((m) => `${briefingField(m.name)} ${fmt(m.totalMinor)}`).join(', ')}.`
+				: null
+		);
+	}
+
+	return lines.filter(Boolean).join('\n');
 }
 
 export const POST: RequestHandler = async ({ locals, request }) => {
@@ -139,20 +187,56 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	});
 
 	/*
-	 * Everything except the three data-backed intents is decided in
+	 * Everything except the four data-backed intents is decided in
 	 * `application/ask`: deterministic parser first, then a constrained model
 	 * command, then the out-of-scope refusal, then narration. A null back means
 	 * this is one of those data intents, answered from the repositories below.
 	 * The briefing is a thunk so it is only built on the one path that needs it.
+	 *
+	 * The wider window: when a question names a month the deterministic parser
+	 * didn't recognize (so it lands on narration), the briefing is built around
+	 * that month too and the scope guard is told about it — the model answers
+	 * from real figures for the month asked about instead of refusing.
 	 */
+	const mentioned = mentionedMonthPeriod(query, today);
+	const lastMonthForCover = previousMonthPeriod(today);
+	const isCoveredByDefault =
+		mentioned &&
+		((mentioned.y === today.y && mentioned.m === today.m) ||
+			(mentioned.y === lastMonthForCover.from.y && mentioned.m === lastMonthForCover.from.m));
+	const focus =
+		mentioned && !isCoveredByDefault
+			? {
+					period: monthPeriod({ y: mentioned.y, m: mentioned.m, d: 1 }),
+					label: `${mentioned.mention.charAt(0).toUpperCase()}${mentioned.mention.slice(1)}`
+				}
+			: null;
+	const coveredMonths = focus ? [{ y: mentioned!.y, m: mentioned!.m }] : undefined;
+
 	const outcome = await answerAsk(
-		{ assist, briefing: () => buildBriefing(db, scope, ws, now, today), currency, today },
+		{
+			assist,
+			briefing: () => buildBriefing(db, scope, ws, now, today, focus),
+			currency,
+			today,
+			coveredMonths
+		},
 		{ query, parsed }
 	);
 	if (outcome) return jsonSafe(askOutcomeToWire(outcome));
 
+	if (parsed.intent === 'safe_to_spend') {
+		const sts = await safeToSpend(db, scope, now);
+		const read = narrateSafeToSpend(sts, (m) => Money.of(m, currency).format());
+		return jsonSafe({
+			intent: parsed.intent,
+			answer: `${read.text} Free to spend: ${Money.of(sts.freeMinor, currency).format()}.`,
+			highlight: Number(sts.freeMinor)
+		});
+	}
+
 	if (parsed.intent === 'spending_query') {
-		const period = timeToPeriod(parsed.period);
+		const period = timeToPeriod(parsed.period, now, scope.timezone, ws.weekStartDay);
 		const total = await periodTotal(db, scope, period, now);
 		const categories = await categoryBreakdown(db, scope, period, now);
 		const members = await memberBreakdown(db, scope, period, now);
@@ -199,7 +283,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	}
 
 	if (parsed.intent === 'net_position') {
-		const period = timeToPeriod(parsed.period);
+		const period = timeToPeriod(parsed.period, now, scope.timezone, ws.weekStartDay);
 		const total = await periodTotal(db, scope, period, now);
 		const income = await incomeInPeriod(db, ws.id, period, scope.timezone, today);
 		const bucket = await bucketFlowsInPeriod(db, ws.id, period, scope.timezone);

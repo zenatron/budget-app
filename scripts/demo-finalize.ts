@@ -77,13 +77,42 @@ async function main() {
 		const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 		manifest.start_url = `${BASE}/`;
 		manifest.scope = `${BASE}/`;
+		const rebase = (src: string) => (src.startsWith('/') ? `${BASE}${src}` : src);
 		if (Array.isArray(manifest.icons)) {
 			manifest.icons = manifest.icons.map((icon: { src: string }) => ({
 				...icon,
-				src: icon.src.startsWith('/') ? `${BASE}${icon.src}` : icon.src
+				src: rebase(icon.src)
 			}));
 		}
+		if (Array.isArray(manifest.screenshots)) {
+			manifest.screenshots = manifest.screenshots.map((shot: { src: string }) => ({
+				...shot,
+				src: rebase(shot.src)
+			}));
+		}
+		if (Array.isArray(manifest.shortcuts)) {
+			manifest.shortcuts = manifest.shortcuts.map(
+				(sc: { url: string; icons?: { src: string }[] }) => ({
+					...sc,
+					url: sc.url.startsWith('/') ? `${BASE}${sc.url}` : sc.url,
+					icons: Array.isArray(sc.icons)
+						? sc.icons.map((icon) => ({ ...icon, src: rebase(icon.src) }))
+						: sc.icons
+				})
+			);
+		}
 		await writeFile(manifestPath, JSON.stringify(manifest, null, '\t') + '\n');
+	}
+
+	// The share target needs the server route behind POST /share, which the
+	// static demo does not ship. A share into the demo would be a 404 from the
+	// OS sheet — so the affordance is removed rather than left broken.
+	if (await exists(manifestPath)) {
+		const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+		if ('share_target' in manifest) {
+			delete manifest.share_target;
+			await writeFile(manifestPath, JSON.stringify(manifest, null, '\t') + '\n');
+		}
 	}
 
 	console.log(`demo finalized in build-demo/ for ${HOST}${BASE ? ` (base ${BASE})` : ''}`);

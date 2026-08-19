@@ -3,11 +3,20 @@
 	import { page } from '$app/state';
 	import { ChevronLeft, Mail, Users } from '@lucide/svelte';
 	import { money } from '$lib/actions/money';
+	import RecurrencePicker from '$lib/components/RecurrencePicker.svelte';
+	import { calDateInZone } from '$lib/domain/time/zoned';
 	import { formatMinor } from '$lib/money-format';
 
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
 	let editingPolicy: string | null = $state(null);
+	let editingAllowance: string | null = $state(null);
+	// Today in the *workspace* timezone: toISOString() is UTC, so late in the
+	// evening in the Americas a new allowance would anchor to tomorrow.
+	const today = $derived.by(() => {
+		const t = calDateInZone(new Date(), data.workspace.timezone);
+		return `${t.y}-${String(t.m).padStart(2, '0')}-${String(t.d).padStart(2, '0')}`;
+	});
 	let copied: string | null = $state(null);
 
 	const roleLabel: Record<string, string> = { owner: 'Owner', member: 'Member' };
@@ -22,7 +31,19 @@
 	let routingMode = $state('any_of');
 	let approvers = $state<string[]>([]);
 	let bucketCharges = $state('inherit');
+	let bucketScope = $state('any');
 	let threshold = $state('');
+
+	/* The allowance form's own draft, separate from the policy editor's: the two
+	   open independently and one must not overwrite the other's fields. The
+	   schedule fields are the ones RecurrencePicker binds and the server already
+	   parses, so an allowance can be set to anything a bucket can. */
+	let allowanceAmount = $state('');
+	let allowanceFreq = $state('weekly');
+	let allowanceInterval = $state(1);
+	let allowanceWeekDays = $state<number[]>([]);
+	let allowanceMonthDay = $state('1');
+	let allowanceStart = $state('');
 
 	const activeMembers = $derived(data.members.filter((m) => m.status === 'active'));
 	/** Approvers only matter when something can actually need approving. */
@@ -38,8 +59,25 @@
 		routingMode = m.policy.routing.mode;
 		approvers = [...m.policy.routing.approver_ids];
 		bucketCharges = m.policy.bucket_charges ?? 'inherit';
+		bucketScope = m.policy.own_buckets_only ? 'own' : 'any';
 		threshold =
 			m.policy.threshold_minor !== undefined ? (m.policy.threshold_minor / 100).toFixed(2) : '';
+	}
+
+	function openAllowance(m: (typeof data.members)[number]) {
+		if (editingAllowance === m.id) {
+			editingAllowance = null;
+			return;
+		}
+		editingAllowance = m.id;
+		allowanceAmount = m.allowance ? (Number(m.allowance.amountMinor) / 100).toFixed(2) : '';
+		allowanceFreq = m.allowance?.freq ?? 'weekly';
+		allowanceInterval = m.allowance?.interval ?? 1;
+		allowanceWeekDays = [...(m.allowance?.weekDays ?? [])];
+		allowanceMonthDay = m.allowance?.monthDay ?? '1';
+		// A new allowance starts today; an existing one keeps its own anchor, or
+		// re-saving would quietly move a weekly rule onto a different weekday.
+		allowanceStart = m.allowance?.startDate || today;
 	}
 
 	const nameOf = (id: string) => data.members.find((m) => m.id === id)?.displayName ?? 'someone';
@@ -73,6 +111,11 @@
 			lines.push('Bucket charges always need approval, even so.');
 		} else if (data.workspaceSkipsBucketCharges) {
 			lines.push('Bucket charges skip approval, following the workspace setting.');
+		}
+
+		if (bucketScope === 'own') {
+			lines.push(`${who} can only charge to buckets they own.`);
+			lines.push('Going past what a bucket holds needs approval.');
 		}
 
 		if (canRequireApproval) {
@@ -248,15 +291,32 @@
 								>
 									{bucketSummary(m.policy)}
 								</p>
+								{#if m.allowance}
+									<!-- The pot, in the terms a parent set it in: what goes in, and
+									     what is left of it right now. -->
+									<!-- accent-ink, not --ws-accent: this is words. The raw accent is a
+								     hex the workspace picked and can land under 4.5:1 as text. -->
+									<p class="mt-0.5 text-[12px]" style="color: var(--accent-ink)">
+										{formatMinor(m.allowance.amountMinor, data.workspace.currency)}
+										{m.allowance.cadence.toLowerCase()} ·
+										{formatMinor(m.allowance.balanceMinor, data.workspace.currency)} left
+									</p>
+								{/if}
 							{/if}
 						</div>
 						{#if data.isOwner}
 							<div class="flex shrink-0 items-center gap-3">
 								{#if !disabled}
 									<button
+										onclick={() => openAllowance(m)}
+										class="press text-[13px] font-medium"
+										style="color: var(--ink-3)"
+										>{editingAllowance === m.id ? 'Close' : 'Allowance'}</button
+									>
+									<button
 										onclick={() => openPolicy(m)}
 										class="press text-[13px] font-medium"
-										style="color: var(--ws-accent)"
+										style="color: var(--accent-ink)"
 										>{editingPolicy === m.id ? 'Done' : 'Policy'}</button
 									>
 								{/if}
@@ -344,6 +404,20 @@
 								</select>
 							</label>
 
+							<!--
+								The cap half of an allowance. "Only their own" does two things at
+								once, which is why it is one control: it stops them charging
+								anyone else's bucket, and it takes the exemption above away for a
+								charge bigger than the bucket holds.
+							-->
+							<label class="block">
+								<span class="section-label mb-1.5 block">Buckets they can charge</span>
+								<select name="bucketScope" bind:value={bucketScope} class="field text-[16px]">
+									<option value="any">Any bucket</option>
+									<option value="own">Only their own</option>
+								</select>
+							</label>
+
 							{#if canRequireApproval}
 								<label class="block">
 									<span class="section-label mb-1.5 block">Who decides</span>
@@ -391,6 +465,81 @@
 							>
 								Save policy
 							</button>
+						</form>
+					{/if}
+
+					<!--
+						The guided setup. Everything in it is expressible through the Policy
+						editor and the Buckets page, and assembling it by hand there is four
+						screens plus knowing which three settings to reach for. This is that
+						assembly, named for what people actually call it.
+					-->
+					{#if editingAllowance === m.id}
+						<form
+							method="POST"
+							action="?/allowance"
+							use:submit={{
+								success: m.allowance ? 'Allowance updated' : 'Allowance set up',
+								onSuccess: () => (editingAllowance = null)
+							}}
+							class="mt-1 mb-2 space-y-3 rounded-[14px] p-4"
+							style="background: var(--surface-2)"
+						>
+							<input type="hidden" name="memberId" value={m.id} />
+
+							<p
+								class="rounded-[10px] px-3 py-2.5 text-[13px] leading-relaxed"
+								style="background: var(--surface); color: var(--ink-2)"
+							>
+								{m.displayName} gets a bucket only they can spend from, topped up on this schedule. Anything
+								that fits comes straight out of it. Anything bigger comes to you to approve.
+							</p>
+
+							<label class="block">
+								<span class="section-label mb-1.5 block">Amount each time</span>
+								<input
+									name="amount"
+									required
+									bind:value={allowanceAmount}
+									use:money
+									inputmode="decimal"
+									placeholder="20.00"
+									aria-label="Allowance amount"
+									class="field text-[16px] tabular-nums"
+								/>
+							</label>
+
+							<!--
+								The same picker the Buckets and Plan pages use, because an
+								allowance is a bucket accrual and there is no reason it should
+								be schedulable in fewer ways than one.
+							-->
+							<RecurrencePicker
+								bind:freq={allowanceFreq}
+								bind:interval={allowanceInterval}
+								bind:weekDays={allowanceWeekDays}
+								bind:monthDay={allowanceMonthDay}
+								bind:startDate={allowanceStart}
+								noun="top-up"
+							/>
+
+							{#if m.allowance}
+								<p class="text-[13px]" style="color: var(--ink-3)">
+									Saving moves <strong>{m.allowance.name}</strong>. Its balance of
+									{formatMinor(m.allowance.balanceMinor, data.workspace.currency)} stays where it is.
+								</p>
+							{/if}
+
+							<div class="flex gap-2">
+								<button class="btn btn-accent px-5 py-2.5 text-[15px]">
+									{m.allowance ? 'Save allowance' : 'Set up allowance'}
+								</button>
+								<button
+									type="button"
+									onclick={() => (editingAllowance = null)}
+									class="btn btn-ghost px-5 py-2.5 text-[15px]">Cancel</button
+								>
+							</div>
 						</form>
 					{/if}
 				</div>

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import Segmented from '$lib/components/Segmented.svelte';
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
 	import {
@@ -7,33 +6,28 @@
 		Camera,
 		ChevronRight,
 		CircleHelp,
+		Download,
 		FileCheck,
-		Monitor,
-		Moon,
+		Palette,
 		Settings,
 		Shapes,
 		Sparkles,
-		Sun,
 		Users,
 		Webhook
 	} from '@lucide/svelte';
-	import AccentPicker from '$lib/components/AccentPicker.svelte';
-	import { theme, setTheme, type ThemePref } from '$lib/theme.svelte';
-	import { accentFor } from '$lib/accent';
+	import { installPrompt, isIos, promptInstall, dismissInstall } from '$lib/install-prompt.svelte';
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
+	let prompting = $state(false);
 
-	// Writable $derived: the picker reassigns it so the swatch responds instantly,
-	// and it re-syncs to the stored value whenever the load data changes. The Save
-	// button only appears once the two diverge.
-	const currentAccent = $derived(accentFor({ slug: slug ?? '', accentColor: data.accentColor }));
-	let accent = $derived(currentAccent);
-
-	const themeOptions: { id: ThemePref; label: string; icon: typeof Sun }[] = [
-		{ id: 'system', label: 'System', icon: Monitor },
-		{ id: 'light', label: 'Light', icon: Sun },
-		{ id: 'dark', label: 'Dark', icon: Moon }
-	];
+	async function install() {
+		prompting = true;
+		try {
+			await promptInstall();
+		} finally {
+			prompting = false;
+		}
+	}
 
 	let confirmingDelete = $state(false);
 	let deleteConfirmText = $state('');
@@ -303,34 +297,91 @@
 		</div>
 	{/if}
 
-	<div class="card p-5">
-		<p class="text-[15px] font-medium" style="color: var(--ink)">Appearance</p>
-		<p class="mt-0.5 mb-3.5 text-[13px]" style="color: var(--ink-3)">
-			Follows your device by default. Saved on this device.
-		</p>
-		<Segmented
-			options={themeOptions.map((o) => ({ value: o.id, label: o.label, icon: o.icon }))}
-			value={theme.pref}
-			onselect={(v) => setTheme(v as ThemePref)}
-			ariaLabel="Theme"
-		/>
-	</div>
-
-	{#if data.member.role === 'owner'}
-		<div class="card p-5">
-			<p class="text-[15px] font-medium" style="color: var(--ink)">Accent</p>
-			<p class="mt-0.5 mb-3.5 text-[13px]" style="color: var(--ink-3)">
-				Colors this workspace everywhere. Each workspace keeps its own.
-			</p>
-			<form method="POST" action="?/accent" use:submit={{ success: 'Accent updated' }}>
-				<AccentPicker bind:value={accent} label="" />
-				<input type="hidden" name="accentColor" value={accent} />
-				{#if accent !== currentAccent}
-					<button class="btn btn-tint mt-3.5 px-4 py-2 text-[14px]">Save accent</button>
-				{/if}
-			</form>
-		</div>
+	<!--
+		Install, offered rather than begged for: one quiet card that appears when
+		the platform has an install to offer (or is an iPhone, where the only
+		lever is Share → Add to Home Screen) and stays dismissed once answered.
+		Amber like every other "consider this" card; nothing pulses, nothing
+		re-appears after "Not now".
+	-->
+	{#if !installPrompt.installed && !installPrompt.dismissed}
+		{#if installPrompt.available}
+			<div
+				class="card p-4"
+				style="background: color-mix(in oklab, var(--pending) 12%, var(--surface))"
+			>
+				<div class="flex items-center gap-2.5">
+					<span
+						class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+						style="background: color-mix(in oklab, var(--pending) 16%, transparent)"
+					>
+						<Download class="h-4 w-4" style="color: var(--pending)" />
+					</span>
+					<div class="flex-1">
+						<p class="text-[15px] font-semibold" style="color: var(--pending)">Install Ledger</p>
+						<p class="text-[13px]" style="color: var(--ink-3)">
+							Full screen, its own window, and works offline.
+						</p>
+					</div>
+				</div>
+				<div class="mt-3 flex items-center gap-2.5">
+					<button
+						onclick={install}
+						disabled={prompting}
+						class="btn btn-accent px-4 py-2 text-[14px]"
+					>
+						Install
+					</button>
+					<button
+						onclick={dismissInstall}
+						disabled={prompting}
+						class="btn btn-plain px-4 py-2 text-[14px]"
+						style="color: var(--ink-3)">Not now</button
+					>
+				</div>
+			</div>
+		{:else if isIos()}
+			<div
+				class="card p-4"
+				style="background: color-mix(in oklab, var(--pending) 12%, var(--surface))"
+			>
+				<div class="flex items-center gap-2.5">
+					<span
+						class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+						style="background: color-mix(in oklab, var(--pending) 16%, transparent)"
+					>
+						<Download class="h-4 w-4" style="color: var(--pending)" />
+					</span>
+					<p class="text-[15px] font-semibold" style="color: var(--pending)">Install Ledger</p>
+				</div>
+				<p class="mt-1.5 text-[13px] leading-relaxed" style="color: var(--ink-2)">
+					In Safari, tap <strong style="color: var(--ink)">Share</strong> (the square with the
+					arrow) and choose <strong style="color: var(--ink)">Add to Home Screen</strong>.
+				</p>
+				<button
+					onclick={dismissInstall}
+					class="btn btn-plain mt-2 px-4 py-2 text-[14px]"
+					style="color: var(--ink-3)">Not now</button
+				>
+			</div>
+		{/if}
 	{/if}
+
+	<a href="/w/{slug}/settings/appearance" class="press card flex items-center gap-3.5 p-4">
+		<span
+			class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+			style="background: color-mix(in oklab, var(--ws-accent) 18%, transparent)"
+		>
+			<Palette class="h-[18px] w-[18px]" style="color: var(--ws-accent)" />
+		</span>
+		<div class="flex-1">
+			<p class="text-[15px] font-medium" style="color: var(--ink)">Appearance</p>
+			<p class="text-[13px]" style="color: var(--ink-3)">
+				Theme, haptics, and the workspace accent
+			</p>
+		</div>
+		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
+	</a>
 
 	<a href="/w/{slug}/settings/help" class="press card flex items-center gap-3.5 p-4">
 		<span

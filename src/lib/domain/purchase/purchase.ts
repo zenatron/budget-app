@@ -204,6 +204,97 @@ export function deny(
 	};
 }
 
+/**
+ * DENIED → PENDING_APPROVAL. The requester asks again, with a reason.
+ *
+ * A denial used to be the end of the road: the row sat there refused, and the
+ * only way to raise it again was to type the whole purchase in a second time,
+ * which lost the history of having asked and been told no. That is the wrong
+ * shape for the thing this app is actually about. People do come back with
+ * "it's on sale now" or "I found a cheaper one", and the honest record of that
+ * is one purchase with a denial and an appeal on it, not two purchases.
+ *
+ * The note is required, because an appeal with nothing new to say is just the
+ * same request again and the approver has no basis to answer it differently.
+ * Approvers are re-resolved by the caller, so an appeal goes to whoever can
+ * decide *now* rather than to whoever happened to be named before.
+ */
+export function appeal(
+	p: Purchase,
+	actorMemberId: string,
+	note: string,
+	approverMemberIds: string[],
+	now: Date
+): TransitionResult {
+	assertState(p, ['denied'], 'appeal');
+	if (actorMemberId !== p.memberId) {
+		throw new PurchaseStateError('Only the requester can appeal a denial');
+	}
+	if (note.trim().length === 0) {
+		throw new PurchaseStateError('Say what has changed since it was denied');
+	}
+	if (approverMemberIds.length === 0) {
+		throw new PurchaseStateError('Cannot appeal with no approvers');
+	}
+	return {
+		purchase: {
+			...p,
+			state: 'pending_approval',
+			approverMemberIds: [...approverMemberIds],
+			requestedAt: now,
+			decidedAt: null
+		},
+		event: event(p, 'pending_approval', actorMemberId, now, `appealed: ${note.trim()}`)
+	};
+}
+
+/**
+ * DENIED → APPROVED. An approver changes their mind, on the record.
+ *
+ * Deliberately not a silent re-decision. Overturning a "no" is exactly the kind
+ * of act that people need to be able to point at afterwards, so the note is
+ * required and lands in the same event log as the denial it reverses. The two
+ * sit next to each other in the history, which is the whole point: the record
+ * says it was refused and then allowed, and by whom.
+ *
+ * Anyone who was a designated approver on the denial may do it. Re-resolving
+ * against the current policy would let a change of policy quietly hand someone
+ * the power to overturn a decision they were never part of.
+ */
+export function overrideDenial(
+	p: Purchase,
+	actorMemberId: string,
+	note: string,
+	now: Date
+): TransitionResult {
+	assertState(p, ['denied'], 'override the denial of');
+	if (!p.approverMemberIds.includes(actorMemberId)) {
+		throw new PurchaseStateError('Only a designated approver can overturn this denial');
+	}
+	if (note.trim().length === 0) {
+		throw new PurchaseStateError('Say why you are allowing it after all');
+	}
+	const reason = `denial overturned: ${note.trim()}`;
+	// Same fork as `approve`: a purchase that already carries a final amount is
+	// money out the door, so allowing it completes rather than merely approves.
+	if (p.finalAmount !== null) {
+		return {
+			purchase: {
+				...p,
+				state: 'completed',
+				approvedAmount: p.finalAmount,
+				decidedAt: now,
+				completedAt: p.completedAt ?? now
+			},
+			event: event(p, 'completed', actorMemberId, now, reason, p.finalAmount)
+		};
+	}
+	return {
+		purchase: { ...p, state: 'approved', approvedAmount: p.requestedAmount, decidedAt: now },
+		event: event(p, 'approved', actorMemberId, now, reason, p.requestedAmount)
+	};
+}
+
 /** DRAFT | PENDING_APPROVAL | APPROVED → CANCELLED, by the requester. */
 export function cancel(p: Purchase, actorMemberId: string, now: Date): TransitionResult {
 	assertState(p, ['draft', 'pending_approval', 'approved'], 'cancel');

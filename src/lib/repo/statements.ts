@@ -45,6 +45,8 @@ export interface ImportListItem {
 	importedByName: string;
 	/** Transcribed off a picture by a model. Surfaced everywhere it is listed. */
 	modelRead: boolean;
+	/** Every line answered and the import closed — review work, finished. */
+	closed: boolean;
 }
 
 /** Newest first — you reconcile the statement you just pulled down. */
@@ -76,7 +78,8 @@ export async function listImports(db: Db, workspaceId: string): Promise<ImportLi
 		periodEnd: r.imp.periodEnd,
 		currency: r.imp.currency,
 		importedByName: r.importedByName,
-		modelRead: r.imp.modelRead
+		modelRead: r.imp.modelRead,
+		closed: r.imp.status === 'reconciled'
 	}));
 }
 
@@ -401,4 +404,22 @@ export async function refreshMatchedCount(db: Db, importId: string): Promise<voi
 		.update(statementImport)
 		.set({ matchedCount: row?.n ?? 0 })
 		.where(eq(statementImport.id, importId));
+}
+
+/**
+ * Lines still waiting for a person: unmatched, or holding a proposal they
+ * haven't accepted. Zero is the precondition for closing an import — confirmed,
+ * private and ignored all count as answered.
+ */
+export async function countUnsettled(db: Db, importId: string): Promise<number> {
+	const [row] = await db
+		.select({ n: count() })
+		.from(statementLine)
+		.where(
+			and(
+				eq(statementLine.importId, importId),
+				inArray(statementLine.matchState, ['unmatched', 'matched'])
+			)
+		);
+	return row?.n ?? 0;
 }

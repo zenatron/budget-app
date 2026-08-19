@@ -291,11 +291,25 @@
 						onclick={() => askForHelp(l.id)}
 						disabled={asking !== null}
 						class="btn btn-ghost px-3.5 py-1.5 text-[13px]"
-						style="color: var(--ws-accent)"
+						style="color: var(--accent-ink)"
 					>
 						<Sparkles class="h-3.5 w-3.5" />
 						{asking === l.id ? 'Looking…' : 'Help me find this'}
 					</button>
+				{/if}
+				{#if !data.import.modelRead && l.amountMinor < 0n}
+					<!-- The direct door: this line becomes a purchase, through the same
+					     submission path a hand-logged one takes. Absent for model-read
+					     imports by design — a transcribed figure must be retyped by a
+					     person, not promoted into the ledger by a tap — and for lines
+					     that are money in. -->
+					<form method="POST" action="?/create" use:submit={{ success: 'Added to the ledger' }}>
+						<input type="hidden" name="lineId" value={l.id} />
+						<input type="hidden" name="itemName" value={l.rawDescription} />
+						<button class="btn btn-ghost px-3.5 py-1.5 text-[13px]" style="color: var(--ink-2)">
+							<Plus class="h-3.5 w-3.5" /> Add to ledger
+						</button>
+					</form>
 				{/if}
 				<a
 					href="/w/{slug}/purchases/new?describe={encodeURIComponent(describeFor(l))}"
@@ -341,6 +355,37 @@
 				of <span class="num">{data.import.lineCount}</span> still to account for.
 			{/if}
 		</p>
+		<!--
+			The session's own lifecycle. Closing is a statement — this period is
+			reconciled, stop carrying it as open work — and it is deliberately soft:
+			reopen is one tap, and any line put back in review reopens on its own.
+		-->
+		{#if data.import.closed}
+			<div class="mt-3 flex items-center gap-2.5">
+				<span
+					class="chip"
+					style="color: var(--approve); background: color-mix(in oklab, var(--approve) 14%, transparent)"
+				>
+					<Check class="h-3 w-3" /> Closed
+				</span>
+				<form method="POST" action="?/reopen" use:submit={{ success: 'Reopened' }}>
+					<button class="press text-[13px] font-semibold" style="color: var(--ink-3)">
+						Reopen
+					</button>
+				</form>
+			</div>
+		{:else if remaining === 0}
+			<form
+				method="POST"
+				action="?/close"
+				use:submit={{ success: 'Statement closed' }}
+				class="mt-3"
+			>
+				<button class="btn btn-tint px-4 py-2 text-[14px]">
+					<Check class="h-4 w-4" /> Close statement
+				</button>
+			</form>
+		{/if}
 	</div>
 
 	<!--
@@ -494,7 +539,7 @@
 											<!-- Labelled, not styled-as-chosen: this row is a question. -->
 											<span
 												class="chip shrink-0"
-												style="color: var(--ws-accent); background: color-mix(in oklab, var(--ws-accent) 14%, transparent)"
+												style="color: var(--accent-ink); background: color-mix(in oklab, var(--ws-accent) 14%, transparent)"
 												>Guess</span
 											>
 										{/if}

@@ -9,7 +9,7 @@ import {
 	formatRRule,
 	parseRRule
 } from '$lib/domain/recurrence/rrule';
-import { zonedTimeToUtc } from '$lib/domain/time/zoned';
+import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
 import { addIncome, deleteIncome, listIncome, updateIncome } from '$lib/repo/income';
 
 export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
@@ -17,6 +17,11 @@ export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
 	// a locals-only load declares no such dependency. See +layout.server.ts.
 	void params.workspace;
 	const rows = await listIncome(ctx.db, ctx.workspace.id);
+	// Midnight today in the workspace's own timezone, so "past" means the day it
+	// means to the household rather than to UTC.
+	const ws = ctx.workspace;
+	const t = calDateInZone(ctx.deps.clock.now(), ws.timezone);
+	const startOfToday = zonedTimeToUtc(t, 0, 0, ws.timezone);
 	return {
 		entries: rows.map((r) => {
 			let freq: string | null = null;
@@ -41,6 +46,10 @@ export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
 				note: r.entry.note,
 				memberName: r.memberName,
 				mine: r.entry.memberId === ctx.member.id,
+				/* A monthly entry is a template, so it is never "past": it keeps
+				   producing occurrences. Only a dated one-off can fall behind. */
+				recurring: r.entry.rrule !== null,
+				past: r.entry.rrule === null && r.entry.receivedAt < startOfToday,
 				freq,
 				monthDay
 			};

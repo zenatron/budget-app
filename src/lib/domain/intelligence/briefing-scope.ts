@@ -84,6 +84,27 @@ function covers(scope: BriefingScope, y: number, m: number): boolean {
 }
 
 /**
+ * The month a question names, resolved the way the palette's own parser
+ * resolves one: a bare month that hasn't happened yet this year means last
+ * year's. Null when no month is named. Exposed so the ask route can build the
+ * briefing *around* the named month — the wider-window half of the bargain, of
+ * which the coverage check here is the other.
+ */
+export function mentionedMonthPeriod(
+	query: string,
+	today: { y: number; m: number }
+): { y: number; m: number; mention: string } | null {
+	const q = query.toLowerCase();
+	const named = new RegExp(`\\b(${Object.keys(MONTHS).join('|')})\\b`).exec(q);
+	if (!named) return null;
+	const month = MONTHS[named[1]];
+	// An explicit year alongside it wins over the inferred one.
+	const withYear = new RegExp(`\\b${named[1]}\\s+(\\d{4})\\b`).exec(q);
+	const year = withYear ? Number(withYear[1]) : month <= today.m ? today.y : today.y - 1;
+	return { y: year, m: month, mention: withYear ? withYear[0] : named[0] };
+}
+
+/**
  * Returns what puts the question outside the briefing, or null when nothing does.
  * Null is not a promise that the briefing can answer it — only that time isn't
  * the reason it can't.
@@ -96,21 +117,10 @@ export function outOfBriefingScope(query: string, scope: BriefingScope): OutOfSc
 		if (m) return { mention: m[0], suggest: w.suggest };
 	}
 
-	// A named month, resolved the way the palette's own parser resolves one: a
-	// bare month that hasn't happened yet this year means last year's.
-	const named = new RegExp(`\\b(${Object.keys(MONTHS).join('|')})\\b`).exec(q);
-	if (named) {
-		const month = MONTHS[named[1]];
-		// An explicit year alongside it wins over the inferred one.
-		const withYear = new RegExp(`\\b${named[1]}\\s+(\\d{4})\\b`).exec(q);
-		const year = withYear
-			? Number(withYear[1])
-			: month <= scope.today.m
-				? scope.today.y
-				: scope.today.y - 1;
-		if (!covers(scope, year, month)) {
-			return { mention: withYear ? withYear[0] : named[1], suggest: 'analytics' };
-		}
+	// A named month, resolved the same way as above, checked for coverage.
+	const named = mentionedMonthPeriod(q, scope.today);
+	if (named && !covers(scope, named.y, named.m)) {
+		return { mention: named.mention, suggest: 'analytics' };
 	}
 
 	// A bare year is always an annual aggregate, which the briefing never holds.

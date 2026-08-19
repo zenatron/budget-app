@@ -5,7 +5,6 @@ import { invite } from '$lib/db/schema';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 
-const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // Crockford base32: no 0/O or 1/I/L confusion when read aloud.
 const ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
 

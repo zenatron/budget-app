@@ -1,7 +1,7 @@
 import type { WorkspaceContext } from '$lib/ports/context';
 import type { ActionEvent, LoadEvent } from '$lib/ports/handlers';
 import { error, fail } from '@sveltejs/kit';
-import { and, asc, eq, gt, isNull } from 'drizzle-orm';
+import { and, asc, eq, gt, isNull, or } from 'drizzle-orm';
 import * as v from 'valibot';
 import { budget, category } from '$lib/db/schema';
 import { Money, InvalidMoneyError } from '$lib/domain/money/money';
@@ -20,10 +20,10 @@ import {
 	placeBreakdown,
 	verdictTotals
 } from '$lib/repo/analytics';
-import { incomeInPeriod } from '$lib/repo/income';
-import { setBudget } from '$lib/repo/budgets';
+import { incomeInPeriod, memberIncomeBreakdown } from '$lib/repo/income';
+import { setBudget, schedulableBudgetWeeks } from '$lib/repo/budgets';
 import { bucketFlowsInPeriod, lifetimeSaved, totalSaved } from '$lib/repo/buckets';
-import { listCategories } from '$lib/repo/workspaces';
+import { listCategories, listMembers } from '$lib/repo/workspaces';
 import { EARLIEST, MONTH_NAMES, pad, periodFromUrl } from '$lib/analytics-period';
 
 export async function load(ctx: WorkspaceContext, { url, params }: LoadEvent) {
@@ -35,8 +35,7 @@ export async function load(ctx: WorkspaceContext, { url, params }: LoadEvent) {
 	const ws = ctx.workspace;
 	const scope = { workspaceId: ws.id, viewerId: ctx.member.id, timezone: ws.timezone };
 	const today = calDateInZone(now, ws.timezone);
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const weekStartDay = (ws as any).weekStartDay ?? 1;
+	const weekStartDay = ws.weekStartDay;
 
 	// Shared with the map, so stepping the period on one screen means exactly
 	// what it means on the other. See server/analytics-period.
@@ -63,7 +62,9 @@ export async function load(ctx: WorkspaceContext, { url, params }: LoadEvent) {
 		periodTotal(db, scope, cfg.prevPeriod, now),
 		categoryBreakdown(db, scope, cfg.queryPeriod, now),
 		memberBreakdown(db, scope, cfg.queryPeriod, now),
-		cfg.showBudgets ? budgetVsActual(db, scope, cfg.queryPeriod, now) : Promise.resolve([]),
+		cfg.showBudgets && cfg.budgetKind
+			? budgetVsActual(db, scope, cfg.queryPeriod, now, cfg.budgetKind)
+			: Promise.resolve([]),
 		listCategories(db, ws.id),
 		incomeInPeriod(db, ws.id, cfg.queryPeriod, ws.timezone, today),
 		incomeInPeriod(db, ws.id, cfg.prevPeriod, ws.timezone, today),
@@ -86,22 +87,47 @@ export async function load(ctx: WorkspaceContext, { url, params }: LoadEvent) {
 	// app admits data for.
 	const allTime = yearPeriod({ y: EARLIEST, m: 1, d: 1 });
 	allTime.toExclusive = { y: today.y + 1, m: 1, d: 1 };
-	const [verdicts, earnedMinor, savedMinor, onHandMinor] = await Promise.all([
-		verdictTotals(db, scope, now),
-		incomeInPeriod(db, ws.id, allTime, ws.timezone, today),
-		lifetimeSaved(db, ws.id),
-		// What the buckets hold right now, as opposed to what went into them this
-		// period — the line under net position is answering "how much have I got
-		// put by?", which is a balance, not a flow.
-		totalSaved(db, ws.id)
-	]);
 
-	// Budgets that start after the current month — scheduled, not yet in force.
-	// Surfaced so a plan you made months ago is visible rather than a surprise.
+	// Settlement inputs: every active member, their income this period, and
+	// what they paid (the members breakdown above, already seal-filtered to
+	// this viewer). The math itself is domain-pure and runs in the page so the
+	// share basis can be switched without a round trip.
+	const [verdicts, earnedMinor, savedMinor, onHandMinor, memberRows, memberIncome] =
+		await Promise.all([
+			verdictTotals(db, scope, now),
+			incomeInPeriod(db, ws.id, allTime, ws.timezone, today),
+			lifetimeSaved(db, ws.id),
+			// What the buckets hold right now, as opposed to what went into them this
+			// period — the line under net position is answering "how much have I got
+			// put by?", which is a balance, not a flow.
+			totalSaved(db, ws.id),
+			listMembers(db, ws.id),
+			memberIncomeBreakdown(db, ws.id, cfg.queryPeriod, ws.timezone, today)
+		]);
+	const paidByMember = new Map(members.map((m) => [m.memberId, m.totalMinor]));
+	const incomeByMember = new Map(memberIncome.map((m) => [m.memberId, m.incomeMinor]));
+	// Empty when the workspace has settle-up switched off, so the whole section
+	// falls away with the flag rather than needing a second condition in the view.
+	const settlementMembers = (ws.settleUpEnabled ? memberRows : [])
+		.filter((r) => r.member.status === 'active')
+		.map((r) => ({
+			memberId: r.member.id,
+			name: r.user.displayName,
+			incomeMinor: incomeByMember.get(r.member.id) ?? 0n,
+			paidMinor: paidByMember.get(r.member.id) ?? 0n
+		}));
+
+	// Budgets that start after the current period — scheduled, not yet in force.
+	// Surfaced so a plan you made ahead is visible rather than a surprise. Both
+	// cadences are listed from any budgets-visible view: a weekly cap scheduled
+	// for next month shouldn't vanish because you're looking at the month view.
+	const thisMonthStart = `${today.y}-${pad(today.m)}-01`;
+	const thisWeekStart = schedulableWeeks(today, weekStartDay)[0].value;
 	const scheduled = cfg.showBudgets
 		? await db
 				.select({
 					id: budget.id,
+					period: budget.period,
 					categoryId: budget.categoryId,
 					amountMinor: budget.amountMinor,
 					effectiveFrom: budget.effectiveFrom,
@@ -113,8 +139,12 @@ export async function load(ctx: WorkspaceContext, { url, params }: LoadEvent) {
 				.where(
 					and(
 						eq(budget.workspaceId, ws.id),
-						eq(budget.period, 'month'),
-						gt(budget.effectiveFrom, `${today.y}-${pad(today.m)}-01`)
+						// "Future" is per cadence: a monthly line is future after this
+						// month starts, a weekly one after this week starts.
+						or(
+							and(eq(budget.period, 'month'), gt(budget.effectiveFrom, thisMonthStart)),
+							and(eq(budget.period, 'week'), gt(budget.effectiveFrom, thisWeekStart))
+						)
 					)
 				)
 				.orderBy(asc(budget.effectiveFrom))
@@ -145,6 +175,7 @@ export async function load(ctx: WorkspaceContext, { url, params }: LoadEvent) {
 		overdraftMinor: periodBuckets.overdraftMinor,
 		categories: categories.map((c) => ({ ...c })),
 		members: members.map((m) => ({ ...m })),
+		settlementMembers,
 		locationEnabled: ws.locationEnabled,
 		hasPlaces,
 		// A section captioned with a single row isn't a section — one pinned
@@ -167,15 +198,20 @@ export async function load(ctx: WorkspaceContext, { url, params }: LoadEvent) {
 		}),
 		budgets: budgets.map((b) => ({ ...b })),
 		budgetMonths: cfg.showBudgets ? schedulableMonths(today) : [],
+		budgetWeeks: cfg.showBudgets ? schedulableWeeks(today, weekStartDay) : [],
 		scheduledBudgets: scheduled.map((s) => ({
 			id: s.id,
+			period: s.period,
 			categoryId: s.categoryId,
 			categoryName: s.categoryName,
 			categoryIcon: s.categoryIcon,
 			amountMinor: s.amountMinor,
 			effectiveFrom: s.effectiveFrom,
-			// "2026-09-01" -> "Sep 2026"
-			label: `${MONTH_NAMES[Number(s.effectiveFrom.slice(5, 7)) - 1]} ${s.effectiveFrom.slice(0, 4)}`
+			// "2026-09-01" -> "Sep 2026"; a week's first day -> "the week of Sep 1".
+			label:
+				s.period === 'week'
+					? `the week of ${MONTH_NAMES[Number(s.effectiveFrom.slice(5, 7)) - 1]} ${Number(s.effectiveFrom.slice(8, 10))}`
+					: `${MONTH_NAMES[Number(s.effectiveFrom.slice(5, 7)) - 1]} ${s.effectiveFrom.slice(0, 4)}`
 		})),
 		allCategories: allCategories.map((c) => ({ id: c.id, name: c.name, icon: c.icon })),
 		verdicts,
@@ -208,8 +244,12 @@ const MAX_BUDGET_LEAD_MONTHS = 12;
 const BudgetSchema = v.object({
 	categoryId: v.optional(v.string()),
 	amount: v.pipe(v.string(), v.trim(), v.minLength(1, 'How much?')),
+	// 'month' (default) or 'week' — the cadence this budget runs on.
+	period: v.optional(v.picklist(['month', 'week'])),
 	// YYYY-MM. Absent means "this month", which is what the form defaults to.
-	effectiveMonth: v.optional(v.pipe(v.string(), v.regex(/^\d{4}-\d{2}$/, 'Pick a month')))
+	effectiveMonth: v.optional(v.pipe(v.string(), v.regex(/^\d{4}-\d{2}$/, 'Pick a month'))),
+	// YYYY-MM-DD, the week's first day. Absent means "this week".
+	effectiveWeek: v.optional(v.pipe(v.string(), v.regex(/^\d{4}-\d{2}-\d{2}$/, 'Pick a week')))
 });
 
 /** Months a budget can be scheduled for: this month through +12. */
@@ -224,6 +264,18 @@ function schedulableMonths(today: { y: number; m: number }) {
 			label: i === 0 ? 'This month' : `${MONTH_NAMES[m - 1]} ${y}`
 		});
 	}
+	return out;
+}
+
+/** Weeks a weekly budget can be scheduled for: this week through +12. */
+function schedulableWeeks(today: { y: number; m: number; d: number }, weekStartDay: number) {
+	const out: { value: string; label: string }[] = [];
+	const dates = schedulableBudgetWeeks(today, weekStartDay);
+	dates.forEach((value, i) => {
+		const month = MONTH_NAMES[Number(value.slice(5, 7)) - 1];
+		const day = Number(value.slice(8, 10));
+		out.push({ value, label: i === 0 ? 'This week' : `${month} ${day}` });
+	});
 	return out;
 }
 
@@ -246,13 +298,26 @@ export const actions = {
 		const db = ctx.db;
 		const now = ctx.deps.clock.now();
 		const today = calDateInZone(now, ctx.workspace.timezone);
+		const weekStartDay = ctx.workspace.weekStartDay;
 
-		const allowed = schedulableMonths(today);
-		const chosen = parsed.output.effectiveMonth ?? allowed[0].value;
-		if (!allowed.some((m) => m.value === chosen)) {
-			return fail(400, { error: `Pick a month between now and ${allowed.at(-1)!.label}` });
+		// One cadence per submit; each validates against its own calendar.
+		const kind = parsed.output.period ?? 'month';
+		let from: string;
+		if (kind === 'week') {
+			const allowed = schedulableWeeks(today, weekStartDay);
+			const chosen = parsed.output.effectiveWeek ?? allowed[0].value;
+			if (!allowed.some((w) => w.value === chosen)) {
+				return fail(400, { error: `Pick a week between now and ${allowed.at(-1)!.label}` });
+			}
+			from = chosen;
+		} else {
+			const allowed = schedulableMonths(today);
+			const chosen = parsed.output.effectiveMonth ?? allowed[0].value;
+			if (!allowed.some((m) => m.value === chosen)) {
+				return fail(400, { error: `Pick a month between now and ${allowed.at(-1)!.label}` });
+			}
+			from = `${chosen}-01`;
 		}
-		const from = `${chosen}-01`;
 
 		// Timeline write (close the open range, inherit the next start, replace an
 		// exact match) lives in one place so the MCP set_budget tool shares it.
@@ -260,7 +325,8 @@ export const actions = {
 			workspaceId: ctx.workspace.id,
 			categoryId,
 			amountMinor: amount.minor,
-			effectiveFrom: from
+			effectiveFrom: from,
+			period: kind
 		});
 		return { ok: true };
 	},
@@ -272,7 +338,9 @@ export const actions = {
 		const db = ctx.db;
 		const today = calDateInZone(ctx.deps.clock.now(), ctx.workspace.timezone);
 		const pad = (n: number) => String(n).padStart(2, '0');
+		const weekStartDay = ctx.workspace.weekStartDay;
 		const thisMonth = `${today.y}-${pad(today.m)}-01`;
+		const thisWeek = schedulableBudgetWeeks(today, weekStartDay)[0];
 
 		await db.transaction(async (tx) => {
 			const [row] = await tx
@@ -280,17 +348,21 @@ export const actions = {
 				.from(budget)
 				.where(and(eq(budget.id, id), eq(budget.workspaceId, ctx.workspace.id)))
 				.limit(1);
-			// Only future rows are removable here; past ones are history.
-			if (!row || row.effectiveFrom <= thisMonth) return;
+			// Only future rows are removable here; past ones are history. "Future"
+			// on the row's own clock: this month for a monthly line, this week for
+			// a weekly one.
+			if (!row) return;
+			const boundary = row.period === 'week' ? thisWeek : thisMonth;
+			if (row.effectiveFrom <= boundary) return;
 
-			await tx.delete(budget).where(eq(budget.id, id));
+			await tx.delete(budget).where(eq(budget.id, row.id));
 			await tx
 				.update(budget)
 				.set({ effectiveTo: row.effectiveTo })
 				.where(
 					and(
 						eq(budget.workspaceId, ctx.workspace.id),
-						eq(budget.period, 'month'),
+						eq(budget.period, row.period),
 						row.categoryId === null
 							? isNull(budget.categoryId)
 							: eq(budget.categoryId, row.categoryId),

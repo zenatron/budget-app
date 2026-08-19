@@ -41,6 +41,7 @@ export async function POST(ctx: WorkspaceContext, { request }: { request: Reques
 		// out of reach of exactly the deployment that wants it most.
 		updates.locationEnabled = value;
 	} else if (flag === 'uniqueCategories') updates.uniqueCategories = value;
+	else if (flag === 'settleUpEnabled') updates.settleUpEnabled = value;
 	else error(400, 'Unknown setting');
 
 	await ctx.db.update(workspace).set(updates).where(eq(workspace.id, ctx.workspace.id));

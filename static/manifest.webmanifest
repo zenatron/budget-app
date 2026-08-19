@@ -24,5 +24,65 @@
 			"type": "image/png",
 			"purpose": "maskable"
 		}
+	],
+	"shortcuts": [
+		{
+			"name": "New purchase",
+			"url": "/new",
+			"icons": [{ "src": "/icons/shortcut-new-96.png", "sizes": "96x96", "type": "image/png" }]
+		},
+		{
+			"name": "Ledger",
+			"url": "/"
+		}
+	],
+	"share_target": {
+		"action": "/share",
+		"method": "POST",
+		"enctype": "multipart/form-data",
+		"params": {
+			"title": "title",
+			"text": "text",
+			"url": "url",
+			"files": [{ "name": "photo", "accept": ["image/webp", "image/jpeg", "image/png"] }]
+		}
+	},
+	"screenshots": [
+		{
+			"src": "/screenshots/ledger.png",
+			"sizes": "540x1170",
+			"type": "image/png",
+			"form_factor": "narrow",
+			"label": "The ledger with Safe to Spend",
+			"theme_color": "#F4EEE1",
+			"background_color": "#F4EEE1"
+		},
+		{
+			"src": "/screenshots/approval.png",
+			"sizes": "540x1170",
+			"type": "image/png",
+			"form_factor": "narrow",
+			"label": "An approval, one thumb away",
+			"theme_color": "#F4EEE1",
+			"background_color": "#F4EEE1"
+		},
+		{
+			"src": "/screenshots/activity.png",
+			"sizes": "540x1170",
+			"type": "image/png",
+			"form_factor": "narrow",
+			"label": "Where the money went",
+			"theme_color": "#201c17",
+			"background_color": "#201c17"
+		},
+		{
+			"src": "/screenshots/new.png",
+			"sizes": "540x1170",
+			"type": "image/png",
+			"form_factor": "narrow",
+			"label": "Log a purchase as it happens",
+			"theme_color": "#201c17",
+			"background_color": "#201c17"
+		}
 	]
 }

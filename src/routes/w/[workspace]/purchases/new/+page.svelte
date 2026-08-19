@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
+	import { toastError } from '$lib/toast-state.svelte';
 	import {
 		ArrowRight,
 		Calendar,
@@ -94,16 +95,35 @@
 			shortMinor
 		};
 	});
-	const overdraftConfirm = $derived(
-		overdraft
-			? {
-					title: `${overdraft.bucketName} doesn't have that`,
-					body: `It holds ${formatMinor(overdraft.balanceMinor, overdraft.currency)}, and this is ${formatMinor(overdraft.amountMinor, overdraft.currency)}. Charging it anyway leaves the bucket ${formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn, and that part counts as ordinary spending.`,
-					confirmLabel: 'Charge it anyway',
-					tone: 'danger' as const
-				}
-			: undefined
-	);
+	/*
+	 * Two different things happen past the balance, so two different warnings.
+	 *
+	 * For most people an overdraft is allowed and simply costs: the bucket goes
+	 * negative and the uncovered part counts as ordinary spending. For someone
+	 * held to their own buckets it is the cap on an allowance, and the purchase
+	 * goes to an approver instead of being recorded. Telling them the first
+	 * thing would be a plain lie about what the button is going to do.
+	 */
+	const overdraftConfirm = $derived.by(() => {
+		if (!overdraft) return undefined;
+		const title = `${overdraft.bucketName} doesn't have that`;
+		const held = formatMinor(overdraft.balanceMinor, overdraft.currency);
+		const asked = formatMinor(overdraft.amountMinor, overdraft.currency);
+		if (data.ownBucketsOnly) {
+			return {
+				title,
+				body: `It holds ${held}, and this is ${asked}. Going past what a bucket holds needs approval, so this goes to an approver instead of being recorded now.`,
+				confirmLabel: 'Send for approval',
+				tone: 'default' as const
+			};
+		}
+		return {
+			title,
+			body: `It holds ${held}, and this is ${asked}. Charging it anyway leaves the bucket ${formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn, and that part counts as ordinary spending.`,
+			confirmLabel: 'Charge it anyway',
+			tone: 'danger' as const
+		};
+	});
 
 	// Optional category suggestion (the assist layer's first proving ground).
 	// Bound so a suggestion can fill it; a suggestion is only ever offered, never
@@ -201,14 +221,45 @@
 		}
 	}
 
-	// The Harmony button's "log a purchase" door hands off here via ?describe=.
+	// The Harmony button's "log a purchase" door hands off here via ?describe=;
+	// the share sheet's lands via ?share= (a staged photo) or ?shareText=.
 	onMount(() => {
 		const d = page.url.searchParams.get('describe');
 		if (d) {
 			describeText = d;
 			void parseDescription();
 		}
+		const sharedText = page.url.searchParams.get('shareText');
+		if (sharedText && !itemName) itemName = sharedText.split('\n')[0].slice(0, 80);
+		const shareId = page.url.searchParams.get('share');
+		if (shareId) void pickupShare(shareId);
 	});
+
+	/**
+	 * A photo shared from the OS share sheet (the manifest's share_target)
+	 * arrives as a staged blob; pick it up and attach it exactly as if it had
+	 * been chosen here, so the preview, the "Read this receipt" offer, and the
+	 * submit-time processing are all the ones that already exist. The param is
+	 * stripped before the fetch: a refresh should be a clean form, not a
+	 * re-attach of a photo the sweep may already have collected.
+	 */
+	async function pickupShare(id: string) {
+		const url = new URL(location.href);
+		url.searchParams.delete('share');
+		// Native rather than $app/navigation's replaceState: that one throws
+		// before the router has initialised, and a share URL is always a hard
+		// load — the one case where onMount is guaranteed to beat it. The router
+		// patches history itself, so it stays in step with this call.
+		history.replaceState(history.state, '', url.toString());
+		try {
+			const res = await fetch(`/w/${slug}/share/${encodeURIComponent(id)}`);
+			if (!res.ok) throw new Error(String(res.status));
+			const blob = await res.blob();
+			attachImage(new File([blob], 'shared.jpg', { type: blob.type || 'image/jpeg' }));
+		} catch {
+			toastError('That shared photo is no longer available');
+		}
+	}
 	const amountMinorForPicker = $derived(
 		BigInt(Math.round((Number((amount || '0').replace(/[^0-9.]/g, '')) || 0) * 100))
 	);
@@ -715,7 +766,7 @@
 						>
 							Suggested
 							<strong style="color: var(--ink)">{suggested.icon} {suggested.name}</strong>
-							<span style="color: var(--ws-accent)">· Apply</span>
+							<span style="color: var(--accent-ink)">· Apply</span>
 						</button>
 						<button
 							type="button"
@@ -760,7 +811,12 @@
 							{overdraft.bucketName} only holds {formatMinor(
 								overdraft.balanceMinor,
 								overdraft.currency
-							)}. This would leave it {formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn.
+							)}.
+							{#if data.ownBucketsOnly}
+								Anything past that goes to an approver.
+							{:else}
+								This would leave it {formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn.
+							{/if}
 						</span>
 					</div>
 				{/if}
@@ -826,7 +882,7 @@
 						onclick={readPhoto}
 						disabled={readingPhoto}
 						class="press flex items-center gap-2 text-[15px]"
-						style="color: var(--ws-accent)"
+						style="color: var(--accent-ink)"
 					>
 						<Sparkles class="h-4 w-4" />
 						{readingPhoto ? 'Reading the receipt…' : 'Read this receipt'}

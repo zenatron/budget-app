@@ -9,6 +9,12 @@ import {
 	sumRecurringInWindow,
 	type SafeToSpend
 } from '$lib/domain/forecast/safe-to-spend';
+import {
+	projectRunway,
+	nextMonthStart,
+	type ProjectionInputs,
+	type Runway
+} from '$lib/domain/forecast/runway';
 import { budgetVsActual } from './analytics';
 import { bucketFlowsInPeriod } from './buckets';
 import { visibleTo } from './purchases';
@@ -80,6 +86,113 @@ export async function safeToSpend(db: Db, scope: ForecastScope, now: Date): Prom
 		},
 		period
 	);
+}
+
+/**
+ * Project the `months` months that follow the current one.
+ *
+ * Safe to Spend answers this month; this answers the ones after it, from the
+ * same recurring facts — income and bills that repeat, cash that accrues into
+ * buckets, and any one-off income already dated ahead. A future month has no
+ * actuals, so every figure is a projection; the caller labels it as such.
+ *
+ * Not seal-scoped: income, bills and bucket accruals are household-wide and
+ * cannot be sealed (the same reason Safe to Spend takes them un-filtered). Only
+ * the purchase-derived actuals a seal touches, and those don't exist for a month
+ * that hasn't happened.
+ *
+ * Bucket accruals are projected uncapped — a goal-capped bucket that is nearly
+ * full is still shown as setting money aside. That overstates savings and so
+ * *understates* projected free cash: the conservative direction for a "will we
+ * be alright next month" read, and simple. Modelling the exact month a cap
+ * stops a bucket is a refinement, not a correctness need.
+ */
+export async function forecastMonths(
+	db: Db,
+	scope: ForecastScope,
+	now: Date,
+	months: number
+): Promise<Runway> {
+	const today = calDateInZone(now, scope.timezone);
+	const thisMonthStart = { y: today.y, m: today.m, d: 1 };
+	const firstMonth = nextMonthStart(thisMonthStart);
+	// The exclusive far edge of the whole horizon, for filtering one-off income.
+	let horizonEnd = firstMonth;
+	for (let i = 0; i < months; i++) horizonEnd = nextMonthStart(horizonEnd);
+
+	const [incomeRows, billRows, bucketRows] = await Promise.all([
+		db
+			.select({
+				amountMinor: income.amountMinor,
+				rrule: income.rrule,
+				receivedAt: income.receivedAt
+			})
+			.from(income)
+			.where(eq(income.workspaceId, scope.workspaceId)),
+		db
+			.select({
+				amountMinor: recurringRule.amountMinor,
+				rrule: recurringRule.rrule,
+				autoComplete: recurringRule.autoComplete
+			})
+			.from(recurringRule)
+			.where(
+				and(eq(recurringRule.workspaceId, scope.workspaceId), eq(recurringRule.status, 'active'))
+			),
+		db
+			.select({ amountMinor: bucket.amountMinor, rrule: bucket.rrule })
+			.from(bucket)
+			.where(and(eq(bucket.workspaceId, scope.workspaceId), eq(bucket.status, 'active')))
+	]);
+
+	const inputs: ProjectionInputs = {
+		incomeRules: [],
+		billRules: [],
+		savingRules: [],
+		oneOffIncome: []
+	};
+
+	for (const r of incomeRows) {
+		if (r.rrule) {
+			// Malformed rule — leave it out rather than guess, as every other
+			// projection here does.
+			try {
+				inputs.incomeRules.push({ rec: parseRRule(r.rrule), amountMinor: r.amountMinor });
+			} catch {
+				/* skip */
+			}
+		} else {
+			const on = calDateInZone(r.receivedAt, scope.timezone);
+			// Only one-off income dated inside the projected horizon matters; this
+			// month's is Safe to Spend's, and the past is done.
+			if (compareDates(on, firstMonth) >= 0 && compareDates(on, horizonEnd) < 0) {
+				inputs.oneOffIncome.push({ on, amountMinor: r.amountMinor });
+			}
+		}
+	}
+	for (const r of billRows) {
+		try {
+			// A confirm-at-price rule projects at its last-known amount, so the
+			// months it lands in carry the estimate flag — the same signal
+			// upcomingBills turns into this month's dotted figure.
+			inputs.billRules.push({
+				rec: parseRRule(r.rrule),
+				amountMinor: r.amountMinor,
+				estimated: !r.autoComplete
+			});
+		} catch {
+			/* skip */
+		}
+	}
+	for (const r of bucketRows) {
+		try {
+			inputs.savingRules.push({ rec: parseRRule(r.rrule), amountMinor: r.amountMinor });
+		} catch {
+			/* skip */
+		}
+	}
+
+	return projectRunway(inputs, firstMonth, months);
 }
 
 /** All income landing this month — one-off received + recurring projected across the whole period. */

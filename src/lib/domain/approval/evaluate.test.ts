@@ -107,6 +107,97 @@ describe('approvalRequired', () => {
 			expect(approvalRequired(q, usd(50), 'groceries', { chargedToBucket: true })).toBe(true);
 		});
 	});
+
+	/*
+	 * The allowance cap. An allowance is `mode: 'always'` plus `bucket_charges:
+	 * 'skip'` plus `own_buckets_only`: spend the pot freely, ask to go past it.
+	 */
+	describe('overdrawing an allowance', () => {
+		const allowance = policy({
+			mode: 'always',
+			bucket_charges: 'skip',
+			own_buckets_only: true
+		});
+
+		it('a charge the bucket covers stays exempt', () => {
+			expect(
+				approvalRequired(allowance, usd(50), null, {
+					chargedToBucket: true,
+					bucketWouldOverdraw: false
+				})
+			).toBe(false);
+		});
+
+		it('a charge past the balance falls back to the base mode', () => {
+			expect(
+				approvalRequired(allowance, usd(50), null, {
+					chargedToBucket: true,
+					bucketWouldOverdraw: true
+				})
+			).toBe(true);
+		});
+
+		it('falls back to the base mode, which can still be lenient', () => {
+			// The restriction removes the exemption; it does not invent a
+			// requirement. Somebody whose base mode is 'none' still spends freely.
+			const lenient = policy({ mode: 'none', bucket_charges: 'skip', own_buckets_only: true });
+			expect(
+				approvalRequired(lenient, usd(50), null, {
+					chargedToBucket: true,
+					bucketWouldOverdraw: true
+				})
+			).toBe(false);
+
+			const threshold = policy({
+				mode: 'threshold',
+				threshold_minor: 10_000,
+				bucket_charges: 'skip',
+				own_buckets_only: true
+			});
+			expect(
+				approvalRequired(threshold, usd(5000), null, {
+					chargedToBucket: true,
+					bucketWouldOverdraw: true
+				})
+			).toBe(false);
+			expect(
+				approvalRequired(threshold, usd(20_000), null, {
+					chargedToBucket: true,
+					bucketWouldOverdraw: true
+				})
+			).toBe(true);
+		});
+
+		it('an inherited exemption is withdrawn the same way', () => {
+			const inherits = policy({ mode: 'always', own_buckets_only: true });
+			const ctx = { chargedToBucket: true, workspaceSkipsBucketCharges: true };
+			expect(
+				approvalRequired(inherits, usd(50), null, { ...ctx, bucketWouldOverdraw: false })
+			).toBe(false);
+			expect(approvalRequired(inherits, usd(50), null, { ...ctx, bucketWouldOverdraw: true })).toBe(
+				true
+			);
+		});
+
+		it("leaves an unrestricted member's overdraft alone", () => {
+			// Nobody's behaviour changed by adding the flag: without it, an
+			// overdrawing bucket charge is exempt exactly as it always was.
+			const plain = policy({ mode: 'always', bucket_charges: 'skip' });
+			expect(
+				approvalRequired(plain, usd(50), null, {
+					chargedToBucket: true,
+					bucketWouldOverdraw: true
+				})
+			).toBe(false);
+		});
+
+		it("'require' still beats everything", () => {
+			const p = policy({ mode: 'none', bucket_charges: 'require', own_buckets_only: true });
+			expect(
+				approvalRequired(p, usd(50), null, { chargedToBucket: true, bucketWouldOverdraw: false })
+			).toBe(true);
+		});
+	});
 });
 
 describe('resolveApprovers', () => {

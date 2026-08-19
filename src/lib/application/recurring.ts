@@ -11,6 +11,8 @@ import { withdrawFromBucket } from '$lib/application/purchases';
 import type { Clock } from '$lib/ports/clock';
 import type { IdGenerator } from '$lib/ports/id-generator';
 import type { Notifier } from '$lib/ports/notifier';
+import type { ApprovalPolicy } from '$lib/domain/approval/policy';
+import { chargeRefusalMessage, refuseBucketCharge } from '$lib/domain/bucket/scope';
 
 /** Recurring charges land at 09:00 workspace-local on their occurrence date. */
 const MATERIALIZE_HOUR = 9;
@@ -46,17 +48,48 @@ export interface CreateRuleCmd {
 	backfill?: boolean;
 }
 
-/** The bucket a rule may charge: real, in this workspace, and active. */
-async function assertChargableBucket(db: Db, workspaceId: string, bucketId: string) {
+/**
+ * The bucket a rule may charge: real, in this workspace, active, and one this
+ * member may spend from.
+ *
+ * Checked when the rule is written rather than when it fires. A rule is a
+ * standing instruction, so a charge it generates months from now has nobody at
+ * the keyboard to tell; refusing it up front is the only place the answer is
+ * useful. The other end is `updateBucket`, which detaches a bucket from other
+ * members' rules the moment it is made personal, so a rule cannot keep drawing
+ * on a bucket that has since closed to its owner.
+ */
+async function assertChargableBucket(db: Db, scope: Scope, bucketId: string) {
 	const [bkt] = await db
-		.select({ id: bucket.id, status: bucket.status })
+		.select({
+			id: bucket.id,
+			status: bucket.status,
+			memberId: bucket.memberId,
+			chargeMemberIds: bucket.chargeMemberIds
+		})
 		.from(bucket)
-		.where(and(eq(bucket.id, bucketId), eq(bucket.workspaceId, workspaceId)))
+		.where(and(eq(bucket.id, bucketId), eq(bucket.workspaceId, scope.workspaceId)))
 		.limit(1);
 	if (!bkt) throw new RecurringRuleError('Bucket not found');
 	if (bkt.status !== 'active') {
 		throw new RecurringRuleError('Cannot charge to a paused or archived bucket');
 	}
+	const [me] = await db
+		.select({ policy: workspaceMember.approvalPolicy })
+		.from(workspaceMember)
+		.where(
+			and(
+				eq(workspaceMember.id, scope.memberId),
+				eq(workspaceMember.workspaceId, scope.workspaceId)
+			)
+		)
+		.limit(1);
+	const policy = me?.policy as ApprovalPolicy | undefined;
+	const refusal = refuseBucketCharge(bkt, {
+		memberId: scope.memberId,
+		ownBucketsOnly: policy?.own_buckets_only === true
+	});
+	if (refusal) throw new RecurringRuleError(chargeRefusalMessage(refusal));
 }
 
 export async function createRule(
@@ -76,7 +109,7 @@ export async function createRule(
 		throw new RecurringRuleError(`Amount must be positive ${ws.currency}`);
 	}
 	const rec = parseRRule(cmd.rrule); // throws RecurrenceError on bad input
-	if (cmd.bucketId) await assertChargableBucket(db, scope.workspaceId, cmd.bucketId);
+	if (cmd.bucketId) await assertChargableBucket(db, scope, cmd.bucketId);
 
 	// Normally the first occurrence is today at the earliest — nothing in the
 	// past. Backfilling instead anchors to the rule's own start date, and the
@@ -212,7 +245,7 @@ export async function updateRule(
 	}
 	if (cmd.categoryId !== undefined) updates.categoryId = cmd.categoryId;
 	if (cmd.bucketId !== undefined) {
-		if (cmd.bucketId) await assertChargableBucket(db, scope.workspaceId, cmd.bucketId);
+		if (cmd.bucketId) await assertChargableBucket(db, scope, cmd.bucketId);
 		updates.bucketId = cmd.bucketId;
 	}
 	if (cmd.autoComplete !== undefined) updates.autoComplete = cmd.autoComplete;
@@ -263,7 +296,31 @@ export async function materializeDueRules(db: Db, deps: Deps): Promise<number> {
 				if (!r || r.status !== 'active' || !r.nextOccurrenceAt || r.nextOccurrenceAt > now) {
 					return null;
 				}
-				const rec = parseRRule(r.rrule);
+
+				// A malformed rule must not wedge the sweep: parsing throws, the
+				// transaction rolls back with next_occurrence_at unadvanced, and the
+				// row re-throws every sweep — starving every rule after it. Pause it
+				// instead. The candidate query filters status='active', so a paused
+				// rule leaves the queue for good; it shows as paused and resumes in one
+				// tap once corrected.
+				let rec;
+				try {
+					rec = parseRRule(r.rrule);
+				} catch (e) {
+					await tx
+						.update(recurringRule)
+						.set({ status: 'paused' })
+						.where(eq(recurringRule.id, r.id));
+					console.log(
+						JSON.stringify({
+							level: 'warn',
+							msg: 'sweep: recurring paused (unparseable rule)',
+							ruleId: r.id,
+							err: (e as Error).message
+						})
+					);
+					return null;
+				}
 				const occurrenceAt = r.nextOccurrenceAt;
 				const amount = Money.of(r.amountMinor, r.currency);
 				const p: Purchase = {

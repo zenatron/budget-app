@@ -17,6 +17,24 @@ function iconSvg(size: number, padded: boolean): string {
 </svg>`;
 }
 
+// The "New purchase" manifest shortcut: the same coin, with the slot turned
+// into a plus. Shortcut glyphs render tiny — a bold stroke on the familiar
+// tile beats a new composition nobody can read at 48px.
+function shortcutSvg(size: number): string {
+	const r = size * 0.22;
+	const coinR = size * 0.28;
+	const cx = size / 2;
+	const cy = size / 2;
+	const arm = coinR * 0.62;
+	const stroke = size * 0.07;
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+	<rect x="0" y="0" width="${size}" height="${size}" rx="${r}" fill="#0a0a0a"/>
+	<circle cx="${cx}" cy="${cy}" r="${coinR}" fill="none" stroke="#4ade80" stroke-width="${stroke}"/>
+	<line x1="${cx - arm}" y1="${cy}" x2="${cx + arm}" y2="${cy}" stroke="#4ade80" stroke-width="${stroke}" stroke-linecap="round"/>
+	<line x1="${cx}" y1="${cy - arm}" x2="${cx}" y2="${cy + arm}" stroke="#4ade80" stroke-width="${stroke}" stroke-linecap="round"/>
+</svg>`;
+}
+
 await mkdir('static/icons', { recursive: true });
 const jobs: [string, number, boolean][] = [
 	['static/icons/icon-192.png', 192, false],
@@ -30,3 +48,8 @@ for (const [path, size, padded] of jobs) {
 		.toFile(path);
 	console.log('wrote', path);
 }
+
+await sharp(Buffer.from(shortcutSvg(96)))
+	.png()
+	.toFile('static/icons/shortcut-new-96.png');
+console.log('wrote', 'static/icons/shortcut-new-96.png');

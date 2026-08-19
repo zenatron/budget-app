@@ -52,6 +52,11 @@ export interface PeriodConfig {
 	prevLabel: string;
 	buckets: Array<{ label: string; key: string; today: boolean; weekLabel?: string }>;
 	showBudgets: boolean;
+	/**
+	 * The budget cadence this view reads, when showBudgets is true. Month and
+	 * week views each carry their own lines; day and year carry none.
+	 */
+	budgetKind: 'month' | 'week' | null;
 	hasPrev: boolean;
 	hasNext: boolean;
 	nav: {
@@ -117,7 +122,8 @@ export function resolvePeriod(params: {
 			label,
 			prevLabel: 'last week',
 			buckets,
-			showBudgets: false,
+			showBudgets: true,
+			budgetKind: 'week',
 			hasPrev,
 			hasNext,
 			nav: {
@@ -147,6 +153,7 @@ export function resolvePeriod(params: {
 			prevLabel: 'last year',
 			buckets,
 			showBudgets: false,
+			budgetKind: null,
 			hasPrev: target.y > EARLIEST,
 			hasNext: target.y < latestYear,
 			nav: {
@@ -181,6 +188,7 @@ export function resolvePeriod(params: {
 			prevLabel: 'yesterday',
 			buckets,
 			showBudgets: false,
+			budgetKind: null,
 			hasPrev: compareDates(target, earliest) > 0,
 			// Strictly before today — comparing against tomorrow let you step onto
 			// tomorrow itself, which is always an empty day.
@@ -218,6 +226,7 @@ export function resolvePeriod(params: {
 		prevLabel: 'last month',
 		buckets,
 		showBudgets: true,
+		budgetKind: 'month',
 		hasPrev: target.y > EARLIEST || (target.y === EARLIEST && target.m > 1),
 		hasNext: target.y < latestMonth.y || (target.y === latestMonth.y && target.m < latestMonth.m),
 		nav: {

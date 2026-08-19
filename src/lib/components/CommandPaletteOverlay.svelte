@@ -18,9 +18,27 @@
 		executeProposal,
 		type Proposal
 	} from '$lib/command-palette-state.svelte';
+	import { startThinking } from '$lib/haptics.svelte';
 
 	let { currency = 'USD', assistEnabled = false }: { currency?: string; assistEnabled?: boolean } =
 		$props();
+
+	/*
+	 * Harmony thinking, in the hand.
+	 *
+	 * The mark spins while it works, which is fine on a desk and useless on a
+	 * phone you have already looked away from. A light triple tap on a loop says
+	 * "still going" without asking for your eyes back, and it stops the moment
+	 * the answer lands — which is the part that actually tells you something.
+	 *
+	 * `startThinking` returns its own stopper, so the effect's cleanup is the
+	 * whole of the teardown: an answer, a cancel, or the overlay closing mid
+	 * request all end the pulse the same way.
+	 */
+	$effect(() => {
+		if (!paletteLoading.value) return;
+		return startThinking();
+	});
 
 	// The parser is pure and synchronous, so this runs on every keystroke with no
 	// network and no debounce — that's the whole point of showing it live.
@@ -78,12 +96,16 @@
 		if (p.intent === 'create_income') {
 			return `Add income “${p.source}”: ${formatMinor(BigInt(p.amountMinor), currency)}${p.monthly ? ` monthly on day ${p.dayOfMonth}` : ' once'}`;
 		}
+		if (p.intent === 'set_budget') {
+			return `${p.period === 'week' ? 'Weekly' : 'Monthly'} budget for ${p.category === 'everything' ? 'everything' : `“${p.category}”`}: ${formatMinor(BigInt(p.amountMinor), currency)}`;
+		}
 		return `Open ${p.label}`;
 	}
 
 	function proposalButton(p: Proposal): string {
 		if (p.intent === 'create_bucket') return 'Create bucket';
 		if (p.intent === 'create_income') return 'Add income';
+		if (p.intent === 'set_budget') return 'Set budget';
 		return 'Open';
 	}
 </script>
@@ -135,7 +157,7 @@
 					autocapitalize="off"
 					spellcheck="false"
 					aria-label="Ask Harmony"
-					class="min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] leading-tight outline-none placeholder-shimmer"
+					class="placeholder-shimmer min-w-0 flex-1 border-none bg-transparent p-0 text-[17px] leading-tight outline-none"
 					style="color: var(--ink)"
 				/>
 				{#if paletteQuery.value}
@@ -270,7 +292,7 @@
 								paletteInputEl.value?.focus();
 							}}
 							class="mt-3 text-[13px] font-medium"
-							style="color: var(--ws-accent)"
+							style="color: var(--accent-ink)"
 						>
 							Ask something else
 						</button>

@@ -5,7 +5,7 @@ import { toDiscretionMode } from '$lib/domain/visibility/discretion';
 import { purchase } from '$lib/db/schema';
 import { listLedger } from '$lib/repo/ledger';
 import { listPurchases } from '$lib/repo/purchases';
-import { safeToSpend } from '$lib/repo/forecast';
+import { safeToSpend, forecastMonths } from '$lib/repo/forecast';
 import { toLedgerView } from '$lib/ledger-view';
 import { listCategories, listMembers } from '$lib/repo/workspaces';
 import { ledgerOptsFromUrl } from '$lib/ledger-query';
@@ -35,28 +35,37 @@ export async function load(ctx: WorkspaceContext, { url, params }: LoadEvent) {
 	 * months old (a backfilled bill), so they'd otherwise sort into a later page
 	 * and be exactly the thing this section exists to stop getting lost.
 	 */
-	const [feed, categories, members, awaitingIds, sleepingIds, forecast] = await Promise.all([
-		listLedger(db, scope, now, { ...opts, limit: LIMIT }),
-		listCategories(db, ws.id),
-		listMembers(db, ws.id),
-		db
-			.select({ id: purchase.id })
-			.from(purchase)
-			.where(
-				and(
-					eq(purchase.workspaceId, ws.id),
-					eq(purchase.state, 'approved'),
-					eq(purchase.memberId, ctx.member.id)
-				)
-			),
-		// "Sleep on it": everything paused in the workspace, its own to-do.
-		db
-			.select({ id: purchase.id })
-			.from(purchase)
-			.where(and(eq(purchase.workspaceId, ws.id), eq(purchase.state, 'held'))),
-		// Harmony's number: Safe to Spend this month, seal-scoped to the viewer.
-		safeToSpend(db, { workspaceId: ws.id, viewerId: ctx.member.id, timezone: ws.timezone }, now)
-	]);
+	const [feed, categories, members, awaitingIds, sleepingIds, forecast, runway] = await Promise.all(
+		[
+			listLedger(db, scope, now, { ...opts, limit: LIMIT }),
+			listCategories(db, ws.id),
+			listMembers(db, ws.id),
+			db
+				.select({ id: purchase.id })
+				.from(purchase)
+				.where(
+					and(
+						eq(purchase.workspaceId, ws.id),
+						eq(purchase.state, 'approved'),
+						eq(purchase.memberId, ctx.member.id)
+					)
+				),
+			// "Sleep on it": everything paused in the workspace, its own to-do.
+			db
+				.select({ id: purchase.id })
+				.from(purchase)
+				.where(and(eq(purchase.workspaceId, ws.id), eq(purchase.state, 'held'))),
+			// Harmony's number: Safe to Spend this month, seal-scoped to the viewer.
+			safeToSpend(db, { workspaceId: ws.id, viewerId: ctx.member.id, timezone: ws.timezone }, now),
+			// The months after this one — a quiet forward look under the headline.
+			forecastMonths(
+				db,
+				{ workspaceId: ws.id, viewerId: ctx.member.id, timezone: ws.timezone },
+				now,
+				3
+			)
+		]
+	);
 
 	const viewCtx = {
 		now,
@@ -115,9 +124,13 @@ export async function load(ctx: WorkspaceContext, { url, params }: LoadEvent) {
 		awaitingConfirmation,
 		sleeping,
 		forecast,
+		runway,
 		// How much of the headline this member wants legible on arrival. Server-side
 		// so a masked number never renders before the client can hide it.
 		safeToSpendDisplay: toDiscretionMode(ctx.member.safeToSpendDisplay),
+		// Whether the breakdown projects the months after this one. A reading
+		// preference, set in Harmony settings alongside the display mode.
+		showRunwayMonths: ctx.member.showRunwayMonths,
 		currency: ws.currency
 	};
 }

@@ -1,27 +1,41 @@
 import { and, asc, eq, gt, isNull, lt, or } from 'drizzle-orm';
 import type { Db } from '$lib/db/types';
 import { budget } from '$lib/db/schema';
+import { weekPeriod } from '$lib/domain/analytics/period';
 import type { IdGenerator } from '$lib/ports/id-generator';
 
-/** This month through +12 — the window a budget may be scheduled for. */
+/** This month through +12 — the window a monthly budget may be scheduled for. */
 export const MAX_BUDGET_LEAD_MONTHS = 12;
+/** This week through +12 — the same lead, on the weekly clock. */
+export const MAX_BUDGET_LEAD_WEEKS = 12;
+
+export type BudgetPeriodKind = 'month' | 'week';
 
 export interface SetBudgetCmd {
 	workspaceId: string;
 	/** null = the overall (all-category) budget. */
 	categoryId: string | null;
 	amountMinor: bigint;
-	/** First day of the effective month, 'YYYY-MM-01'. */
+	/**
+	 * First day of the effective period: 'YYYY-MM-01' for a monthly budget, the
+	 * week's first day 'YYYY-MM-DD' for a weekly one.
+	 */
 	effectiveFrom: string;
+	/** Monthly and weekly budgets are separate timelines over the same scope. */
+	period: BudgetPeriodKind;
 }
 
 /**
- * Set (or replace) a monthly budget line, effective from a given month.
+ * Set (or replace) a budget line, effective from a given period.
  *
  * Budgets are a timeline, not a single value: reads select the row effective
- * for the month being viewed, so a write must keep ranges adjacent and
+ * for the period being viewed, so a write must keep ranges adjacent and
  * non-overlapping rather than clobbering history. This is the single writer —
- * both the analytics page and the MCP tool call it.
+ * the analytics page and the MCP set_budget tool both call it.
+ *
+ * Monthly and weekly budgets never touch each other: the timeline is scoped
+ * by period kind as well as category, so a weekly grocery cap and a monthly
+ * one coexist without one truncating the other.
  *
  * Closes the open range at `effectiveFrom`, inherits the start of whatever is
  * already scheduled after it, and replaces any line that already starts exactly
@@ -30,7 +44,7 @@ export interface SetBudgetCmd {
 export async function setBudget(db: Db, ids: IdGenerator, cmd: SetBudgetCmd): Promise<void> {
 	const scope = and(
 		eq(budget.workspaceId, cmd.workspaceId),
-		eq(budget.period, 'month'),
+		eq(budget.period, cmd.period),
 		cmd.categoryId === null ? isNull(budget.categoryId) : eq(budget.categoryId, cmd.categoryId)
 	);
 	const from = cmd.effectiveFrom;
@@ -62,7 +76,7 @@ export async function setBudget(db: Db, ids: IdGenerator, cmd: SetBudgetCmd): Pr
 			id: ids.newId(),
 			workspaceId: cmd.workspaceId,
 			categoryId: cmd.categoryId,
-			period: 'month',
+			period: cmd.period,
 			amountMinor: cmd.amountMinor,
 			effectiveFrom: from,
 			effectiveTo: next?.from ?? null
@@ -70,7 +84,7 @@ export async function setBudget(db: Db, ids: IdGenerator, cmd: SetBudgetCmd): Pr
 	});
 }
 
-/** Months a budget can be scheduled for: this month through +MAX_BUDGET_LEAD_MONTHS. */
+/** Months a monthly budget can be scheduled for: this month through +MAX_BUDGET_LEAD_MONTHS. */
 export function schedulableBudgetMonths(today: { y: number; m: number }): string[] {
 	const out: string[] = [];
 	for (let i = 0; i <= MAX_BUDGET_LEAD_MONTHS; i++) {
@@ -81,3 +95,25 @@ export function schedulableBudgetMonths(today: { y: number; m: number }): string
 	}
 	return out;
 }
+
+/**
+ * Weeks a weekly budget can be scheduled for: this week through
+ * +MAX_BUDGET_LEAD_WEEKS, each as its first day 'YYYY-MM-DD'.
+ */
+export function schedulableBudgetWeeks(
+	today: { y: number; m: number; d: number },
+	weekStartDay: number
+): string[] {
+	const out: string[] = [];
+	// The domain's own week math — the same convention every week-shaped read
+	// uses, so a schedulable week is exactly a week the analytics screen shows.
+	let cursor = weekPeriod(today, weekStartDay).from;
+	for (let i = 0; i <= MAX_BUDGET_LEAD_WEEKS; i++) {
+		out.push(`${cursor.y}-${pad(cursor.m)}-${pad(cursor.d)}`);
+		const next = new Date(Date.UTC(cursor.y, cursor.m - 1, cursor.d) + 7 * 86_400_000);
+		cursor = { y: next.getUTCFullYear(), m: next.getUTCMonth() + 1, d: next.getUTCDate() };
+	}
+	return out;
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');

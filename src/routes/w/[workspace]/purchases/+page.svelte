@@ -19,6 +19,7 @@
 		X
 	} from '@lucide/svelte';
 	import Money from '$lib/components/Money.svelte';
+	import SkeletonRow from '$lib/components/SkeletonRow.svelte';
 	import { dismiss } from '$lib/actions/dismiss';
 	import { modal } from '$lib/actions/modal';
 	import { swipe } from '$lib/actions/swipe';
@@ -27,7 +28,7 @@
 	import { goto } from '$app/navigation';
 	import { formatMinor } from '$lib/money-format';
 	import { narrateSafeToSpend } from '$lib/domain/forecast/safe-to-spend';
-	import { maskAmount, type DiscretionMode } from '$lib/domain/visibility/discretion';
+	import { maskAmount } from '$lib/domain/visibility/discretion';
 	import { NO_CATEGORY } from '$lib/ledger-filters';
 	import { toastError } from '$lib/toast-state.svelte';
 	let { data } = $props();
@@ -333,22 +334,48 @@
 	// from under the user mid-typing.
 	const f = $derived(data.forecast);
 
+	// Svelte JS transitions escape the global reduced-motion clamp in CSS, so
+	// they read the query themselves — the same concession Money.svelte makes.
+	const reduceMotion =
+		typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+	// The months after this one: projected free cash, shown inside the expanded
+	// breakdown. Every figure is a projection; the caption says so.
+	const runway = $derived(data.runway);
+	// Gated on the member's own preference as well as on there being anything to
+	// show: a projection is a different question from "what's left this month",
+	// and not everyone wants the second answer attached to the first.
+	const runwayHasSignal = $derived(
+		data.showRunwayMonths &&
+			runway.months.some(
+				(m) => m.incomeMinor !== 0n || m.billsMinor !== 0n || m.savingsMinor !== 0n
+			)
+	);
+	const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+	function monthLabel(m: { y: number; m: number }): string {
+		// Append a short year only when the horizon crosses into a new one.
+		const rollsYear = runway.months[0].month.y !== m.y;
+		return `${MON[m.m - 1]}${rollsYear ? ` ’${String(m.y).slice(2)}` : ''}`;
+	}
+	const runwaySummary = $derived.by(() => {
+		if (!runwayHasSignal) return '';
+		if (runway.firstShortMonth) return `Tight in ${monthLabel(runway.firstShortMonth)}`;
+		const last = runway.months[runway.months.length - 1];
+		return `On track through ${monthLabel(last.month)}`;
+	});
+
 	/*
 	 * Discretion. The one number on this page that reads across a café from the
 	 * next table, so it's the one you get to turn down: shown, masked until you
-	 * ask, or off entirely (the switch lives in the filter sheet either way, so
-	 * "off" is never a one-way door). Per member and persisted — see
+	 * ask, or off entirely. Per member and persisted — see
 	 * $lib/domain/visibility/discretion.
+	 *
+	 * Set in Settings → Harmony, not here. It lived in this page's filter sheet,
+	 * which put a durable preference among the transient ones: everything else in
+	 * that sheet resets when you leave, and this does not. The momentary reveal
+	 * below is the part that genuinely belongs to the page, and it stays.
 	 */
-	// svelte-ignore state_referenced_locally
-	let display = $state<DiscretionMode>(data.safeToSpendDisplay);
-	let savingDisplay = false;
-	// Reseed from server truth on navigation, but never mid-save — same dance as
-	// Toggle.svelte, so the optimistic value isn't clobbered by a stale prop.
-	$effect(() => {
-		const next = data.safeToSpendDisplay;
-		if (!untrack(() => savingDisplay)) display = next;
-	});
+	const display = $derived(data.safeToSpendDisplay);
 	// A momentary reveal, deliberately *not* persisted: leaving the ledger and
 	// coming back re-hides the number, which is the whole point of asking for it.
 	let revealed = $state(false);
@@ -359,33 +386,6 @@
 		masked ? maskAmount(formatMinor(minor, data.currency)) : formatMinor(minor, data.currency)
 	);
 
-	const DISPLAY_OPTIONS: { value: DiscretionMode; label: string }[] = [
-		{ value: 'shown', label: 'Shown' },
-		{ value: 'masked', label: 'Hidden until tapped' },
-		{ value: 'off', label: 'Off' }
-	];
-
-	async function setDisplay(next: DiscretionMode) {
-		const prev = display;
-		if (next === prev) return;
-		display = next; // optimistic
-		revealed = false;
-		if (next !== 'shown') showRunway = false;
-		savingDisplay = true;
-		try {
-			const res = await fetch(`/w/${slug}/settings/member-pref`, {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ pref: 'safeToSpendDisplay', value: next })
-			});
-			if (!res.ok) throw new Error(String(res.status));
-		} catch {
-			display = prev; // revert
-			toastError('Could not save that. Try again.');
-		} finally {
-			savingDisplay = false;
-		}
-	}
 	// The runway waterfall unfolds in place: income minus everything already
 	// spent, promised, and set aside, arriving at the free number above.
 	let showRunway = $state(false);
@@ -730,7 +730,7 @@
 				<div
 					class="mt-4 border-t pt-3 text-[14px]"
 					style="border-color: var(--hairline)"
-					transition:slide={{ duration: 220 }}
+					transition:slide={{ duration: reduceMotion ? 0 : 220 }}
 				>
 					{@render runwayLine('Income', f.breakdown.incomeMinor, 'add')}
 					{@render runwayLine(
@@ -795,6 +795,41 @@
 							The dotted figure is an estimate. Some of those bills ask you to confirm the real
 							price, so it's what they came to last time.
 						</p>
+					{/if}
+					{#if runwayHasSignal}
+						<!-- The months after this one: projected free cash left each month, after
+						     income, bills and saving. A projection, not a commitment. -->
+						<div class="mt-4 border-t pt-3" style="border-color: var(--hairline)">
+							<span class="section-label">The months after</span>
+							<div class="mt-1.5 text-[14px]">
+								{#each runway.months as m (`${m.month.y}-${m.month.m}`)}
+									<div class="flex items-center justify-between py-0.5">
+										<span style="color: var(--ink-2)">{monthLabel(m.month)}</span>
+										<!-- The same dotted underline the current month's estimate
+										     wears: a projection whose bills include one that still asks
+										     for its real price. -->
+										<span
+											class="num"
+											style="color: {m.freeMinor < 0n ? 'var(--deny)' : 'var(--ink)'}; {m.estimated
+												? 'text-decoration: underline dotted; text-underline-offset: 3px;'
+												: ''}"
+											>{m.freeMinor >= 0n ? '' : '−'}{formatMinor(
+												m.freeMinor < 0n ? -m.freeMinor : m.freeMinor,
+												data.currency
+											)}</span
+										>
+									</div>
+								{/each}
+							</div>
+							{#if runwaySummary}
+								<p class="mt-2 text-[12px] leading-relaxed" style="color: var(--ink-3)">
+									{runwaySummary}. Projected from what repeats each month. Nothing here is spent
+									yet.{#if runway.months.some((m) => m.estimated)}
+										A dotted figure includes a bill that still asks for its real price.
+									{/if}
+								</p>
+							{/if}
+						</div>
 					{/if}
 				</div>
 			{/if}
@@ -899,7 +934,7 @@
 			class="fixed inset-0 z-50"
 			style="background: var(--scrim)"
 			use:dismiss={() => (showFilter = false)}
-			transition:fade={{ duration: 140 }}
+			transition:fade={{ duration: reduceMotion ? 0 : 140 }}
 		></div>
 		<div
 			class="fixed inset-x-4 top-[10vh] z-50 mx-auto flex max-h-[80vh] max-w-md flex-col"
@@ -911,7 +946,7 @@
 			onkeydown={(e) => {
 				if (e.key === 'Escape') showFilter = false;
 			}}
-			transition:scale={{ start: 0.96, duration: 170 }}
+			transition:scale={{ start: 0.96, duration: reduceMotion ? 0 : 170 }}
 		>
 			<div
 				class="card-lg flex min-h-0 flex-col overflow-hidden"
@@ -1020,29 +1055,6 @@
 						</div>
 					</div>
 
-					<!-- Safe to Spend discretion. It sits with the other "how I read this
-					     page" preferences rather than in Settings: it's the switch you
-					     reach for *while* someone is sitting beside you. -->
-					<div class="h-px" style="background: var(--hairline)"></div>
-					<div>
-						<span class="block text-[15px]" style="color: var(--ink)">Safe to spend</span>
-						<span class="mb-2 block text-[13px]" style="color: var(--ink-3)"
-							>How the headline reads on this ledger</span
-						>
-						<div class="flex flex-wrap gap-2" role="radiogroup" aria-label="Safe to spend display">
-							{#each DISPLAY_OPTIONS as opt (opt.value)}
-								{@const on = display === opt.value}
-								<button
-									onclick={() => setDisplay(opt.value)}
-									role="radio"
-									aria-checked={on}
-									class="press chip-btn"
-									style={on ? SELECTED : UNSELECTED}>{opt.label}</button
-								>
-							{/each}
-						</div>
-					</div>
-
 					<!-- Bucket activity toggle -->
 					<div class="h-px" style="background: var(--hairline)"></div>
 					<button
@@ -1122,7 +1134,7 @@
 				<a
 					href="/w/{slug}/settings/help?s=logging"
 					class="press mt-4 flex items-center justify-center gap-1.5 text-[14px] font-medium"
-					style="color: var(--ws-accent)"
+					style="color: var(--accent-ink)"
 				>
 					<CircleHelp class="h-4 w-4" /> How this works
 				</a>
@@ -1207,6 +1219,14 @@
 						{@render row(e, i === rest.length - 1)}
 					{/if}
 				{/each}
+				<!-- The page size is 20, but four placeholders carry the message as
+				     well as twenty would; a skeleton list as long as the content it
+				     imitates is theatre. -->
+				{#if loadingMore}
+					{#each Array(4) as _, i (i)}
+						<SkeletonRow last={i === 3} />
+					{/each}
+				{/if}
 			</div>
 		{/if}
 		{#if hasMore}

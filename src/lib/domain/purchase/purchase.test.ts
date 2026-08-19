@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Money } from '../money/money';
 import {
+	appeal,
 	approve,
 	autoApprove,
 	cancel,
@@ -9,6 +10,7 @@ import {
 	edit,
 	markRefunded,
 	needsReapproval,
+	overrideDenial,
 	requestApproval,
 	PurchaseStateError,
 	type Purchase,
@@ -154,6 +156,90 @@ describe('deny', () => {
 	it('rejects non-approvers and non-pending states', () => {
 		expect(() => deny(pending(), 'm-stranger', null, NOW)).toThrow(PurchaseStateError);
 		expect(() => deny(approved(), 'm-approver', null, NOW)).toThrow(PurchaseStateError);
+	});
+});
+
+const denied = (o: Partial<Purchase> = {}) =>
+	draft({
+		state: 'denied',
+		approverMemberIds: ['m-approver'],
+		requestedAt: NOW,
+		decidedAt: NOW,
+		...o
+	});
+
+describe('appeal', () => {
+	it('sends a denial back for a decision, with the note on the event', () => {
+		const { purchase, event } = appeal(
+			denied(),
+			'm-requester',
+			"it's on sale",
+			['m-approver'],
+			NOW
+		);
+		expect(purchase.state).toBe('pending_approval');
+		expect(purchase.approverMemberIds).toEqual(['m-approver']);
+		// Cleared, or the row would claim it had been decided while it waits.
+		expect(purchase.decidedAt).toBeNull();
+		expect(event.reason).toBe("appealed: it's on sale");
+	});
+
+	it('routes to whoever can decide now, not to whoever was asked before', () => {
+		const p = denied({ approverMemberIds: ['m-gone'] });
+		expect(appeal(p, 'm-requester', 'changed', ['m-new'], NOW).purchase.approverMemberIds).toEqual([
+			'm-new'
+		]);
+	});
+
+	it("is the requester's alone, and only from denied", () => {
+		expect(() => appeal(denied(), 'm-approver', 'x', ['m-approver'], NOW)).toThrow(
+			PurchaseStateError
+		);
+		expect(() => appeal(pending(), 'm-requester', 'x', ['m-approver'], NOW)).toThrow(
+			PurchaseStateError
+		);
+	});
+
+	it('needs something new to say, and someone to say it to', () => {
+		expect(() => appeal(denied(), 'm-requester', '   ', ['m-approver'], NOW)).toThrow(
+			PurchaseStateError
+		);
+		expect(() => appeal(denied(), 'm-requester', 'x', [], NOW)).toThrow(PurchaseStateError);
+	});
+});
+
+describe('overrideDenial', () => {
+	it('approves a denied request and says so in the log', () => {
+		const { purchase, event } = overrideDenial(denied(), 'm-approver', 'talked it over', NOW);
+		expect(purchase.state).toBe('approved');
+		expect(purchase.approvedAmount).toEqual(usd(18000));
+		expect(event.reason).toBe('denial overturned: talked it over');
+	});
+
+	it('completes instead when the money already went out', () => {
+		// A logged purchase carries its final amount, so allowing it is not a
+		// promise to spend: it is a record that the spending stands.
+		const p = denied({ finalAmount: usd(18000) });
+		const { purchase } = overrideDenial(p, 'm-approver', 'fine', NOW);
+		expect(purchase.state).toBe('completed');
+		expect(purchase.completedAt).toEqual(NOW);
+	});
+
+	it('is limited to the people who were asked', () => {
+		expect(() => overrideDenial(denied(), 'm-stranger', 'why not', NOW)).toThrow(
+			PurchaseStateError
+		);
+		expect(() => overrideDenial(denied(), 'm-requester', 'let me', NOW)).toThrow(
+			PurchaseStateError
+		);
+	});
+
+	it('will not overturn silently', () => {
+		expect(() => overrideDenial(denied(), 'm-approver', '  ', NOW)).toThrow(PurchaseStateError);
+	});
+
+	it('only applies to a denial', () => {
+		expect(() => overrideDenial(pending(), 'm-approver', 'x', NOW)).toThrow(PurchaseStateError);
 	});
 });
 

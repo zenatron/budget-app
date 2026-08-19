@@ -1,6 +1,6 @@
-import { and, eq, gte, lt, ne, sql } from 'drizzle-orm';
+import { and, eq, gte, lt, ne, notInArray, sql } from 'drizzle-orm';
 import type { Db } from '$lib/db/types';
-import { bucket, bucketTransaction, user, workspaceMember } from '$lib/db/schema';
+import { bucket, bucketTransaction, recurringRule, user, workspaceMember } from '$lib/db/schema';
 import type { Period } from '$lib/domain/analytics/period';
 import { bucketFlows, type BucketFlows } from '$lib/domain/bucket/flows';
 import { zonedTimeToUtc } from '$lib/domain/time/zoned';
@@ -21,6 +21,9 @@ export interface CreateBucketCmd {
 	color?: string | null;
 	icon?: string | null;
 	nextAccrualAt?: Date | null;
+	/** Who else may charge it. Absent or null means anyone, which is how every
+	 *  bucket behaved before the column. */
+	chargeMemberIds?: string[] | null;
 }
 
 export interface BucketListItem {
@@ -63,6 +66,7 @@ export async function createBucket(
 		color: cmd.color ?? null,
 		icon: cmd.icon ?? null,
 		nextAccrualAt: cmd.nextAccrualAt ?? null,
+		chargeMemberIds: cmd.chargeMemberIds ?? null,
 		status: 'active',
 		createdAt: now
 	});
@@ -115,6 +119,7 @@ export interface UpdateBucketCmd {
 	goalCapMinor?: bigint | null;
 	color?: string | null;
 	icon?: string | null;
+	chargeMemberIds?: string[] | null;
 }
 
 /** Owner-scoped load. Every mutation goes through this, not `loadBucket`. */
@@ -148,10 +153,32 @@ export async function updateBucket(
 	if (changes.goalCapMinor !== undefined) updates.goalCapMinor = changes.goalCapMinor;
 	if (changes.color !== undefined) updates.color = changes.color;
 	if (changes.icon !== undefined) updates.icon = changes.icon;
+	if (changes.chargeMemberIds !== undefined) updates.chargeMemberIds = changes.chargeMemberIds;
 
 	if (Object.keys(updates).length === 0) return b;
 
 	await db.update(bucket).set(updates).where(eq(bucket.id, bucketId));
+
+	/*
+	 * Narrowing a bucket also closes the standing instructions pointed at it.
+	 *
+	 * A recurring rule is checked when it is written, and then runs unattended
+	 * for years. Without this, restricting a bucket would leave the rules of
+	 * everyone newly excluded quietly drawing on it every month, which is the
+	 * same bypass the charge check exists to close, just on a delay. The rules
+	 * keep running; they stop charging this bucket, and their purchases become
+	 * ordinary spending.
+	 */
+	if (changes.chargeMemberIds !== undefined && changes.chargeMemberIds !== null) {
+		const allowed = [b.memberId, ...changes.chargeMemberIds];
+		await db
+			.update(recurringRule)
+			.set({ bucketId: null })
+			.where(
+				and(eq(recurringRule.bucketId, bucketId), notInArray(recurringRule.memberId, allowed))
+			);
+	}
+
 	const [row] = await db.select().from(bucket).where(eq(bucket.id, bucketId)).limit(1);
 	return row!;
 }

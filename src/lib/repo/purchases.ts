@@ -499,15 +499,19 @@ export async function memberNames(db: Db, memberIds: string[]): Promise<Map<stri
  * category for you, the correction should take effect immediately instead of
  * being outvoted by history.
  *
- * Deliberately *not* seal-filtered. It returns a category id and nothing else —
- * no item, no amount, no date — and it is only ever used to pre-fill a field on
- * a form the person is already filling in about that same merchant. Threading a
- * viewer through would suggest it leaks something it cannot.
+ * Seal-filtered to the viewer. It returns only a category id, but a category is
+ * still something: if the only purchase at a merchant is one sealed from the
+ * viewer, an unfiltered lookup would pre-fill that gift's category the moment
+ * they typed the vendor, disclosing that a purchase exists there. Sealing's
+ * promise is that a sealed purchase does not exist for a concealed member, so
+ * this reads only what they can already see.
  */
 export async function lastCategoryForMerchant(
 	db: Db,
 	workspaceId: string,
-	normalizedMerchantName: string
+	normalizedMerchantName: string,
+	viewerId: string,
+	now: Date
 ): Promise<string | null> {
 	const [row] = await db
 		.select({ categoryId: purchase.categoryId })
@@ -519,7 +523,8 @@ export async function lastCategoryForMerchant(
 				eq(purchase.workspaceId, workspaceId),
 				eq(merchant.normalizedName, normalizedMerchantName),
 				inArray(purchase.state, ['completed', 'approved']),
-				eq(category.isArchived, false)
+				eq(category.isArchived, false),
+				visibleTo(viewerId, now)
 			)
 		)
 		.orderBy(desc(purchase.createdAt))

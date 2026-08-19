@@ -13,6 +13,8 @@ import { addDays } from '$lib/domain/recurrence/rrule';
 import { ImageValidationError } from '$lib/ports/image-processor';
 import { listCategories, listMembers } from '$lib/repo/workspaces';
 import { listBuckets } from '$lib/repo/buckets';
+import { refuseBucketCharge } from '$lib/domain/bucket/scope';
+import type { ApprovalPolicy } from '$lib/domain/approval/policy';
 import { listAccounts } from '$lib/repo/accounts';
 import { calDateInZone, zonedTimeToUtc } from '$lib/domain/time/zoned';
 import { fromE3, roundToE3 } from '$lib/domain/location/coords';
@@ -37,6 +39,12 @@ export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
 		listBuckets(db, ctx.workspace.id),
 		listAccounts(db, ctx.workspace.id)
 	]);
+	// Buckets this member is allowed to spend from. Cosmetic, not the gate:
+	// `submitPurchase` refuses the same charges however the form arrives.
+	const chargeScope = {
+		memberId: ctx.member.id,
+		ownBucketsOnly: (ctx.member.approvalPolicy as ApprovalPolicy).own_buckets_only === true
+	};
 	/*
 	 * Whether to offer reading a *scanned* bill — the one thing the deterministic
 	 * extractor can't do, because a scan has no text layer. Resolved on the server
@@ -79,13 +87,19 @@ export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
 		// balance may have moved by the time it lands, and the charge is allowed
 		// either way; it's friction, not a rule.
 		buckets: buckets
-			.filter((b) => b.bucket.status === 'active')
+			.filter(
+				(b) => b.bucket.status === 'active' && refuseBucketCharge(b.bucket, chargeScope) === null
+			)
 			.map((b) => ({
 				id: b.bucket.id,
 				name: b.bucket.name,
 				balanceMinor: b.balanceMinor,
 				currency: b.bucket.currency
 			})),
+		// Whether this member is held to their own buckets. The picker already
+		// reflects it; this is for the overdraft warning, which otherwise promises
+		// the charge lands when for them it goes for approval instead.
+		ownBucketsOnly: chargeScope.ownBucketsOnly,
 		// Only offered once at least one card has been named; a household with none
 		// never sees the field.
 		accounts: accounts.map((a) => ({ id: a.id, name: a.name, last4: a.last4 }))

@@ -88,7 +88,29 @@ export async function materializeBucketAccruals(db: Db, deps: Deps): Promise<num
 					.limit(1);
 				const b = locked[0];
 				if (!b || b.status !== 'active') return null;
-				const rec = parseRRule(b.rrule);
+
+				// A malformed rule (e.g. a legacy row missing DTSTART) must not wedge
+				// the sweep. Parsing throws, the transaction would roll back with the
+				// accrual pointer unadvanced, and the row would re-throw on every sweep
+				// — starving every bucket after it. Pause it instead: the candidate
+				// query filters status='active', so a paused bucket leaves the queue
+				// for good, the owner sees it stopped, and it's one resume away once
+				// the rule is fixed.
+				let rec;
+				try {
+					rec = parseRRule(b.rrule);
+				} catch (e) {
+					await tx.update(bucket).set({ status: 'paused' }).where(eq(bucket.id, b.id));
+					console.log(
+						JSON.stringify({
+							level: 'warn',
+							msg: 'sweep: bucket paused (unparseable rule)',
+							bucketId: b.id,
+							err: (e as Error).message
+						})
+					);
+					return null;
+				}
 
 				// Never scheduled (legacy row, or created before the pointer existed):
 				// anchor to the next future occurrence and wait for it. No catch-up —

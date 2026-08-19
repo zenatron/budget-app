@@ -68,6 +68,12 @@ export interface AskDeps {
 	currency: string;
 	/** Today in the workspace's zone; fixes the briefing's month window. */
 	today: { y: number; m: number; d: number };
+	/**
+	 * The months the briefing actually carries, for the scope guard. This month
+	 * and last month by default; the route adds a question's named focus month
+	 * when it built the briefing around one, which is what widens the window.
+	 */
+	coveredMonths?: { y: number; m: number }[];
 }
 
 export interface AskInput {
@@ -198,6 +204,32 @@ export function buildActionOutcome(
 		};
 	}
 
+	if (action.intent === 'set_budget') {
+		const amount = moneyFromNumber(action.amount, currency);
+		if (!amount) {
+			return {
+				kind: 'proposal',
+				intent: 'set_budget',
+				answer: 'I need a positive amount for the budget.'
+			};
+		}
+		const category = safeName(action.category, 60);
+		const period = action.period === 'week' ? 'weekly' : 'monthly';
+		return {
+			kind: 'proposal',
+			intent: 'propose',
+			answer: `Set ${category ?? 'the overall'} budget to ${amount.format()} ${period}`,
+			propose: {
+				intent: 'set_budget',
+				category: category ?? 'everything',
+				amount: action.amount,
+				amountMinor: amount.minor.toString(),
+				period: action.period,
+				currency
+			}
+		};
+	}
+
 	return null;
 }
 
@@ -222,6 +254,13 @@ export function deterministicAction(parsed: ParsedIntent): ParsedAction | null {
 				monthly: parsed.cadence === 'monthly',
 				dayOfMonth: parsed.dayOfMonth
 			};
+		case 'set_budget':
+			return {
+				intent: 'set_budget',
+				category: parsed.category,
+				amount: parsed.amount,
+				period: parsed.period
+			};
 		case 'navigate':
 			return { intent: 'navigate', target: parsed.target };
 		case 'log_purchase':
@@ -235,21 +274,51 @@ export function deterministicAction(parsed: ParsedIntent): ParsedAction | null {
  * Does this question fall outside the two months the briefing covers? Returns
  * the refusal to send, or null to carry on.
  */
-function briefingRefusal(query: string, today: AskDeps['today']): AskOutcome | null {
+const MONTH_WORDS = [
+	'January',
+	'February',
+	'March',
+	'April',
+	'May',
+	'June',
+	'July',
+	'August',
+	'September',
+	'October',
+	'November',
+	'December'
+];
+
+function briefingRefusal(query: string, deps: AskDeps): AskOutcome | null {
+	const { today } = deps;
 	const lastMonth = previousMonthPeriod(today);
-	const outOfScope = outOfBriefingScope(query, {
-		months: [
-			{ y: today.y, m: today.m },
-			{ y: lastMonth.from.y, m: lastMonth.from.m }
-		],
-		today: { y: today.y, m: today.m }
-	});
+	// The covered window is this month and last month, plus the question's own
+	// focus month when the route built the briefing around one — that third
+	// month is the whole of the "wider window".
+	const months = [
+		{ y: today.y, m: today.m },
+		{ y: lastMonth.from.y, m: lastMonth.from.m },
+		...(deps.coveredMonths ?? []).filter(
+			(m) =>
+				!(m.y === today.y && m.m === today.m) &&
+				!(m.y === lastMonth.from.y && m.m === lastMonth.from.m)
+		)
+	];
+	const outOfScope = outOfBriefingScope(query, { months, today: { y: today.y, m: today.m } });
 	if (!outOfScope) return null;
+
+	// Name what is covered honestly: two months reads as a pair, a third is
+	// appended — "this month, last month and March 2025".
+	const extras = months
+		.slice(2)
+		.map((m) => `${MONTH_WORDS[m.m - 1]} ${m.y}`)
+		.join(', ');
+	const covered = extras ? `this month, last month and ${extras}` : 'this month and last month';
 	return {
 		kind: 'refusal',
 		raw: query,
 		answer:
-			`I can only answer for this month and last month, so I can't answer that for ${outOfScope.mention}. ` +
+			`I can only answer for ${covered}, so I can't answer that for ${outOfScope.mention}. ` +
 			(outOfScope.suggest === 'ledger'
 				? 'The Ledger tab has it day by day.'
 				: 'The Analytics tab goes back further.')
@@ -262,7 +331,7 @@ function briefingRefusal(query: string, today: AskDeps['today']): AskOutcome | n
  * signal to answer it from the repositories itself.
  */
 export async function answerAsk(deps: AskDeps, input: AskInput): Promise<AskOutcome | null> {
-	const { assist, currency, today } = deps;
+	const { assist, currency } = deps;
 	const { query, parsed } = input;
 
 	// 1. Our own grammar first. The model never gets to overrule a sentence we
@@ -276,6 +345,7 @@ export async function answerAsk(deps: AskDeps, input: AskInput): Promise<AskOutc
 	// The data intents belong to the route.
 	if (
 		parsed.intent === 'spending_query' ||
+		parsed.intent === 'safe_to_spend' ||
 		parsed.intent === 'net_position' ||
 		parsed.intent === 'incomplete'
 	) {
@@ -294,7 +364,7 @@ export async function answerAsk(deps: AskDeps, input: AskInput): Promise<AskOutc
 
 	// 3. Out of the briefing's window: refuse without asking the model, so the
 	//    answer is the same whether it is on, off, or timing out.
-	const refusal = briefingRefusal(query, today);
+	const refusal = briefingRefusal(query, deps);
 	if (refusal) return refusal;
 
 	// 4. In scope. Narrate over figures the core computed — never invented ones.
