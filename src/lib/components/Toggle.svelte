@@ -15,6 +15,13 @@
 	 * fetch: the latter leaned on SvelteKit's internal action protocol and broke
 	 * behind a proxy in production. JSON behaves the same in dev and prod.
 	 *
+	 * Not everything it switches is a workspace flag. Pass `onToggle` instead of
+	 * `flag` and the switch persists however the caller says — a device
+	 * preference in localStorage, a group of settings opening on the page — while
+	 * keeping the same optimistic flip, the same revert on failure, and the same
+	 * shape as every other switch in the app. Two visually identical switches
+	 * that behaved differently were the thing worth avoiding.
+	 *
 	 * Geometry: track 44×28, knob 20, 4px inset so all four gaps match.
 	 */
 	const TRACK_W = 44;
@@ -24,8 +31,13 @@
 
 	let {
 		on,
-		/** Which workspace boolean this switch writes, e.g. "intelligenceEnabled". */
+		/**
+		 * Which workspace boolean this switch writes, e.g. "intelligenceEnabled".
+		 * Omit it and pass `onToggle` for a switch that persists some other way.
+		 */
 		flag,
+		/** Persist it yourself. Throw to make the switch revert and warn. */
+		onToggle,
 		label,
 		/** When true the switch is visible but cannot be flipped. */
 		disabled = false,
@@ -34,7 +46,8 @@
 		onColor = 'var(--accent)'
 	}: {
 		on: boolean;
-		flag: string;
+		flag?: string;
+		onToggle?: (next: boolean) => void | Promise<void>;
 		label: string;
 		disabled?: boolean;
 		onColor?: string;
@@ -60,16 +73,20 @@
 		checked = next; // optimistic
 		saving = true;
 		try {
-			const res = await fetch(`/w/${page.params.workspace}/settings/flag`, {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ flag, value: next })
-			});
-			if (!res.ok) throw new Error(String(res.status));
-			// Re-run all load functions so layout-gated features (sparkle button,
-			// Safe to Spend, statement, etc.) react immediately rather than waiting
-			// for the next navigation.
-			await invalidateAll();
+			if (flag === undefined) {
+				await onToggle?.(next);
+			} else {
+				const res = await fetch(`/w/${page.params.workspace}/settings/flag`, {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ flag, value: next })
+				});
+				if (!res.ok) throw new Error(String(res.status));
+				// Re-run all load functions so layout-gated features (sparkle button,
+				// Safe to Spend, statement, etc.) react immediately rather than waiting
+				// for the next navigation.
+				await invalidateAll();
+			}
 		} catch {
 			checked = !next; // revert
 			toastError('Could not save that. Try again.');

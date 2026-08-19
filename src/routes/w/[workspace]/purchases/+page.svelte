@@ -28,7 +28,7 @@
 	import { goto } from '$app/navigation';
 	import { formatMinor } from '$lib/money-format';
 	import { narrateSafeToSpend } from '$lib/domain/forecast/safe-to-spend';
-	import { maskAmount, type DiscretionMode } from '$lib/domain/visibility/discretion';
+	import { maskAmount } from '$lib/domain/visibility/discretion';
 	import { NO_CATEGORY } from '$lib/ledger-filters';
 	import { toastError } from '$lib/toast-state.svelte';
 	let { data } = $props();
@@ -342,8 +342,14 @@
 	// The months after this one: projected free cash, shown inside the expanded
 	// breakdown. Every figure is a projection; the caption says so.
 	const runway = $derived(data.runway);
+	// Gated on the member's own preference as well as on there being anything to
+	// show: a projection is a different question from "what's left this month",
+	// and not everyone wants the second answer attached to the first.
 	const runwayHasSignal = $derived(
-		runway.months.some((m) => m.incomeMinor !== 0n || m.billsMinor !== 0n || m.savingsMinor !== 0n)
+		data.showRunwayMonths &&
+			runway.months.some(
+				(m) => m.incomeMinor !== 0n || m.billsMinor !== 0n || m.savingsMinor !== 0n
+			)
 	);
 	const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 	function monthLabel(m: { y: number; m: number }): string {
@@ -361,19 +367,15 @@
 	/*
 	 * Discretion. The one number on this page that reads across a café from the
 	 * next table, so it's the one you get to turn down: shown, masked until you
-	 * ask, or off entirely (the switch lives in the filter sheet either way, so
-	 * "off" is never a one-way door). Per member and persisted — see
+	 * ask, or off entirely. Per member and persisted — see
 	 * $lib/domain/visibility/discretion.
+	 *
+	 * Set in Settings → Harmony, not here. It lived in this page's filter sheet,
+	 * which put a durable preference among the transient ones: everything else in
+	 * that sheet resets when you leave, and this does not. The momentary reveal
+	 * below is the part that genuinely belongs to the page, and it stays.
 	 */
-	// svelte-ignore state_referenced_locally
-	let display = $state<DiscretionMode>(data.safeToSpendDisplay);
-	let savingDisplay = false;
-	// Reseed from server truth on navigation, but never mid-save — same dance as
-	// Toggle.svelte, so the optimistic value isn't clobbered by a stale prop.
-	$effect(() => {
-		const next = data.safeToSpendDisplay;
-		if (!untrack(() => savingDisplay)) display = next;
-	});
+	const display = $derived(data.safeToSpendDisplay);
 	// A momentary reveal, deliberately *not* persisted: leaving the ledger and
 	// coming back re-hides the number, which is the whole point of asking for it.
 	let revealed = $state(false);
@@ -384,33 +386,6 @@
 		masked ? maskAmount(formatMinor(minor, data.currency)) : formatMinor(minor, data.currency)
 	);
 
-	const DISPLAY_OPTIONS: { value: DiscretionMode; label: string }[] = [
-		{ value: 'shown', label: 'Shown' },
-		{ value: 'masked', label: 'Hidden until tapped' },
-		{ value: 'off', label: 'Off' }
-	];
-
-	async function setDisplay(next: DiscretionMode) {
-		const prev = display;
-		if (next === prev) return;
-		display = next; // optimistic
-		revealed = false;
-		if (next !== 'shown') showRunway = false;
-		savingDisplay = true;
-		try {
-			const res = await fetch(`/w/${slug}/settings/member-pref`, {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ pref: 'safeToSpendDisplay', value: next })
-			});
-			if (!res.ok) throw new Error(String(res.status));
-		} catch {
-			display = prev; // revert
-			toastError('Could not save that. Try again.');
-		} finally {
-			savingDisplay = false;
-		}
-	}
 	// The runway waterfall unfolds in place: income minus everything already
 	// spent, promised, and set aside, arriving at the free number above.
 	let showRunway = $state(false);
@@ -1077,29 +1052,6 @@
 								class="press chip-btn"
 								style={category === NO_CATEGORY ? SELECTED : UNSELECTED}>Other</button
 							>
-						</div>
-					</div>
-
-					<!-- Safe to Spend discretion. It sits with the other "how I read this
-					     page" preferences rather than in Settings: it's the switch you
-					     reach for *while* someone is sitting beside you. -->
-					<div class="h-px" style="background: var(--hairline)"></div>
-					<div>
-						<span class="block text-[15px]" style="color: var(--ink)">Safe to spend</span>
-						<span class="mb-2 block text-[13px]" style="color: var(--ink-3)"
-							>How the headline reads on this ledger</span
-						>
-						<div class="flex flex-wrap gap-2" role="radiogroup" aria-label="Safe to spend display">
-							{#each DISPLAY_OPTIONS as opt (opt.value)}
-								{@const on = display === opt.value}
-								<button
-									onclick={() => setDisplay(opt.value)}
-									role="radio"
-									aria-checked={on}
-									class="press chip-btn"
-									style={on ? SELECTED : UNSELECTED}>{opt.label}</button
-								>
-							{/each}
 						</div>
 					</div>
 

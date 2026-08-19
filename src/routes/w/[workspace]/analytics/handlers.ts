@@ -106,7 +106,9 @@ export async function load(ctx: WorkspaceContext, { url, params }: LoadEvent) {
 		]);
 	const paidByMember = new Map(members.map((m) => [m.memberId, m.totalMinor]));
 	const incomeByMember = new Map(memberIncome.map((m) => [m.memberId, m.incomeMinor]));
-	const settlementMembers = memberRows
+	// Empty when the workspace has settle-up switched off, so the whole section
+	// falls away with the flag rather than needing a second condition in the view.
+	const settlementMembers = (ws.settleUpEnabled ? memberRows : [])
 		.filter((r) => r.member.status === 'active')
 		.map((r) => ({
 			memberId: r.member.id,

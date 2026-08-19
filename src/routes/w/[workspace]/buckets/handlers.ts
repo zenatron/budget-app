@@ -11,7 +11,9 @@ import {
 	parseRRule,
 	type Recurrence
 } from '$lib/domain/recurrence/rrule';
+import { recurrenceFromFields } from '$lib/domain/recurrence/from-fields';
 import { firstAccrualAt, materializeBucketAccruals } from '$lib/application/buckets';
+import { listMembers } from '$lib/repo/workspaces';
 import {
 	createBucket,
 	listBuckets,
@@ -30,13 +32,20 @@ export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
 	void params.workspace;
 	const db = ctx.db;
 	const ws = ctx.workspace;
-	const [rows, lifetimeSavedMinor] = await Promise.all([
+	const [rows, lifetimeSavedMinor, members] = await Promise.all([
 		listBuckets(db, ws.id),
-		lifetimeSaved(db, ws.id)
+		lifetimeSaved(db, ws.id),
+		listMembers(db, ws.id)
 	]);
+	// Everyone a bucket could name, and everyone a scope label has to spell out.
+	const people = members
+		.filter((m) => m.member.status === 'active')
+		.map((m) => ({ id: m.member.id, displayName: m.user.displayName }));
 
 	return {
 		currency: ws.currency,
+		viewerMemberId: ctx.member.id,
+		members: people,
 		// What's actually in the visible buckets right now (active + paused;
 		// archived already excluded by listBuckets).
 		onHandMinor: rows.reduce((sum, r) => sum + r.balanceMinor, 0n),
@@ -59,6 +68,8 @@ export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
 				color: r.bucket.color,
 				icon: r.bucket.icon,
 				status: r.bucket.status,
+				chargeMemberIds: r.bucket.chargeMemberIds,
+				memberId: r.bucket.memberId,
 				balanceMinor: r.balanceMinor,
 				memberName: r.memberName,
 				mine: r.bucket.memberId === ctx.member.id,
@@ -83,30 +94,6 @@ export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
 	};
 }
 
-/** Form fields → Recurrence, the same shape the recurring page builds. */
-function recurrenceFromForm(f: {
-	freq: string;
-	interval: number;
-	monthDay?: string;
-	startDate: string;
-	weekDays: number[];
-}): Recurrence {
-	const [y, m, d] = f.startDate.split('-').map(Number);
-	const rec: Recurrence = {
-		start: { y, m, d },
-		freq: f.freq as Recurrence['freq'],
-		interval: f.interval
-	};
-	if (f.freq === 'weekly' && f.weekDays.length > 0) {
-		rec.byDay = f.weekDays.filter((n) => n >= 1 && n <= 7);
-	}
-	if ((f.freq === 'monthly' || f.freq === 'yearly') && f.monthDay) {
-		rec.byMonthDay = Number(f.monthDay);
-		if (f.freq === 'yearly') rec.byMonth = m;
-	}
-	return rec;
-}
-
 const CreateSchema = v.object({
 	name: v.pipe(v.string(), v.trim(), v.minLength(1, 'Bucket needs a name'), v.maxLength(120)),
 	amount: v.pipe(v.string(), v.trim(), v.minLength(1, 'Amount is required')),
@@ -123,6 +110,29 @@ const CreateSchema = v.object({
 	goalCap: v.optional(v.string()),
 	color: v.optional(v.string())
 });
+
+/**
+ * The charge-scope control, off both bucket forms.
+ *
+ * Three states arrive as one hidden field plus a set of checkboxes: `anyone`
+ * means null (no restriction at all), `only-me` means the empty list, and
+ * `choose` means exactly whoever is ticked. Undefined means the form never
+ * carried the control, which is what keeps a caller that doesn't know about it
+ * from widening a bucket it never meant to touch.
+ *
+ * The owner is dropped if they somehow appear: they are always allowed, and
+ * storing that would let the row contradict itself.
+ */
+function chargeScopeFromForm(form: FormData, ownerMemberId: string): string[] | null | undefined {
+	const mode = form.get('chargeScope');
+	if (mode === null) return undefined;
+	if (mode === 'anyone') return null;
+	if (mode === 'only-me') return [];
+	return form
+		.getAll('chargeMemberId')
+		.map(String)
+		.filter((id) => id && id !== ownerMemberId);
+}
 
 export const actions = {
 	create: async (ctx: WorkspaceContext, { request }: ActionEvent) => {
@@ -142,7 +152,7 @@ export const actions = {
 			}
 
 			const ws = ctx.workspace;
-			const rrule = formatRRule(recurrenceFromForm({ ...f, weekDays }));
+			const rrule = formatRRule(recurrenceFromFields({ ...f, weekDays }));
 			const today = calDateInZone(ctx.deps.clock.now(), ws.timezone);
 
 			await createBucket(ctx.db, ctx.deps, {
@@ -155,6 +165,7 @@ export const actions = {
 				goalCapMinor,
 				color: f.color?.trim() || null,
 				icon: null,
+				chargeMemberIds: chargeScopeFromForm(form, ctx.member.id) ?? null,
 				nextAccrualAt: firstAccrualAt(rrule, today, ws.timezone, { backfill })
 			});
 
@@ -198,12 +209,16 @@ export const actions = {
 				nextAccrualAt?: Date | null;
 				goalCapMinor?: bigint | null;
 				color?: string | null;
+				chargeMemberIds?: string[] | null;
 			} = { name, amountMinor: amount.minor };
+
+			const chargeMemberIds = chargeScopeFromForm(form, ctx.member.id);
+			if (chargeMemberIds !== undefined) changes.chargeMemberIds = chargeMemberIds;
 
 			if (freq && /^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
 				const interval = Math.max(1, Math.min(52, parseInt(intervalRaw) || 1));
 				const rrule = formatRRule(
-					recurrenceFromForm({
+					recurrenceFromFields({
 						freq,
 						interval,
 						monthDay: monthDay ?? undefined,

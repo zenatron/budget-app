@@ -11,6 +11,8 @@
 	import Money from '$lib/components/Money.svelte';
 	import RecurrencePicker from '$lib/components/RecurrencePicker.svelte';
 	import CheckField from '$lib/components/CheckField.svelte';
+	import Segmented from '$lib/components/Segmented.svelte';
+	import { describeChargeScope } from '$lib/domain/bucket/scope';
 	import { calDateInZone } from '$lib/domain/time/zoned';
 
 	let { data, form } = $props();
@@ -30,6 +32,40 @@
 
 	let showNew = $state(false);
 	let createColor = $state<string | null>(null);
+	/*
+	 * Who may charge to the bucket: 'anyone', 'only-me', or 'choose' plus the
+	 * people picked. One slot each, like the color, because only one bucket is
+	 * being created or edited at a time.
+	 *
+	 * The owner never appears in the list. They are always allowed, and a stored
+	 * copy of that could only ever go out of sync with the row that owns it.
+	 */
+	let createScope = $state('anyone');
+	let createPicked = $state<string[]>([]);
+	let editScope = $state('anyone');
+	let editPicked = $state<string[]>([]);
+
+	const others = $derived(data.members.filter((m) => m.id !== data.viewerMemberId));
+	const nameOf = (id: string) => data.members.find((m) => m.id === id)?.displayName ?? 'someone';
+
+	const SCOPE_OPTIONS = [
+		{ value: 'anyone', label: 'Anyone' },
+		{ value: 'only-me', label: 'Only me' },
+		{ value: 'choose', label: 'Pick people' }
+	];
+
+	/** The stored value read back as the control's three states. */
+	function scopeOf(ids: string[] | null): string {
+		if (ids === null) return 'anyone';
+		return ids.length === 0 ? 'only-me' : 'choose';
+	}
+
+	const scopeLabel = (b: (typeof data.buckets)[number]) =>
+		describeChargeScope(
+			{ memberId: b.memberId, chargeMemberIds: b.chargeMemberIds },
+			data.viewerMemberId,
+			nameOf
+		);
 	let editing: string | null = $state(null);
 	let editColor: Record<string, string | null> = $state({});
 	let adjusting: string | null = $state(null);
@@ -137,6 +173,8 @@
 		editing = editing === b.id ? null : b.id;
 		if (editing === null) return;
 		editColor = { ...editColor, [b.id]: b.color };
+		editScope = scopeOf(b.chargeMemberIds);
+		editPicked = [...(b.chargeMemberIds ?? [])];
 		editFreq = b.freq;
 		editInterval = b.interval;
 		editWeekDays = [...b.byDay];
@@ -147,6 +185,8 @@
 	function resetNewForm() {
 		showNew = false;
 		createColor = null;
+		createScope = 'anyone';
+		createPicked = [];
 		freq = 'monthly';
 		interval = 1;
 		weekDays = [];
@@ -261,6 +301,42 @@
 					? `Fills in every accrual since ${fmtStart(startDate)}.`
 					: 'Set the start date in the past to fill in accruals you already missed.'}
 			/>
+			<div>
+				<Segmented
+					options={SCOPE_OPTIONS}
+					bind:value={createScope}
+					name="chargeScope"
+					label="Who can charge this bucket"
+					size="sm"
+				/>
+				{#if createScope === 'choose'}
+					<div class="mt-2.5 flex flex-wrap gap-x-4 gap-y-2">
+						{#each others as m (m.id)}
+							<label class="flex items-center gap-1.5 text-[15px]" style="color: var(--ink)">
+								<input
+									type="checkbox"
+									name="chargeMemberId"
+									value={m.id}
+									checked={createPicked.includes(m.id)}
+									onchange={() =>
+										(createPicked = createPicked.includes(m.id)
+											? createPicked.filter((x) => x !== m.id)
+											: [...createPicked, m.id])}
+								/>
+								{m.displayName}
+							</label>
+						{/each}
+					</div>
+				{/if}
+				<p class="mt-1.5 text-[13px]" style="color: var(--ink-3)">
+					{#if createScope === 'anyone'}
+						Anyone in the workspace can charge a purchase to it.
+					{:else}
+						You can always charge it. Anyone left out loses it from their purchase form and from any
+						recurring rule that charged it.
+					{/if}
+				</p>
+			</div>
 			<p class="text-[11px] font-medium tracking-[0.14em] uppercase" style="color: var(--ink-3)">
 				Color
 			</p>
@@ -389,6 +465,15 @@
 									{#if b.status === 'paused'}
 										<span class="chip" style="color: var(--ink-3); background: var(--surface-2)"
 											>Paused</span
+										>
+									{/if}
+									{#if scopeLabel(b)}
+										<!-- Says why a bucket you can see is missing from your
+									     purchase form, which is otherwise silent about it. An
+									     unrestricted bucket says nothing, so the restricted ones
+									     are the ones that stand out. -->
+										<span class="chip" style="color: var(--ink-3); background: var(--surface-2)"
+											>{scopeLabel(b)}</span
 										>
 									{/if}
 									{#if b.balanceMinor < 0n}
@@ -530,6 +615,37 @@
 									placeholder="Save up to…"
 									class="field text-[16px]"
 								/>
+								<div>
+									<Segmented
+										options={SCOPE_OPTIONS}
+										bind:value={editScope}
+										name="chargeScope"
+										label="Who can charge this bucket"
+										size="sm"
+									/>
+									{#if editScope === 'choose'}
+										<div class="mt-2.5 flex flex-wrap gap-x-4 gap-y-2">
+											{#each others as m (m.id)}
+												<label
+													class="flex items-center gap-1.5 text-[15px]"
+													style="color: var(--ink)"
+												>
+													<input
+														type="checkbox"
+														name="chargeMemberId"
+														value={m.id}
+														checked={editPicked.includes(m.id)}
+														onchange={() =>
+															(editPicked = editPicked.includes(m.id)
+																? editPicked.filter((x) => x !== m.id)
+																: [...editPicked, m.id])}
+													/>
+													{m.displayName}
+												</label>
+											{/each}
+										</div>
+									{/if}
+								</div>
 								<p
 									class="text-[11px] font-medium tracking-[0.14em] uppercase"
 									style="color: var(--ink-3)"

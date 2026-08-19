@@ -95,16 +95,35 @@
 			shortMinor
 		};
 	});
-	const overdraftConfirm = $derived(
-		overdraft
-			? {
-					title: `${overdraft.bucketName} doesn't have that`,
-					body: `It holds ${formatMinor(overdraft.balanceMinor, overdraft.currency)}, and this is ${formatMinor(overdraft.amountMinor, overdraft.currency)}. Charging it anyway leaves the bucket ${formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn, and that part counts as ordinary spending.`,
-					confirmLabel: 'Charge it anyway',
-					tone: 'danger' as const
-				}
-			: undefined
-	);
+	/*
+	 * Two different things happen past the balance, so two different warnings.
+	 *
+	 * For most people an overdraft is allowed and simply costs: the bucket goes
+	 * negative and the uncovered part counts as ordinary spending. For someone
+	 * held to their own buckets it is the cap on an allowance, and the purchase
+	 * goes to an approver instead of being recorded. Telling them the first
+	 * thing would be a plain lie about what the button is going to do.
+	 */
+	const overdraftConfirm = $derived.by(() => {
+		if (!overdraft) return undefined;
+		const title = `${overdraft.bucketName} doesn't have that`;
+		const held = formatMinor(overdraft.balanceMinor, overdraft.currency);
+		const asked = formatMinor(overdraft.amountMinor, overdraft.currency);
+		if (data.ownBucketsOnly) {
+			return {
+				title,
+				body: `It holds ${held}, and this is ${asked}. Going past what a bucket holds needs approval, so this goes to an approver instead of being recorded now.`,
+				confirmLabel: 'Send for approval',
+				tone: 'default' as const
+			};
+		}
+		return {
+			title,
+			body: `It holds ${held}, and this is ${asked}. Charging it anyway leaves the bucket ${formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn, and that part counts as ordinary spending.`,
+			confirmLabel: 'Charge it anyway',
+			tone: 'danger' as const
+		};
+	});
 
 	// Optional category suggestion (the assist layer's first proving ground).
 	// Bound so a suggestion can fill it; a suggestion is only ever offered, never
@@ -792,7 +811,12 @@
 							{overdraft.bucketName} only holds {formatMinor(
 								overdraft.balanceMinor,
 								overdraft.currency
-							)}. This would leave it {formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn.
+							)}.
+							{#if data.ownBucketsOnly}
+								Anything past that goes to an approver.
+							{:else}
+								This would leave it {formatMinor(overdraft.shortMinor, overdraft.currency)} overdrawn.
+							{/if}
 						</span>
 					</div>
 				{/if}

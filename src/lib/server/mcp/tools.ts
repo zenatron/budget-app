@@ -80,6 +80,8 @@ import { memberIncomeBreakdown } from '$lib/repo/income';
 import { settleUp } from '$lib/domain/household/settlement';
 import { accountLabel, listAccounts } from '$lib/repo/accounts';
 import { listBuckets } from '$lib/repo/buckets';
+import { refuseBucketCharge } from '$lib/domain/bucket/scope';
+import type { ApprovalPolicy } from '$lib/domain/approval/policy';
 import { safeToSpend, forecastMonths } from '$lib/repo/forecast';
 import { narrateSafeToSpend } from '$lib/domain/forecast/safe-to-spend';
 import {
@@ -999,6 +1001,14 @@ export const TOOLS: McpTool[] = [
 		inputSchema: { type: 'object', properties: {}, additionalProperties: false },
 		async handler(ctx) {
 			const buckets = await listBuckets(ctx.db, ctx.authed.workspace.id);
+			// A token acts as its member, so it sees whose buckets it may actually
+			// charge. Without this the model would keep proposing charges the
+			// submit path then refuses, with no way to tell which ones.
+			const chargeScope = {
+				memberId: ctx.authed.member.id,
+				ownBucketsOnly:
+					(ctx.authed.member.approvalPolicy as ApprovalPolicy).own_buckets_only === true
+			};
 			const data = buckets.map((b) => {
 				let cadence: string | null = null;
 				try {
@@ -1014,12 +1024,18 @@ export const TOOLS: McpTool[] = [
 					amount: fmt(b.bucket.amountMinor, ctx),
 					cadence,
 					goal: b.bucket.goalCapMinor === null ? null : fmt(b.bucket.goalCapMinor, ctx),
-					status: b.bucket.status
+					status: b.bucket.status,
+					chargeable: refuseBucketCharge(b.bucket, chargeScope) === null
 				};
 			});
 			const text = data.length
 				? data
-						.map((b) => `- ${b.name}: ${b.balance}${b.goal ? ` / ${b.goal}` : ''} (${b.id})`)
+						.map(
+							(b) =>
+								`- ${b.name}: ${b.balance}${b.goal ? ` / ${b.goal}` : ''} (${b.id})${
+									b.chargeable ? '' : ' [cannot charge to this one]'
+								}`
+						)
 						.join('\n')
 				: 'No buckets yet.';
 			return { text, data };
@@ -1646,7 +1662,12 @@ export const TOOLS: McpTool[] = [
 					type: 'integer',
 					description: 'Day the monthly amount is added, 1–28 (default 1).'
 				},
-				goal: { type: 'string', description: 'Optional target/cap, decimal.' }
+				goal: { type: 'string', description: 'Optional target/cap, decimal.' },
+				personal: {
+					type: 'boolean',
+					description:
+						'True means only the owner can charge purchases to this bucket. Default false, which lets any member charge to it.'
+				}
 			},
 			required: ['name', 'monthly_amount'],
 			additionalProperties: false
@@ -1665,11 +1686,12 @@ export const TOOLS: McpTool[] = [
 					currency: ctx.authed.workspace.currency,
 					rrule,
 					nextAccrualAt: firstAccrualAt(rrule, today, tz),
-					goalCapMinor: str(args, 'goal') ? money(ctx, str(args, 'goal')!).minor : null
+					goalCapMinor: str(args, 'goal') ? money(ctx, str(args, 'goal')!).minor : null,
+					chargeMemberIds: args.personal === true ? [] : null
 				});
 				return {
-					text: `Created bucket "${b.name}". Bucket id ${b.id}.`,
-					data: { bucket_id: b.id }
+					text: `Created bucket "${b.name}"${b.chargeMemberIds === null ? '' : ', which only you can charge to'}. Bucket id ${b.id}.`,
+					data: { bucket_id: b.id, personal: b.chargeMemberIds !== null }
 				};
 			} catch (e) {
 				return { text: domainErrText(e), isError: true };

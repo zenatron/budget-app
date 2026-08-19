@@ -41,6 +41,11 @@
 	let editingField = $state<'merchant' | 'place' | 'category' | 'note' | null>(null);
 	let deciding = $state<'approve' | 'deny' | null>(null);
 	let showDeny = $state(false);
+	// Which of the two answers to a denial is open, and the note it carries.
+	// Both require the note, which is what makes either one a new statement
+	// rather than a silent re-decision.
+	let denialAction: 'appeal' | 'override' | null = $state(null);
+	let denialNote = $state('');
 
 	/*
 	 * The notification nudge, in the one moment it earns its place: this page
@@ -662,6 +667,87 @@
 					class="field mt-2.5 text-[16px]"
 				/>
 			{/if}
+		{/if}
+
+		<!--
+			After a denial, both sides get a way forward. The requester can ask again
+			with something new to say; whoever was asked can change their mind. Both
+			carry a note, both land in the history beside the denial, and neither is
+			a second purchase — the record is one thing that was refused and then
+			answered again.
+
+			Deliberately quieter than the decide row above: this is the uncommon
+			path, and it should not compete with the ordinary one on any screen
+			where both could appear.
+		-->
+		{#if data.can.appeal || data.can.overrideDenial}
+			<div class="rounded-[14px] p-4" style="background: var(--surface-2)">
+				{#if !denialAction}
+					<p class="text-[14px] leading-relaxed" style="color: var(--ink-3)">
+						{data.can.appeal
+							? 'Something changed since this was denied? You can ask again.'
+							: 'You denied this. You can still allow it.'}
+					</p>
+					<div class="mt-2.5 flex flex-wrap gap-2">
+						{#if data.can.appeal}
+							<button
+								onclick={() => (denialAction = 'appeal')}
+								class="btn btn-ghost px-4 py-2 text-[14px]"
+								style="color: var(--accent-ink)">Ask again</button
+							>
+						{/if}
+						{#if data.can.overrideDenial}
+							<button
+								onclick={() => (denialAction = 'override')}
+								class="btn btn-ghost px-4 py-2 text-[14px]"
+								style="color: var(--approve)">Allow it after all</button
+							>
+						{/if}
+					</div>
+				{:else}
+					{@const isAppeal = denialAction === 'appeal'}
+					<form
+						method="POST"
+						action={isAppeal ? '?/appeal' : '?/overrideDenial'}
+						use:submit={{
+							success: isAppeal ? 'Sent back for a decision' : 'Approved',
+							onSuccess: () => (denialAction = null)
+						}}
+					>
+						<label class="block">
+							<span class="section-label mb-1.5 block">
+								{isAppeal ? 'What has changed' : 'Why you are allowing it'}
+							</span>
+							<input
+								name="note"
+								required
+								bind:value={denialNote}
+								placeholder={isAppeal ? "It's on sale now" : 'Talked it over'}
+								class="field text-[16px]"
+							/>
+						</label>
+						<p class="mt-1.5 text-[12px]" style="color: var(--ink-3)">
+							This goes in the history, next to the denial.
+						</p>
+						<div class="mt-3 flex gap-2">
+							<button
+								class="btn btn-accent px-4 py-2.5 text-[14px] disabled:opacity-50"
+								disabled={denialNote.trim().length === 0}
+							>
+								{isAppeal ? 'Ask again' : 'Allow it'}
+							</button>
+							<button
+								type="button"
+								onclick={() => {
+									denialAction = null;
+									denialNote = '';
+								}}
+								class="btn btn-ghost px-4 py-2.5 text-[14px]">Cancel</button
+							>
+						</div>
+					</form>
+				{/if}
+			</div>
 		{/if}
 
 		<!-- Details as a printed ledger. Editable rows show a pencil on hover

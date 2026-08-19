@@ -7,6 +7,8 @@ export interface ApprovalContext {
 	chargedToBucket?: boolean;
 	/** The workspace-wide default a member's 'inherit' defers to. */
 	workspaceSkipsBucketCharges?: boolean;
+	/** The charge is bigger than what the bucket currently holds. */
+	bucketWouldOverdraw?: boolean;
 }
 
 /**
@@ -19,6 +21,12 @@ export interface ApprovalContext {
  * towards silence spends someone else's money without them hearing about it.
  *
  * An amount at or above the threshold (mode 'threshold') requires approval.
+ *
+ * A member held to their own buckets (`own_buckets_only`) keeps the bucket
+ * exemption only while the bucket can cover the charge. Overdrawing one spends
+ * money that was never set aside, which is ordinary spending wearing a bucket's
+ * name, so it falls back to the base mode and someone gets asked. That is the
+ * cap in an allowance: free underneath it, ask first to go past.
  */
 export function approvalRequired(
 	policy: ApprovalPolicy,
@@ -28,8 +36,10 @@ export function approvalRequired(
 ): boolean {
 	const override = categoryId ? policy.category_overrides?.[categoryId] : undefined;
 	const bucketRule = policy.bucket_charges ?? 'inherit';
+	const overdrawsAllowance = policy.own_buckets_only === true && ctx.bucketWouldOverdraw === true;
 	const bucketExempt =
 		ctx.chargedToBucket === true &&
+		!overdrawsAllowance &&
 		(bucketRule === 'skip' ||
 			(bucketRule === 'inherit' && ctx.workspaceSkipsBucketCharges === true));
 

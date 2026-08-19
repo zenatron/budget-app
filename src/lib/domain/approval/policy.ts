@@ -21,6 +21,15 @@ export interface ApprovalPolicy {
 	category_overrides?: Record<string, 'exempt' | 'always'>;
 	/** Absent means 'inherit'. */
 	bucket_charges?: BucketChargeRule;
+	/**
+	 * This member may only charge purchases to buckets they own, and an
+	 * overdrawing charge falls back to `mode` however generous `bucket_charges`
+	 * is. Together with a bucket only they can spend from, that is an allowance:
+	 * free to spend inside the pot, ask first to go past it.
+	 *
+	 * Absent means false, so it changed nobody's behaviour when it was added.
+	 */
+	own_buckets_only?: boolean;
 	routing: {
 		/** any_of: any listed approver satisfies. specific: exactly that one member. */
 		mode: 'any_of' | 'specific';
@@ -43,6 +52,11 @@ export function defaultApprovalPolicy(): ApprovalPolicy {
  * obscure one to diagnose, so it is checked up front instead.
  *
  * Returns the member ids that would be stranded; empty means the change is safe.
+ *
+ * `own_buckets_only` is deliberately absent from `canRequire`. It takes the
+ * bucket exemption away rather than adding a requirement, so what an overdraft
+ * falls back to is `mode` — which is already counted. A member whose mode is
+ * 'none' still needs nobody, however capped their buckets are.
  */
 export function strandedByRemoving(
 	members: { id: string; policy: ApprovalPolicy; status: string }[],

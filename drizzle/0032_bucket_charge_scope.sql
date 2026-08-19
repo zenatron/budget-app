@@ -1,0 +1,11 @@
+-- Who may charge a purchase to a bucket.
+--
+-- Ownership was enforced on one side only: `loadOwnBucket` gates every bucket
+-- mutation, while the charge path checked workspace and status alone. Any
+-- active member could therefore spend out of anyone's bucket. This column is
+-- the other half of that rule.
+--
+-- Defaulting to true keeps every existing bucket exactly as it behaves today.
+-- Setting it false makes the bucket personal: only its owner may charge to it,
+-- which is what an allowance is.
+ALTER TABLE "bucket" ADD COLUMN "shared" boolean DEFAULT true NOT NULL;

@@ -19,6 +19,7 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { readFile, readdir } from 'node:fs/promises';
 import * as schema from '$lib/db/schema';
 import type { Db } from '$lib/db/types';
+import type { ApprovalPolicy } from '$lib/domain/approval/policy';
 
 const MIGRATIONS = new URL('../../../../drizzle', import.meta.url).pathname;
 
@@ -58,7 +59,7 @@ export interface SeededWorkspace {
 	currency: string;
 	timezone: string;
 	/** Add a second (or third) member; returns the member id. */
-	addMember(opts?: { display?: string }): Promise<string>;
+	addMember(opts?: { display?: string; policy?: ApprovalPolicy }): Promise<string>;
 	addCategory(name?: string): Promise<string>;
 	addMerchant(opts: { name: string; normalizedName?: string }): Promise<string>;
 	addIncome(opts: {
@@ -84,6 +85,9 @@ export interface SeededWorkspace {
 		rrule: string;
 		nextAccrualAt?: Date | null;
 		status?: 'active' | 'paused' | 'archived';
+		/** Who else may charge it. Null (the default) means anyone; [] means only
+		 *  its owner, which is what makes it an allowance pot. */
+		chargeMemberIds?: string[] | null;
 	}): Promise<string>;
 	addPurchase(opts: {
 		memberId?: string;
@@ -152,7 +156,10 @@ export async function seedWorkspace(
 		ownerMemberId,
 		currency,
 		timezone,
-		async addMember({ display = 'Member' } = {}) {
+		async addMember({
+			display = 'Member',
+			policy
+		}: { display?: string; policy?: ApprovalPolicy } = {}) {
 			const userId = uid();
 			const memberId = uid();
 			await db.insert(schema.user).values({
@@ -167,7 +174,7 @@ export async function seedWorkspace(
 				workspaceId,
 				userId,
 				role: 'member',
-				approvalPolicy: { mode: 'none', routing: { mode: 'any_of', approver_ids: [] } },
+				approvalPolicy: policy ?? { mode: 'none', routing: { mode: 'any_of', approver_ids: [] } },
 				status: 'active',
 				joinedAt: now
 			});
@@ -234,7 +241,8 @@ export async function seedWorkspace(
 			amountMinor,
 			rrule,
 			nextAccrualAt,
-			status = 'active'
+			status = 'active',
+			chargeMemberIds = null
 		}) {
 			const id = uid();
 			await db.insert(schema.bucket).values({
@@ -247,6 +255,7 @@ export async function seedWorkspace(
 				rrule,
 				nextAccrualAt: nextAccrualAt === undefined ? now : nextAccrualAt,
 				status,
+				chargeMemberIds,
 				createdAt: now
 			});
 			return id;

@@ -87,6 +87,9 @@ export const workspace = pgTable('workspace', {
 	maxSealDays: integer('max_seal_days').notNull().default(90),
 	accentColor: text('accent_color'),
 	bucketChargesSkipApproval: boolean('bucket_charges_skip_approval').notNull().default(false),
+	/** Whether Activity shows "who owes whom". Households that don't split
+	 *  spending have no use for it, and it is a whole section of the page. */
+	settleUpEnabled: boolean('settle_up_enabled').notNull().default(true),
 	keepStatementFiles: boolean('keep_statement_files').notNull().default(false),
 	/** Alpha: read a bill PDF to prefill a purchase. Off until asked for. */
 	billImportEnabled: boolean('bill_import_enabled').notNull().default(false),
@@ -170,8 +173,12 @@ export const workspaceMember = pgTable(
 		includeLedgerMovements: boolean('include_ledger_movements').notNull().default(false),
 		/** How the Safe to Spend headline reads on the ledger for this member:
 		 *  'shown' | 'masked' | 'off' (see domain/visibility/discretion). Discretion
-		 *  over your own shoulder, not access control — per member, like the above. */
-		safeToSpendDisplay: text('safe_to_spend_display').notNull().default('shown'),
+		 *  over your own shoulder, not access control — per member, like the above.
+		 *  Defaults to masked: the number reads across a café from the next table,
+		 *  and a default you have to notice to turn on is the wrong way round. */
+		safeToSpendDisplay: text('safe_to_spend_display').notNull().default('masked'),
+		/** Whether the Safe to Spend breakdown projects the months after this one. */
+		showRunwayMonths: boolean('show_runway_months').notNull().default(true),
 		joinedAt: timestamp('joined_at', { withTimezone: true }).notNull()
 	},
 	(t) => [uniqueIndex('workspace_member_workspace_user_uq').on(t.workspaceId, t.userId)]
@@ -557,6 +564,16 @@ export const bucket = pgTable(
 		color: text('color'),
 		icon: text('icon'),
 		status: bucketStatus('status').notNull().default('active'),
+		/**
+		 * Who may charge a purchase to this bucket, besides its owner.
+		 *
+		 * Null means anyone in the workspace, which is what every bucket was
+		 * before this column and stays the default. A list names exactly who else
+		 * may charge it; an empty list is therefore "only me", which is what makes
+		 * a bucket an allowance. The owner is always implied and never stored, so
+		 * the two can't drift apart.
+		 */
+		chargeMemberIds: uuid('charge_member_ids').array(),
 		/** Accrual schedule — the same RRULE subset recurring purchases use. */
 		rrule: text('rrule').notNull(),
 		/** When the next accrual is due. Null = not scheduled yet; the sweep

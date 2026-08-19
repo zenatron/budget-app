@@ -1,6 +1,6 @@
 {
-  "id": "c2fc2e88-a4ab-4a16-a57c-72c6391f9a08",
-  "prevId": "ab09a86e-f3c4-475c-a99d-7dccbcaa947b",
+  "id": "28e84b55-d515-444b-9477-3f3f6bcb3752",
+  "prevId": "c2fc2e88-a4ab-4a16-a57c-72c6391f9a08",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -382,6 +382,13 @@
           "notNull": true,
           "default": "'active'"
         },
+        "shared": {
+          "name": "shared",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
         "rrule": {
           "name": "rrule",
           "type": "text",
@@ -659,6 +666,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "period_key": {
+          "name": "period_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "level": {
           "name": "level",
           "type": "text",
@@ -674,12 +687,6 @@
         "last_alerted_at": {
           "name": "last_alerted_at",
           "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "period_key": {
-          "name": "period_key",
-          "type": "text",
           "primaryKey": false,
           "notNull": true
         }

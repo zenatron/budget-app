@@ -45,6 +45,12 @@
 		/** Stretch to fill the row and share width equally, or hug the labels. */
 		fill = true,
 		/**
+		 * Tighter horizontal padding, for a hugging control that sits beside a
+		 * heading rather than owning its own row. Only meaningful with `fill`
+		 * off — a filled track shares the width out regardless.
+		 */
+		compact = false,
+		/**
 		 * Makes each segment a submit button carrying this field name — for the
 		 * places where choosing *is* the submit rather than local state.
 		 */
@@ -58,6 +64,7 @@
 		ariaLabel?: string;
 		size?: 'sm' | 'md';
 		fill?: boolean;
+		compact?: boolean;
 		submitName?: string;
 		onselect?: (value: string) => void;
 	} = $props();
@@ -65,14 +72,26 @@
 	// Radii nest: the inner radius is the outer minus the track's own padding, so
 	// the pill's corners sit concentric inside the track's.
 	const S = {
-		sm: { track: 'rounded-[10px] p-0.5', seg: 'rounded-[8px] py-1.5 text-[13px]', pad: 'px-3' },
-		md: { track: 'rounded-[12px] p-1', seg: 'rounded-[9px] py-2 text-[14px]', pad: 'px-5' }
+		sm: {
+			track: 'rounded-[10px] p-0.5',
+			seg: 'rounded-[8px] py-1.5 text-[13px]',
+			pad: 'px-3',
+			tight: 'px-2'
+		},
+		md: {
+			track: 'rounded-[12px] p-1',
+			seg: 'rounded-[9px] py-2 text-[14px]',
+			pad: 'px-5',
+			tight: 'px-3.5'
+		}
 	} as const;
 
 	const s = $derived(S[size]);
 	const navigational = $derived(options.some((o) => o.href));
 	const segClass = $derived(
-		`press inline-flex items-center justify-center gap-1.5 font-semibold transition-colors ${s.seg} ${fill ? 'flex-1' : s.pad}`
+		`press inline-flex items-center justify-center gap-1.5 font-semibold transition-colors ${s.seg} ${
+			fill ? 'flex-1' : compact ? s.tight : s.pad
+		}`
 	);
 
 	/** The one place the selected treatment is written down. */

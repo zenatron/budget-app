@@ -14,7 +14,9 @@ import {
 	cancelPurchase,
 	completePurchase,
 	deletePurchase,
+	appealPurchase,
 	denyPurchase,
+	overrideDenialForPurchase,
 	editPurchase,
 	editPurchaseNote,
 	recategorizePurchase,
@@ -177,7 +179,12 @@ export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
 			// Sleep on it: either the requester or an approver, on a pending request.
 			hold: pending && (mine || p.approverMemberIds.includes(ctx.member.id)),
 			// While asleep, either side can wake it, extend it, or let it go.
-			manageHold: p.state === 'held' && (mine || p.approverMemberIds.includes(ctx.member.id))
+			manageHold: p.state === 'held' && (mine || p.approverMemberIds.includes(ctx.member.id)),
+			// A denial is answerable from both sides: the requester can ask again
+			// with something new to say, and anyone who was asked can change their
+			// mind. Both write a note into the same history as the denial.
+			appeal: mine && p.state === 'denied',
+			overrideDenial: p.state === 'denied' && p.approverMemberIds.includes(ctx.member.id)
 		},
 		images: images.map((i) => ({
 			id: i.id,
@@ -245,6 +252,18 @@ export const actions = {
 	deny: async (ctx: WorkspaceContext, { request, params }: ActionEvent) => {
 		const reason = String((await request.formData()).get('reason') ?? '').trim() || null;
 		return run(() => denyPurchase(ctx.db, ctx.deps, scopeOf(ctx), params.id, reason));
+	},
+
+	/** Ask again after a denial. The note is what makes it a new question. */
+	appeal: async (ctx: WorkspaceContext, { request, params }: ActionEvent) => {
+		const note = String((await request.formData()).get('note') ?? '').trim();
+		return run(() => appealPurchase(ctx.db, ctx.deps, scopeOf(ctx), params.id, note));
+	},
+
+	/** Overturn a denial, as an approver. Logged with its reason. */
+	overrideDenial: async (ctx: WorkspaceContext, { request, params }: ActionEvent) => {
+		const note = String((await request.formData()).get('note') ?? '').trim();
+		return run(() => overrideDenialForPurchase(ctx.db, ctx.deps, scopeOf(ctx), params.id, note));
 	},
 
 	cancel: async (ctx: WorkspaceContext, { params }: ActionEvent) =>

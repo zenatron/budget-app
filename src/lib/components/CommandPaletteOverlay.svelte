@@ -18,9 +18,27 @@
 		executeProposal,
 		type Proposal
 	} from '$lib/command-palette-state.svelte';
+	import { startThinking } from '$lib/haptics.svelte';
 
 	let { currency = 'USD', assistEnabled = false }: { currency?: string; assistEnabled?: boolean } =
 		$props();
+
+	/*
+	 * Harmony thinking, in the hand.
+	 *
+	 * The mark spins while it works, which is fine on a desk and useless on a
+	 * phone you have already looked away from. A light triple tap on a loop says
+	 * "still going" without asking for your eyes back, and it stops the moment
+	 * the answer lands — which is the part that actually tells you something.
+	 *
+	 * `startThinking` returns its own stopper, so the effect's cleanup is the
+	 * whole of the teardown: an answer, a cancel, or the overlay closing mid
+	 * request all end the pulse the same way.
+	 */
+	$effect(() => {
+		if (!paletteLoading.value) return;
+		return startThinking();
+	});
 
 	// The parser is pure and synchronous, so this runs on every keystroke with no
 	// network and no debounce — that's the whole point of showing it live.

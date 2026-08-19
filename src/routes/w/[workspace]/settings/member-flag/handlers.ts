@@ -15,6 +15,7 @@ export async function POST(ctx: WorkspaceContext, { request }: { request: Reques
 
 	const updates: Partial<typeof workspaceMember.$inferInsert> = {};
 	if (flag === 'includeLedgerMovements') updates.includeLedgerMovements = value;
+	else if (flag === 'showRunwayMonths') updates.showRunwayMonths = value;
 	else error(400, 'Unknown setting');
 
 	await ctx.db.update(workspaceMember).set(updates).where(eq(workspaceMember.id, ctx.member.id));

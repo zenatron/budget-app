@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
-	import Toggle from '$lib/components/Toggle.svelte';
-	import { Check, ChevronLeft, Pencil, Plus, Shapes, Trash2, X } from '@lucide/svelte';
+	import { ChevronLeft, Pencil, Plus, Shapes, Trash2, X } from '@lucide/svelte';
 
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
@@ -192,7 +191,7 @@
 			>
 				<Shapes class="h-4 w-4" style="color: var(--ws-accent)" /> Built-in
 			</h2>
-			<span class="text-[12px]" style="color: var(--ink-4)"
+			<span class="text-[13px]" style="color: var(--ink-3)"
 				>{data.builtIn.length} categor{data.builtIn.length === 1 ? 'y' : 'ies'}</span
 			>
 		</div>
@@ -203,7 +202,7 @@
 			>
 				<span class="text-[20px] leading-none">{c.icon ?? '📦'}</span>
 				<span class="flex-1 text-[15px]" style="color: var(--ink)">{c.name}</span>
-				<span class="text-[13px]" style="color: var(--ink-4)">
+				<span class="text-[15px]" style="color: var(--ink-3)">
 					{c.purchases > 0 ? `${c.purchases} purchase${c.purchases === 1 ? '' : 's'}` : 'unused'}
 				</span>
 			</div>
@@ -219,14 +218,14 @@
 			>
 				<Pencil class="h-4 w-4" style="color: var(--ws-accent)" /> Custom
 			</h2>
-			<span class="text-[12px]" style="color: var(--ink-4)"
+			<span class="text-[13px]" style="color: var(--ink-3)"
 				>{data.custom.length} categor{data.custom.length === 1 ? 'y' : 'ies'}</span
 			>
 		</div>
 		{#if data.custom.length === 0 && !showNew}
 			<div class="px-4 pb-4">
 				<p class="text-[14px]" style="color: var(--ink-3)">
-					None yet — add one below to extend the category list everywhere.
+					None yet. Add one below to extend the category list everywhere.
 				</p>
 			</div>
 		{/if}
@@ -280,7 +279,7 @@
 				>
 					<span class="text-[20px] leading-none">{c.icon ?? '📦'}</span>
 					<span class="flex-1 text-[15px]" style="color: var(--ink)">{c.name}</span>
-					<span class="text-[13px]" style="color: var(--ink-4)">
+					<span class="text-[15px]" style="color: var(--ink-3)">
 						{c.purchases > 0 ? `${c.purchases}` : 'unused'}
 					</span>
 					{#if owner}

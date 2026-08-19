@@ -185,6 +185,23 @@
 
 			<div class="mt-5 flex items-start justify-between gap-4">
 				<div>
+					<p class="text-[15px] font-medium" style="color: var(--ink)">Settle up</p>
+					<p class="text-[13px]" style="color: var(--ink-3)">
+						Show "who owes whom" on Activity, splitting the period's spending into fair shares.
+						Households that keep separate money have no use for it.
+					</p>
+				</div>
+				{#if owner}
+					<Toggle on={data.settleUpEnabled} flag="settleUpEnabled" label="Toggle settle up" />
+				{:else}
+					<span class="shrink-0 text-[13px]" style="color: var(--ink-3)">
+						{data.settleUpEnabled ? 'Shown' : 'Hidden'}
+					</span>
+				{/if}
+			</div>
+
+			<div class="mt-5 flex items-start justify-between gap-4">
+				<div>
 					<p class="text-[15px] font-medium" style="color: var(--ink)">Bucket charges</p>
 					<p class="text-[13px]" style="color: var(--ink-3)">
 						Skip approval for purchases charged directly to a bucket.

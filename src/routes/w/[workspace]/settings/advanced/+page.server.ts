@@ -48,6 +48,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		inviteTtlDays: ws.inviteTtlDays,
 		recurringCatchupMax: ws.recurringCatchupMax,
 		bucketChargesSkipApproval: ws.bucketChargesSkipApproval,
+		settleUpEnabled: ws.settleUpEnabled,
 		uniqueCategories: ws.uniqueCategories,
 		weekStartDay: ws.weekStartDay,
 		weekDays

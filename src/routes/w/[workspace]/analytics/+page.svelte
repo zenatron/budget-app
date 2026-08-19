@@ -1081,6 +1081,8 @@
 					value={shareBasis}
 					onselect={(v) => (shareBasis = v as 'equal' | 'income')}
 					ariaLabel="Fair share basis"
+					size="sm"
+					fill={false}
 				/>
 			</div>
 			<div style="border-top: 0.5px solid var(--hairline)">

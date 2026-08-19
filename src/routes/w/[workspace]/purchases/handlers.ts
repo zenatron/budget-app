@@ -128,6 +128,9 @@ export async function load(ctx: WorkspaceContext, { url, params }: LoadEvent) {
 		// How much of the headline this member wants legible on arrival. Server-side
 		// so a masked number never renders before the client can hide it.
 		safeToSpendDisplay: toDiscretionMode(ctx.member.safeToSpendDisplay),
+		// Whether the breakdown projects the months after this one. A reading
+		// preference, set in Harmony settings alongside the display mode.
+		showRunwayMonths: ctx.member.showRunwayMonths,
 		currency: ws.currency
 	};
 }

@@ -1,6 +1,6 @@
 {
-  "id": "c2fc2e88-a4ab-4a16-a57c-72c6391f9a08",
-  "prevId": "ab09a86e-f3c4-475c-a99d-7dccbcaa947b",
+  "id": "2482f28e-ce86-4a98-b77c-9a3826e5ec4d",
+  "prevId": "9d4d4585-a827-4003-9504-6d5a142f03f2",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -382,6 +382,12 @@
           "notNull": true,
           "default": "'active'"
         },
+        "charge_member_ids": {
+          "name": "charge_member_ids",
+          "type": "uuid[]",
+          "primaryKey": false,
+          "notNull": false
+        },
         "rrule": {
           "name": "rrule",
           "type": "text",
@@ -659,6 +665,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "period_key": {
+          "name": "period_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "level": {
           "name": "level",
           "type": "text",
@@ -674,12 +686,6 @@
         "last_alerted_at": {
           "name": "last_alerted_at",
           "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "period_key": {
-          "name": "period_key",
-          "type": "text",
           "primaryKey": false,
           "notNull": true
         }
@@ -2900,6 +2906,13 @@
           "notNull": true,
           "default": false
         },
+        "settle_up_enabled": {
+          "name": "settle_up_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
         "keep_statement_files": {
           "name": "keep_statement_files",
           "type": "boolean",
@@ -3136,7 +3149,14 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'shown'"
+          "default": "'masked'"
+        },
+        "show_runway_months": {
+          "name": "show_runway_months",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
         },
         "joined_at": {
           "name": "joined_at",

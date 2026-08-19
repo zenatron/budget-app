@@ -169,6 +169,10 @@ export interface NewPurchase {
 	 * geocoder and needs none configured.
 	 */
 	mapLink?: string;
+	/** Charge it to the bucket whose option text starts with this. */
+	bucket?: string;
+	/** The confirm this submit is expected to raise, by its affirmative's label. */
+	confirm?: string | RegExp;
 }
 
 /** Turn on Places for a workspace. Owner only; the switch posts to /settings/flag. */
@@ -262,9 +266,21 @@ export async function newPurchase(page: Page, slug: string, p: NewPurchase): Pro
 		}
 		await page.getByLabel(/Reveal on/).fill(p.sealUntil!);
 	}
+	if (p.bucket) {
+		// The picker carries each balance in its option text, so the label is not
+		// knowable up front. Find the option by its name and select by value.
+		const option = page.locator('select[name="bucketId"] option', { hasText: p.bucket });
+		await expect(option).toHaveCount(1);
+		await page.locator('select[name="bucketId"]').selectOption(await option.getAttribute('value'));
+	}
 	await page
 		.getByRole('button', { name: p.intent === 'log' ? 'Log it: already bought' : 'Ask first' })
 		.click();
+	if (p.confirm) {
+		const dialog = page.getByRole('alertdialog');
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('button', { name: p.confirm }).click();
+	}
 	await page.waitForURL(/\/purchases\/[0-9a-f-]+$/);
 	return page.url();
 }

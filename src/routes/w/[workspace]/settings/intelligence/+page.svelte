@@ -2,6 +2,9 @@
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
 	import Toggle from '$lib/components/Toggle.svelte';
+	import SettingGroup from '$lib/components/SettingGroup.svelte';
+	import Segmented from '$lib/components/Segmented.svelte';
+	import type { DiscretionMode } from '$lib/domain/visibility/discretion';
 	import {
 		ChevronLeft,
 		Check,
@@ -11,7 +14,8 @@
 		ScanEye,
 		ScanLine,
 		ShieldCheck,
-		Sparkles
+		Sparkles,
+		Wallet
 	} from '@lucide/svelte';
 
 	let { data, form } = $props();
@@ -34,11 +38,38 @@
 		apiKey = '';
 	});
 
-	const MODES = [
-		{ value: 'off', label: 'Off' },
-		{ value: 'local', label: 'Local' },
-		{ value: 'external', label: 'External' }
-	] as const;
+	/*
+	 * The two personal Safe to Spend preferences. Both are per-member, so neither
+	 * goes through /settings/flag (which is workspace-wide and owner-only) — they
+	 * use the member endpoints, which every member may write for themselves.
+	 *
+	 * Optimistic like every other switch: `display` moves first and the fetch
+	 * follows. A failure throws, which is what makes Toggle revert and warn.
+	 */
+	let display = $derived(data.safeToSpendDisplay as DiscretionMode);
+
+	async function setDisplay(next: DiscretionMode) {
+		const prev = display;
+		if (next === prev) return;
+		display = next;
+		try {
+			await postPref('member-pref', { pref: 'safeToSpendDisplay', value: next });
+		} catch (e) {
+			display = prev;
+			throw e;
+		}
+	}
+
+	const setMemberFlag = (flag: string, value: boolean) => postPref('member-flag', { flag, value });
+
+	async function postPref(endpoint: string, body: Record<string, unknown>) {
+		const res = await fetch(`/w/${slug}/settings/${endpoint}`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify(body)
+		});
+		if (!res.ok) throw new Error(String(res.status));
+	}
 
 	const testResult = $derived(form && 'test' in form ? form.test : null);
 	const geoHealth = $derived(form && 'geocoder' in form ? form.geocoder : null);
@@ -104,6 +135,60 @@
 			style="color: var(--accent-ink)">How it works</a
 		>
 	</div>
+
+	<!--
+		How you read the headline, moved here from the ledger's filter sheet.
+		Everything else in that sheet resets when you leave the page; this does
+		not, so it was the one durable preference sitting among transient ones.
+
+		The switch is "show it at all". Off is the whole feature gone from the
+		ledger, which is why the two ways of showing it only appear once it's on.
+	-->
+	<SettingGroup
+		title="Safe to Spend"
+		description="The headline on your ledger: how much is free to spend this month. This is your own view, so it counts only what you can see."
+		icon={Wallet}
+		on={display !== 'off'}
+		onToggle={(next) => setDisplay(next ? 'masked' : 'off')}
+	>
+		<div class="space-y-4">
+			<Segmented
+				options={[
+					{ value: 'masked', label: 'Hidden until tapped' },
+					{ value: 'shown', label: 'Always shown' }
+				]}
+				value={display}
+				onselect={(v) => setDisplay(v as DiscretionMode)}
+				label="On the ledger"
+				size="sm"
+			/>
+			<p class="text-[12px] leading-relaxed" style="color: var(--ink-3)">
+				{#if display === 'masked'}
+					The digits read as dots until you tap the eye. They hide again next time you open the app.
+				{:else}
+					The figure is on screen whenever the ledger is.
+				{/if}
+			</p>
+
+			<div
+				class="flex items-start justify-between gap-4 border-t pt-4"
+				style="border-color: var(--hairline)"
+			>
+				<div>
+					<p class="text-[15px] font-medium" style="color: var(--ink)">The months after</p>
+					<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
+						Project the next few months from your recurring income, bills, and bucket accruals.
+						Shown inside the breakdown when you open it.
+					</p>
+				</div>
+				<Toggle
+					on={data.showRunwayMonths}
+					onToggle={(next) => setMemberFlag('showRunwayMonths', next)}
+					label="Toggle the months after"
+				/>
+			</div>
+		</div>
+	</SettingGroup>
 
 	<div class="card flex items-center justify-between gap-4 p-4">
 		<div>
@@ -320,47 +405,63 @@
 		use:submit={{ success: 'Intelligence settings saved', reset: false }}
 	>
 		<section class="card space-y-4 p-5">
-			<!-- Mode -->
-			<div>
-				<p class="section-label mb-2">Assist source</p>
-				<div
-					class="grid grid-cols-3 gap-1 rounded-xl p-1"
-					style="background: color-mix(in oklab, var(--ink) 5%, transparent)"
-				>
-					{#each MODES as m (m.value)}
-						<label
-							class="press cursor-pointer rounded-lg py-2 text-center text-[14px] font-medium"
-							style="background: {mode === m.value
-								? 'var(--surface)'
-								: 'transparent'}; color: {mode === m.value
-								? 'var(--ink)'
-								: 'var(--ink-3)'}; box-shadow: {mode === m.value
-								? 'inset 0 0 0 1px var(--hairline)'
-								: 'none'}"
-						>
-							<input
-								type="radio"
-								name="mode"
-								value={m.value}
-								bind:group={mode}
-								disabled={!owner}
-								class="sr-only"
-							/>
-							{m.label}
-						</label>
-					{/each}
+			<!--
+				The switch is the gate, and the source picker only exists once it is
+				open. Off was one of three equal-looking options, which put the two
+				you cannot use next to the one you can, and left the endpoint, model
+				and key fields on screen for a workspace that had said no to all of
+				it. Off is now the absence of the panel.
+
+				Still one unsaved form: nothing here writes until Save, which is why
+				Save stays on screen even with the panel closed. Turning it off and
+				saving is how you turn it off.
+			-->
+			<div class="flex items-start justify-between gap-4">
+				<div>
+					<p class="text-[15px] font-medium" style="color: var(--ink)">Let a model help</p>
+					<p class="mt-0.5 text-[13px] leading-relaxed" style="color: var(--ink-3)">
+						{#if mode === 'off'}
+							Off. Harmony uses the deterministic parsing it already ships with, and no model is
+							contacted.
+						{:else}
+							On for the fuzzy parts only. Every suggestion is checked against the app's own options
+							before you see it.
+						{/if}
+					</p>
 				</div>
-				<p class="mt-2 text-[12px] leading-relaxed" style="color: var(--ink-3)">
-					{#if mode === 'off'}
-						Deterministic only. No model is contacted.
-					{:else if mode === 'local'}
-						A model on your own machine over the Ollama API. Nothing leaves your server.
-					{:else}
-						Any OpenAI-compatible API. Text you send is processed by a third party, so use this only
-						if you're comfortable with that trade.
-					{/if}
-				</p>
+				{#if owner}
+					<Toggle
+						on={mode !== 'off'}
+						onToggle={(next) => {
+							mode = next ? 'local' : 'off';
+						}}
+						label="Toggle AI assistance"
+					/>
+				{/if}
 			</div>
+			<input type="hidden" name="mode" value={mode} />
+
+			{#if mode !== 'off'}
+				<div>
+					<Segmented
+						options={[
+							{ value: 'local', label: 'Local' },
+							{ value: 'external', label: 'External' }
+						]}
+						bind:value={mode}
+						label="Assist source"
+						size="sm"
+					/>
+					<p class="mt-2 text-[12px] leading-relaxed" style="color: var(--ink-3)">
+						{#if mode === 'local'}
+							A model on your own machine over the Ollama API. Nothing leaves your server.
+						{:else}
+							Any OpenAI-compatible API. Text you send is processed by a third party, so use this
+							only if you're comfortable with that trade.
+						{/if}
+					</p>
+				</div>
+			{/if}
 
 			{#if mode !== 'off'}
 				<div>
