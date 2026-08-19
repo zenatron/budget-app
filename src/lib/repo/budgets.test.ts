@@ -16,7 +16,6 @@ afterEach(async () => {
 const ids = { newId: () => crypto.randomUUID() };
 
 // A Wednesday in New York, so the Monday-start week is unambiguous.
-const NOW = new Date('2026-06-17T12:00:00Z');
 const TODAY = { y: 2026, m: 6, d: 17 };
 
 async function rows() {

@@ -331,7 +331,7 @@ function briefingRefusal(query: string, deps: AskDeps): AskOutcome | null {
  * signal to answer it from the repositories itself.
  */
 export async function answerAsk(deps: AskDeps, input: AskInput): Promise<AskOutcome | null> {
-	const { assist, currency, today } = deps;
+	const { assist, currency } = deps;
 	const { query, parsed } = input;
 
 	// 1. Our own grammar first. The model never gets to overrule a sentence we

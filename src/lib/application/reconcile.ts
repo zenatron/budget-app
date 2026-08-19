@@ -21,7 +21,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Db } from '$lib/db/types';
 import { purchase, statementImport, statementLine } from '$lib/db/schema';
 import { dedupKey, parseCsv, type CsvColumnMap } from '$lib/domain/reconcile/parse-csv';

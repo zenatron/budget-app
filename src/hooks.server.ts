@@ -24,7 +24,6 @@ import { materializeBucketAccruals } from '$lib/application/buckets';
 import { sweepExpiredShares } from '$lib/repo/shares';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
-import { getNotifier } from '$lib/server/notify';
 import { serverDeps } from '$lib/server/deps';
 import { user } from '$lib/db/schema';
 import { eq } from 'drizzle-orm';
