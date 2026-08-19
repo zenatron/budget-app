@@ -125,12 +125,28 @@ export async function incomeInPeriod(
 	timezone: string,
 	today: CalDate
 ): Promise<bigint> {
+	const rows = await memberIncomeBreakdown(db, workspaceId, period, timezone, today);
+	return rows.reduce((a, r) => a + r.incomeMinor, 0n);
+}
+
+/**
+ * The same period's income, per member — the input side of household
+ * settlement. Workspace-open like income itself: every member sees every
+ * member's figure, which is why settlement can be computed at all.
+ */
+export async function memberIncomeBreakdown(
+	db: Db,
+	workspaceId: string,
+	period: Period,
+	timezone: string,
+	today: CalDate
+): Promise<{ memberId: string; incomeMinor: bigint }[]> {
 	const from = zonedTimeToUtc(period.from, 0, 0, timezone);
 	const to = zonedTimeToUtc(period.toExclusive, 0, 0, timezone);
 
 	const [oneOffs, recurring] = await Promise.all([
 		db
-			.select({ amountMinor: income.amountMinor })
+			.select({ memberId: income.memberId, amountMinor: income.amountMinor })
 			.from(income)
 			.where(
 				and(
@@ -141,12 +157,21 @@ export async function incomeInPeriod(
 				)
 			),
 		db
-			.select({ id: income.id, amountMinor: income.amountMinor, rrule: income.rrule })
+			.select({
+				id: income.id,
+				memberId: income.memberId,
+				amountMinor: income.amountMinor,
+				rrule: income.rrule
+			})
 			.from(income)
 			.where(and(eq(income.workspaceId, workspaceId), isNotNull(income.rrule)))
 	]);
 
-	let total = oneOffs.reduce((a, r) => a + r.amountMinor, 0n);
+	const byMember = new Map<string, bigint>();
+	const add = (memberId: string, amount: bigint) =>
+		byMember.set(memberId, (byMember.get(memberId) ?? 0n) + amount);
+
+	for (const r of oneOffs) add(r.memberId, r.amountMinor);
 	for (const r of recurring) {
 		if (!r.rrule) continue;
 		try {
@@ -156,7 +181,7 @@ export async function incomeInPeriod(
 				const occ = nextOccurrence(rec, cursor);
 				if (compareDates(occ, period.toExclusive) >= 0) break;
 				if (compareDates(occ, today) > 0) break;
-				total += r.amountMinor;
+				add(r.memberId, r.amountMinor);
 				cursor = occ;
 			}
 		} catch (e) {
@@ -172,5 +197,5 @@ export async function incomeInPeriod(
 			);
 		}
 	}
-	return total;
+	return [...byMember.entries()].map(([memberId, incomeMinor]) => ({ memberId, incomeMinor }));
 }

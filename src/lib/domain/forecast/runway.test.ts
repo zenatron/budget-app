@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { parseRRule } from '$lib/domain/recurrence/rrule';
 import { projectRunway, nextMonthStart, type ProjectionInputs } from './runway';
 
-const monthly = (day: number) => parseRRule(`DTSTART=2026-01-01;FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=${day}`);
+const monthly = (day: number) =>
+	parseRRule(`DTSTART=2026-01-01;FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=${day}`);
 const JUL = { y: 2026, m: 7, d: 1 };
 
 const base: ProjectionInputs = {
@@ -25,7 +26,11 @@ describe('projectRunway', () => {
 		expect(r.clearMonths).toBe(3);
 		expect(r.firstShortMonth).toBeNull();
 		// Months walk forward correctly across the horizon.
-		expect(r.months.map((m) => `${m.month.y}-${m.month.m}`)).toEqual(['2026-7', '2026-8', '2026-9']);
+		expect(r.months.map((m) => `${m.month.y}-${m.month.m}`)).toEqual([
+			'2026-7',
+			'2026-8',
+			'2026-9'
+		]);
 	});
 
 	it('adds one-off income only to the month it lands in', () => {
@@ -54,6 +59,24 @@ describe('projectRunway', () => {
 		expect(r.firstShortMonth).toEqual({ y: 2026, m: 9, d: 1 });
 	});
 
+	it('marks a month estimated only when a confirm-at-price bill lands in it', () => {
+		// Every other month, on the 5th: Aug, Oct, Dec…
+		const variable = parseRRule('DTSTART=2026-08-05;FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=5');
+		const r = projectRunway(
+			{
+				...base,
+				billRules: [...base.billRules, { rec: variable, amountMinor: 150_000n, estimated: true }]
+			},
+			JUL,
+			3
+		);
+		expect(r.months[0].estimated).toBe(false); // Jul — the variable bill skips it
+		expect(r.months[1].estimated).toBe(true); // Aug — it lands
+		expect(r.months[2].estimated).toBe(false); // Sep — INTERVAL=2 skips it
+		// The flag is the bill's, not the picture's: fixed bills estimate nothing.
+		expect(projectRunway(base, JUL, 2).months.every((m) => !m.estimated)).toBe(true);
+	});
+
 	it('handles an empty picture as all-zero and all-clear', () => {
 		const r = projectRunway(
 			{ incomeRules: [], billRules: [], savingRules: [], oneOffIncome: [] },
@@ -68,6 +91,10 @@ describe('projectRunway', () => {
 	it('rolls the year boundary', () => {
 		expect(nextMonthStart({ y: 2026, m: 12, d: 1 })).toEqual({ y: 2027, m: 1, d: 1 });
 		const r = projectRunway(base, { y: 2026, m: 11, d: 1 }, 3);
-		expect(r.months.map((m) => `${m.month.y}-${m.month.m}`)).toEqual(['2026-11', '2026-12', '2027-1']);
+		expect(r.months.map((m) => `${m.month.y}-${m.month.m}`)).toEqual([
+			'2026-11',
+			'2026-12',
+			'2027-1'
+		]);
 	});
 });

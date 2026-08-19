@@ -509,7 +509,7 @@ export const budget = pgTable(
 );
 
 /**
- * One row per budget line per month: what the last alert said and when.
+ * One row per budget line per period: what the last alert said and when.
  * Keyed by category, not budget row id — replacing a budget (setBudget
  * deletes and reinserts the row) must not reset the cooldown or the alert
  * would repeat after every edit.
@@ -523,15 +523,20 @@ export const budgetAlertLog = pgTable(
 			.references(() => workspace.id),
 		/** Category id, or 'overall' for the all-category budget. */
 		categoryKey: text('category_key').notNull(),
-		/** The month this alert state belongs to, 'YYYY-MM'. */
-		month: text('month').notNull(),
+		/**
+		 * The period this alert state belongs to: 'YYYY-MM' for a monthly
+		 * budget, the week's first day 'YYYY-MM-DD' for a weekly one. The two
+		 * shapes can't collide, and a weekly overspend never satisfies a monthly
+		 * cooldown.
+		 */
+		periodKey: text('period_key').notNull(),
 		/** 'nearing' | 'exceeded'. */
 		level: text('level').notNull(),
 		/** Spend reported in the last alert; re-alerts measure growth from here. */
 		actualMinor: bigint('actual_minor', { mode: 'bigint' }).notNull(),
 		lastAlertedAt: timestamp('last_alerted_at', { withTimezone: true }).notNull()
 	},
-	(t) => [uniqueIndex('budget_alert_log_scope_idx').on(t.workspaceId, t.categoryKey, t.month)]
+	(t) => [uniqueIndex('budget_alert_log_scope_idx').on(t.workspaceId, t.categoryKey, t.periodKey)]
 );
 
 export const bucket = pgTable(

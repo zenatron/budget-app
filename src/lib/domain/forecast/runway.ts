@@ -17,13 +17,19 @@
  * Pure: the repo gathers the rules and hands them in. All math is bigint minor
  * units, so nothing rounds.
  */
-import { addDays, type CalDate, type Recurrence } from '$lib/domain/recurrence/rrule';
+import { type CalDate, type Recurrence } from '$lib/domain/recurrence/rrule';
 import { sumRecurringInWindow } from './safe-to-spend';
 
 /** A repeating cash flow — an income source, a bill, or a bucket accrual. */
 export interface RecurringFlow {
 	rec: Recurrence;
 	amountMinor: bigint;
+	/**
+	 * True for a confirm-at-price bill: the amount is the rule's best guess of
+	 * what will be owed, not a figure anyone has verified. Bills only — income
+	 * and bucket accruals are always the rule's own amounts.
+	 */
+	estimated?: boolean;
 }
 
 /** A known, dated, one-time income (a bonus, a gift), not a repeat. */
@@ -49,6 +55,12 @@ export interface MonthProjection {
 	savingsMinor: bigint;
 	/** income − bills − savings. Negative means the month is projected short. */
 	freeMinor: bigint;
+	/**
+	 * True when any bill behind this month projects at a price that isn't final
+	 * (a confirm-at-price rule landed in it). The notation is the caller's —
+	 * the ledger wears a dotted underline for the same fact this month.
+	 */
+	estimated: boolean;
 }
 
 export interface Runway {
@@ -97,10 +109,15 @@ export function projectRunway(inputs: ProjectionInputs, firstMonth: CalDate, k: 
 			0n
 		);
 		const incomeMinor = recurringIncome + oneOff;
-		const billsMinor = inputs.billRules.reduce(
-			(sum, f) => sum + sumRecurringInWindow(f.rec, f.amountMinor, start, end),
-			0n
-		);
+		// A month is an estimate if any confirm-at-price bill actually lands in
+		// it — a rule that doesn't contribute has no bearing on the figure, the
+		// same line upcomingBills draws for this month.
+		let estimated = false;
+		const billsMinor = inputs.billRules.reduce((sum, f) => {
+			const part = sumRecurringInWindow(f.rec, f.amountMinor, start, end);
+			if (part > 0n && f.estimated) estimated = true;
+			return sum + part;
+		}, 0n);
 		const savingsMinor = inputs.savingRules.reduce(
 			(sum, f) => sum + sumRecurringInWindow(f.rec, f.amountMinor, start, end),
 			0n
@@ -110,7 +127,8 @@ export function projectRunway(inputs: ProjectionInputs, firstMonth: CalDate, k: 
 			incomeMinor,
 			billsMinor,
 			savingsMinor,
-			freeMinor: incomeMinor - billsMinor - savingsMinor
+			freeMinor: incomeMinor - billsMinor - savingsMinor,
+			estimated
 		});
 		start = end;
 	}
@@ -124,6 +142,3 @@ export function projectRunway(inputs: ProjectionInputs, firstMonth: CalDate, k: 
 
 	return { months, clearMonths, firstShortMonth: firstShort ? firstShort.month : null };
 }
-
-/** Keeps `addDays` imported for callers that build windows off a CalDate. */
-export const _dateHelpers = { addDays };

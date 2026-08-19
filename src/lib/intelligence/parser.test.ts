@@ -249,3 +249,61 @@ describe('parse — log purchase', () => {
 		});
 	});
 });
+
+describe('parse — week periods', () => {
+	it('resolves "this week" and "last week" as week offsets', () => {
+		const r = at('how much did we spend this week');
+		expect(r.intent).toBe('spending_query');
+		if (r.intent !== 'spending_query') return;
+		expect(r.period).toMatchObject({ type: 'week', weekOffset: 0, label: 'this week' });
+		const last = at('what did alice spend last week');
+		expect(last.intent).toBe('spending_query');
+		if (last.intent !== 'spending_query') return;
+		expect(last.period).toMatchObject({ type: 'week', weekOffset: -1, label: 'last week' });
+	});
+});
+
+describe('parse — safe to spend', () => {
+	it('routes the free-cash question to the engine, not a model', () => {
+		expect(at('how much can I spend?')).toEqual({ intent: 'safe_to_spend' });
+		expect(at("what's safe to spend")).toEqual({ intent: 'safe_to_spend' });
+		expect(at('how much free cash')).toEqual({ intent: 'safe_to_spend' });
+	});
+
+	it('does not steal an ordinary spending question', () => {
+		expect(at('how much did I spend on coffee').intent).toBe('spending_query');
+	});
+});
+
+describe('parse — set budget', () => {
+	it('reads "set groceries budget to 400" as a monthly budget', () => {
+		const r = at('set groceries budget to 400');
+		expect(r).toEqual({
+			intent: 'set_budget',
+			category: 'groceries',
+			amount: 400,
+			period: 'month'
+		});
+	});
+
+	it('reads a weekly cadence', () => {
+		const r = at('budget 100 a week for food');
+		expect(r).toEqual({ intent: 'set_budget', category: 'food', amount: 100, period: 'week' });
+		const wk = at('set the food budget to 100 weekly');
+		expect(wk).toEqual({ intent: 'set_budget', category: 'food', amount: 100, period: 'week' });
+	});
+
+	it('treats a bare cadence or "everything" as the overall cap', () => {
+		const r = at('set monthly budget to 2000');
+		expect(r).toMatchObject({ intent: 'set_budget', category: 'everything', period: 'month' });
+		expect(at('cap everything at 2000')).toMatchObject({
+			intent: 'set_budget',
+			category: 'everything',
+			amount: 2000
+		});
+	});
+
+	it('does not steal a budget question', () => {
+		expect(at('how much budget is left').intent).not.toBe('set_budget');
+	});
+});

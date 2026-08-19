@@ -31,6 +31,7 @@ export type ParsedAction =
 			monthly: boolean;
 			dayOfMonth: number;
 	  }
+	| { intent: 'set_budget'; category: string; amount: number; period: 'month' | 'week' }
 	| { intent: 'log_purchase' }
 	| { intent: 'navigate'; target: NavigateTarget }
 	| { intent: 'unknown' };

@@ -8,12 +8,19 @@
 	import Money from '$lib/components/Money.svelte';
 	import CategoryRing from '$lib/components/CategoryRing.svelte';
 	import Segmented from '$lib/components/Segmented.svelte';
+	import { settleUp } from '$lib/domain/household/settlement';
 	import { ChevronRight, Map as MapIcon, MapPin, X, Sparkles } from '@lucide/svelte';
 	import { page } from '$app/state';
 	import { ledgerLink } from '$lib/ledger-filters';
 	let { data } = $props();
 	const slug = $derived(page.params.workspace!);
 	let showBudgetForm = $state(false);
+	// The form's cadence, defaulting to the view it was opened from — the week
+	// view probably means a weekly cap, the month view a monthly one.
+	let budgetCadence = $state<'month' | 'week'>('month');
+	$effect(() => {
+		budgetCadence = period === 'week' ? 'week' : 'month';
+	});
 	const currency = $derived(data.workspace.currency);
 	const period = $derived(data.period);
 	const isMonth = $derived(period === 'month');
@@ -184,17 +191,15 @@
 		)
 	);
 	const overall = $derived(
-		isMonth
-			? (data.budgets.find((b: { categoryId: string | null }) => b.categoryId === null) as
-					{ budgetMinor: bigint; actualMinor: bigint } | undefined)
-			: undefined
+		data.budgets.find((b: { categoryId: string | null }) => b.categoryId === null) as
+			{ budgetMinor: bigint; actualMinor: bigint } | undefined
 	);
 	const overallPct = $derived(
 		overall && overall.budgetMinor > 0n
 			? Number((overall.actualMinor * 1000n) / overall.budgetMinor) / 1000
 			: null
 	);
-	const overBudget = $derived(isMonth && overallPct !== null && overallPct > 1);
+	const overBudget = $derived(overallPct !== null && overallPct > 1);
 
 	/*
 	 * Net position, as three movements rather than two.
@@ -207,6 +212,15 @@
 	 * spending — see domain/bucket/flows.
 	 */
 	const savings = $derived(data.savingsMinor ?? 0n);
+
+	/*
+	 * Settlement — see the "Settle up" section below. The basis toggle is a
+	 * display choice over data already on the page, so the pure domain function
+	 * runs here rather than costing a server round trip per switch.
+	 */
+	let shareBasis = $state<'equal' | 'income'>('equal');
+	const settleUpMembers = $derived(data.settlementMembers ?? []);
+	const settlement = $derived(settleUp(settleUpMembers, shareBasis));
 	/** What the buckets hold right now — a balance, not this period's flow. */
 	const onHand = $derived(data.onHandMinor ?? 0n);
 	const released = $derived(data.releasedMinor ?? 0n);
@@ -474,7 +488,7 @@
 		<div class="mt-4 flex justify-center">
 			<CategoryRing
 				segments={catSegments}
-				cap={isMonth && overall ? overall.budgetMinor : 0n}
+				cap={overall ? overall.budgetMinor : 0n}
 				size={200}
 				stroke={14}
 			>
@@ -485,7 +499,7 @@
 						block
 						class="font-[family-name:var(--font-display)] text-[24px] leading-none font-bold"
 					/>
-					{#if isMonth && overallPct !== null}
+					{#if overallPct !== null}
 						<p class="num mt-1 text-[11px]" style="color: var(--ink-3)">
 							of {formatMinor(overall!.budgetMinor, currency)}
 						</p>
@@ -493,7 +507,7 @@
 				</div>
 			</CategoryRing>
 		</div>
-		{#if isMonth && overallPct !== null}
+		{#if overallPct !== null}
 			<p
 				class="mt-5 text-center text-[13px] font-medium"
 				style="color: {overBudget ? 'var(--deny)' : 'var(--ink-3)'}"
@@ -757,7 +771,7 @@
 		{/if}
 	</div>
 
-	{#if isMonth && (data.budgets.length > 0 || data.isOwner)}
+	{#if (isMonth || period === 'week') && (data.budgets.length > 0 || data.isOwner)}
 		<div>
 			<div class="mb-3 flex items-center justify-between px-1">
 				<p class="section-label">Budgets</p>
@@ -800,18 +814,38 @@
 						</label>
 					</div>
 					<div class="flex items-end gap-2">
+						<!--
+							The cadence is a first-class choice, not a view artifact: a
+							weekly grocery cap and a monthly one are separate timelines, and
+							both may exist for the same scope at once.
+						-->
+						<label class="w-32">
+							<span class="text-[11px]" style="color: var(--ink-3)">Cadence</span>
+							<select name="period" bind:value={budgetCadence} class="field mt-1 text-[16px]">
+								<option value="month">Monthly</option>
+								<option value="week">Weekly</option>
+							</select>
+						</label>
 						<label class="flex-1">
 							<span class="text-[11px]" style="color: var(--ink-3)">Starts</span>
-							<select name="effectiveMonth" class="field mt-1 text-[16px]">
-								{#each data.budgetMonths as m (m.value)}
-									<option value={m.value}>{m.label}</option>
-								{/each}
-							</select>
+							{#if budgetCadence === 'week'}
+								<select name="effectiveWeek" class="field mt-1 text-[16px]">
+									{#each data.budgetWeeks as w (w.value)}
+										<option value={w.value}>{w.label}</option>
+									{/each}
+								</select>
+							{:else}
+								<select name="effectiveMonth" class="field mt-1 text-[16px]">
+									{#each data.budgetMonths as m (m.value)}
+										<option value={m.value}>{m.label}</option>
+									{/each}
+								</select>
+							{/if}
 						</label>
 						<button class="btn btn-accent shrink-0 px-4 py-3 text-[15px]">Save</button>
 					</div>
 					<p class="px-1 text-[12px]" style="color: var(--ink-3)">
-						Applies from that month onward until you set another.
+						Applies from that {budgetCadence === 'week' ? 'week' : 'month'} onward until you set another.
 					</p>
 				</form>
 			{/if}
@@ -829,7 +863,9 @@
 							<span style="color: var(--ink-2)">
 								{s.categoryIcon ?? ''}
 								{s.categoryName ?? 'Everything'}
-								<span style="color: var(--ink-3)">· from {s.label}</span>
+								<span style="color: var(--ink-3)"
+									>· {s.period === 'week' ? 'weekly' : 'monthly'} from {s.label}</span
+								>
 							</span>
 							<span class="flex items-center gap-2">
 								<span class="num" style="color: var(--ink)"
@@ -840,7 +876,7 @@
 										method="POST"
 										action="?/removeScheduledBudget"
 										use:submit={{
-											confirm: `Remove the ${s.label} budget?`,
+											confirm: `Remove the budget starting ${s.label}?`,
 											success: 'Scheduled budget removed'
 										}}
 									>
@@ -1022,6 +1058,83 @@
 			</div>
 		{/if}
 	</div>
+
+	<!--
+		Settle up: the household answer to "who owes whom". Spending is treated
+		as shared; each member owes a fair share of it (evenly, or weighted by
+		what they earned — the toggle), and the difference against what they
+		paid becomes the transfers that zero everyone out.
+
+		The figures are this viewer's: a sealed gift is recomputed away, the
+		same as every other number on this page, so two people can see two
+		settlements and both be right about what they can see.
+	-->
+	{#if settleUpMembers.length >= 2 && data.totalMinor > 0n}
+		<div>
+			<div class="mb-2 flex items-center justify-between px-1">
+				<p class="section-label">Settle up</p>
+				<Segmented
+					options={[
+						{ value: 'equal', label: 'Evenly' },
+						{ value: 'income', label: 'By income' }
+					]}
+					value={shareBasis}
+					onselect={(v) => (shareBasis = v as 'equal' | 'income')}
+					ariaLabel="Fair share basis"
+				/>
+			</div>
+			<div style="border-top: 0.5px solid var(--hairline)">
+				{#each settlement.shares as s (s.memberId)}
+					<div class="hairline flex items-center justify-between gap-3 py-3">
+						<span class="min-w-0 text-[15px]" style="color: var(--ink)">
+							{s.name}
+							<span class="num text-[12px]" style="color: var(--ink-3)">
+								· paid {formatMinor(s.paidMinor, currency)} · share {formatMinor(
+									s.fairShareMinor,
+									currency
+								)}
+							</span>
+						</span>
+						<span
+							class="num shrink-0 text-[15px] font-medium"
+							style="color: {s.owedMinor > 0n
+								? 'var(--pending)'
+								: s.owedMinor < 0n
+									? 'var(--approve)'
+									: 'var(--ink-3)'}"
+						>
+							{#if s.owedMinor > 0n}
+								owes {formatMinor(s.owedMinor, currency)}
+							{:else if s.owedMinor < 0n}
+								is owed {formatMinor(-s.owedMinor, currency)}
+							{:else}
+								even
+							{/if}
+						</span>
+					</div>
+				{/each}
+			</div>
+			{#if settlement.transfers.length > 0}
+				<div class="mt-3 rounded-[14px] p-3.5" style="background: var(--surface-2)">
+					<p class="section-label mb-1.5">To settle</p>
+					{#each settlement.transfers as t (`${t.fromId}-${t.toId}`)}
+						<p class="py-0.5 text-[14px]" style="color: var(--ink-2)">
+							{t.fromName} pays {t.toName}
+							<span class="num font-medium" style="color: var(--ink)"
+								>{formatMinor(t.amountMinor, currency)}</span
+							>
+						</p>
+					{/each}
+				</div>
+			{/if}
+			<p class="mt-2 px-1 text-[12px] leading-relaxed" style="color: var(--ink-3)">
+				Fair shares of this {period}'s shared spending{settlement.basis === 'income'
+					? ', weighted by what each person earned'
+					: ''}.
+				{#if settlement.transfers.length === 0}Already even.{/if}
+			</p>
+		</div>
+	{/if}
 
 	<!--
 		Lifetime totals, deliberately outside the period navigation above — these

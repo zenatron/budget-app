@@ -130,7 +130,11 @@ export async function forecastMonths(
 			.from(income)
 			.where(eq(income.workspaceId, scope.workspaceId)),
 		db
-			.select({ amountMinor: recurringRule.amountMinor, rrule: recurringRule.rrule })
+			.select({
+				amountMinor: recurringRule.amountMinor,
+				rrule: recurringRule.rrule,
+				autoComplete: recurringRule.autoComplete
+			})
 			.from(recurringRule)
 			.where(
 				and(eq(recurringRule.workspaceId, scope.workspaceId), eq(recurringRule.status, 'active'))
@@ -168,7 +172,14 @@ export async function forecastMonths(
 	}
 	for (const r of billRows) {
 		try {
-			inputs.billRules.push({ rec: parseRRule(r.rrule), amountMinor: r.amountMinor });
+			// A confirm-at-price rule projects at its last-known amount, so the
+			// months it lands in carry the estimate flag — the same signal
+			// upcomingBills turns into this month's dotted figure.
+			inputs.billRules.push({
+				rec: parseRRule(r.rrule),
+				amountMinor: r.amountMinor,
+				estimated: !r.autoComplete
+			});
 		} catch {
 			/* skip */
 		}

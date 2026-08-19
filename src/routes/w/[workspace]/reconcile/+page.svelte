@@ -531,6 +531,13 @@
 									aria-label="Read from a picture"
 								/>
 							{/if}
+							{#if imp.closed}
+								<span
+									class="chip shrink-0"
+									style="color: var(--approve); background: color-mix(in oklab, var(--approve) 14%, transparent)"
+									>Closed</span
+								>
+							{/if}
 						</p>
 						<p class="mt-0.5 truncate text-[13px]" style="color: var(--ink-3)">
 							{imp.lineCount}

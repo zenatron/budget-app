@@ -35,6 +35,20 @@ export interface NavigateCommand {
 	target: 'analytics' | 'buckets' | 'recurring' | 'income' | 'purchases' | 'settings';
 }
 
+/** Set (or replace) a budget from the palette: "set groceries budget to 400". */
+export interface SetBudgetCommand {
+	intent: 'set_budget';
+	/** Category name as typed; "everything"/"overall" means the overall cap. */
+	category: string;
+	amount: number;
+	period: 'month' | 'week';
+}
+
+/** "How much can I spend?" — answered from Safe to Spend, no model involved. */
+export interface SafeToSpendQuery {
+	intent: 'safe_to_spend';
+}
+
 /**
  * A command we routed but couldn't complete. Distinct from `unknown`: we know
  * what the user is trying to do, so the UI can say what's missing instead of
@@ -68,15 +82,20 @@ export type ParsedIntent =
 	| NetQuery
 	| CreateBucketCommand
 	| CreateIncomeCommand
+	| SetBudgetCommand
+	| SafeToSpendQuery
 	| NavigateCommand
 	| LogPurchaseCommand
 	| IncompleteResult
 	| UnknownResult;
 
 export interface TimePeriod {
-	type: 'month' | 'year';
+	/** 'week' carries `weekOffset` (0 this, −1 last); the workspace's week-start
+	 *  convention is applied by the caller, who knows it. */
+	type: 'month' | 'year' | 'week';
 	month?: number;
 	year: number;
+	weekOffset?: number;
 	label: string;
 }
 
@@ -163,6 +182,15 @@ function resolvePeriod(input: string, now: Date): TimePeriod {
 		const m = currentMonth === 1 ? 12 : currentMonth - 1;
 		const y = currentMonth === 1 ? currentYear - 1 : currentYear;
 		return { type: 'month', month: m, year: y, label: 'last month' };
+	}
+
+	// "this week" / "last week" — resolved to real bounds by the caller, which
+	// knows the workspace's week-start day; here they are just offsets.
+	if (/\bthis\s+week\b/.test(lower)) {
+		return { type: 'week', year: currentYear, weekOffset: 0, label: 'this week' };
+	}
+	if (/\blast\s+week\b/.test(lower)) {
+		return { type: 'week', year: currentYear, weekOffset: -1, label: 'last week' };
 	}
 
 	// "this year"
@@ -373,6 +401,56 @@ export function parse(input: string, now: Date = new Date()): ParsedIntent {
 		return { intent: 'log_purchase', text: input.trim() };
 	}
 
+	// Set a budget: "set groceries budget to 400", "budget 100 a week for food",
+	// "cap everything at 2000". The category is resolved against the workspace's
+	// real categories by the execute endpoint, not here — typing shouldn't have
+	// to spell a category the way the settings page writes it.
+	{
+		const budgetMatch =
+			lower.match(
+				/\b(?:set|make|put|cap)\s+(?:the\s+|a\s+|our\s+)?(.{1,40}?)\s+budget\s+(?:to|at|of)\s+\$?(\d+(?:\.\d{1,2})?)\s*(\/mo|per\s+month|monthly|a\s+month|\/wk|per\s+week|weekly|a\s+week)?/
+			) ??
+			lower.match(
+				/\bbudget\s+\$?(\d+(?:\.\d{1,2})?)\s*(\/mo|per\s+month|monthly|a\s+month|\/wk|per\s+week|weekly|a\s+week)?\s+for\s+(.{1,40}?)(?:\s*$|\?)/
+			) ??
+			lower.match(
+				/\b(?:cap|set)\s+(everything|overall|everything\s+budget)\s+(?:to|at)\s+\$?(\d+(?:\.\d{1,2})?)\s*(\/mo|per\s+month|monthly|a\s+month|\/wk|per\s+week|weekly|a\s+week)?/
+			);
+		if (budgetMatch) {
+			// The three patterns capture in different orders; normalize.
+			const isBudgetFirst = /^budget/.test(budgetMatch[0]);
+			const isCapEverything = /^(?:cap|set)\s+(everything|overall)/.test(budgetMatch[0]);
+			const amountStr = isBudgetFirst ? budgetMatch[1] : budgetMatch[2];
+			const cadence = (isBudgetFirst ? budgetMatch[2] : budgetMatch[3]) ?? '';
+			const amount = parseFloat(amountStr);
+			if (Number.isFinite(amount)) {
+				let category = (
+					isBudgetFirst ? budgetMatch[3] : isCapEverything ? 'everything' : budgetMatch[1]
+				)
+					.replace(/\b(?:the|my|our|monthly|weekly)\b/g, '')
+					.trim();
+				if (!category || /^(?:month|week)$/.test(category)) category = 'everything';
+				return {
+					intent: 'set_budget',
+					category,
+					amount,
+					period: /wk|week/.test(cadence) ? 'week' : 'month'
+				};
+			}
+		}
+	}
+
+	// Safe to Spend: "how much can I spend", "what's free to spend". Answered
+	// from the engine itself — the one money question that should never wait on
+	// a model or a briefing.
+	if (
+		/\b(?:how\s+much\s+(?:can|could|should)\s+(?:i|we)\s+spend|what(?:'s| is)\s+(?:free|safe)\s+to\s+spend|safe\s+to\s+spend|free\s+cash)\b/.test(
+			lower
+		)
+	) {
+		return { intent: 'safe_to_spend' };
+	}
+
 	// Net position / savings rate: "what's my net", "savings rate", "how much am i saving"
 	if (
 		/\b(?:net\s+position|savings?\s+rate|how\s+much\s+am\s+i\s+saving|what(?:'s| is) my net|net worth)\b/.test(
@@ -420,7 +498,9 @@ export function parse(input: string, now: Date = new Date()): ParsedIntent {
 
 export const EXAMPLE_PROMPTS = [
 	'how much did I spend on groceries last month?',
-	'what did alice spend this month?',
+	'how much can I spend?',
+	'set groceries budget to 400',
+	'what did alice spend this week?',
 	'create a travel bucket of 500/mo on the 15th',
 	'add income of 4800 per month on the first',
 	"what's my net position?",
@@ -547,6 +627,30 @@ export function understand(input: string, now: Date = new Date()): Understanding
 				intent: parsed.intent,
 				label: 'Open',
 				slots: [{ label: 'Page', value: parsed.target }],
+				missing: [],
+				suggestions: [],
+				ready: true
+			};
+
+		case 'set_budget':
+			return {
+				intent: parsed.intent,
+				label: 'Set budget',
+				slots: [
+					{ label: 'Category', value: parsed.category },
+					{ label: 'Amount', value: String(parsed.amount) },
+					{ label: 'Cadence', value: parsed.period === 'week' ? 'weekly' : 'monthly' }
+				],
+				missing: [],
+				suggestions: [],
+				ready: true
+			};
+
+		case 'safe_to_spend':
+			return {
+				intent: parsed.intent,
+				label: 'Safe to Spend',
+				slots: [],
 				missing: [],
 				suggestions: [],
 				ready: true

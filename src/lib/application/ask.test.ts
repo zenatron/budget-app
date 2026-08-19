@@ -236,3 +236,54 @@ describe('askOutcomeToWire', () => {
 		).toEqual({ intent: 'create_bucket', answer: 'I need a name.' });
 	});
 });
+
+describe('answerAsk — budgets and Safe to Spend', () => {
+	it('proposes a monthly budget without consulting the model', async () => {
+		const parseCommand = vi.fn(async () => null);
+		const out = await ask('set groceries budget to 400', {
+			assist: fakeAssist({ parseCommand })
+		});
+
+		expect(out).toMatchObject({ kind: 'proposal', intent: 'propose' });
+		expect(out && 'propose' in out && out.propose).toMatchObject({
+			intent: 'set_budget',
+			category: 'groceries',
+			period: 'month'
+		});
+		expect(parseCommand).not.toHaveBeenCalled();
+	});
+
+	it('refuses a non-positive budget amount rather than proposing it', async () => {
+		const out = await ask('set groceries budget to 0');
+		expect(out).toMatchObject({ kind: 'proposal', intent: 'set_budget' });
+		// No propose payload: the amount never became money.
+		expect(out && 'propose' in out ? out.propose : undefined).toBeUndefined();
+	});
+
+	it('hands Safe to Spend back to the route as a data intent', async () => {
+		const out = await ask('how much can I spend?');
+		expect(out).toBeNull();
+	});
+});
+
+describe('answerAsk — the wider window', () => {
+	it('refuses a named month outside the briefing, naming what it covers', async () => {
+		// A shape the deterministic parser does not recognize, naming a month.
+		const out = await ask('did we blow through money in march');
+		expect(out).toMatchObject({ kind: 'refusal' });
+		if (!out || out.kind !== 'refusal') return;
+		expect(out.answer).toContain('this month and last month');
+		expect(out.answer).toContain('march');
+	});
+
+	it('answers for a named month the briefing was built around', async () => {
+		const out = await ask('did we blow through money in march', {
+			coveredMonths: [{ y: 2026, m: 3 }],
+			briefing: async () => 'The month asked about (March 2026): spent $500.'
+		});
+		// The scope guard passed it through: the terminal answer is the generic
+		// fallback (the fake assist answers nothing), never the window refusal.
+		expect(out).not.toBeNull();
+		expect(out && 'answer' in out ? out.answer : '').not.toContain('only answer for');
+	});
+});

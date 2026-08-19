@@ -78,12 +78,16 @@
 		if (p.intent === 'create_income') {
 			return `Add income “${p.source}”: ${formatMinor(BigInt(p.amountMinor), currency)}${p.monthly ? ` monthly on day ${p.dayOfMonth}` : ' once'}`;
 		}
+		if (p.intent === 'set_budget') {
+			return `${p.period === 'week' ? 'Weekly' : 'Monthly'} budget for ${p.category === 'everything' ? 'everything' : `“${p.category}”`}: ${formatMinor(BigInt(p.amountMinor), currency)}`;
+		}
 		return `Open ${p.label}`;
 	}
 
 	function proposalButton(p: Proposal): string {
 		if (p.intent === 'create_bucket') return 'Create bucket';
 		if (p.intent === 'create_income') return 'Add income';
+		if (p.intent === 'set_budget') return 'Set budget';
 		return 'Open';
 	}
 </script>

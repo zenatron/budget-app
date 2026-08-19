@@ -56,7 +56,7 @@ import {
 	loadOwnBucket
 } from '$lib/repo/buckets';
 import { addIncome, listIncome, updateIncome, deleteIncome } from '$lib/repo/income';
-import { setBudget, schedulableBudgetMonths } from '$lib/repo/budgets';
+import { setBudget, schedulableBudgetMonths, schedulableBudgetWeeks } from '$lib/repo/budgets';
 import {
 	createRule,
 	updateRule,
@@ -76,9 +76,11 @@ import {
 import { listLedger } from '$lib/repo/ledger';
 import { listPurchases, loadPurchase, listEvents, memberNames } from '$lib/repo/purchases';
 import { listCategories, listMembers } from '$lib/repo/workspaces';
+import { memberIncomeBreakdown } from '$lib/repo/income';
+import { settleUp } from '$lib/domain/household/settlement';
 import { accountLabel, listAccounts } from '$lib/repo/accounts';
 import { listBuckets } from '$lib/repo/buckets';
-import { safeToSpend } from '$lib/repo/forecast';
+import { safeToSpend, forecastMonths } from '$lib/repo/forecast';
 import { narrateSafeToSpend } from '$lib/domain/forecast/safe-to-spend';
 import {
 	periodTotal,
@@ -613,6 +615,71 @@ export const TOOLS: McpTool[] = [
 		}
 	},
 	{
+		name: 'forecast',
+		description:
+			'Projected free cash for the months after this one (default 3, max 12), built from recurring income, bills, bucket accruals, and one-off income already dated ahead. Reports each month\'s projected free figure, the first month projected short, and months whose bills include a confirm-at-price estimate. Nothing in it is spent yet. Use for "are we alright next month?" questions.',
+		scope: 'read',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				months: { type: 'integer', description: 'How many months to project, 1–12 (default 3).' }
+			},
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const months = Math.min(Math.max(Math.trunc(Number(args.months) || 3), 1), 12);
+			const r = await forecastMonths(
+				ctx.db,
+				{ ...viewScope(ctx), timezone: ctx.authed.workspace.timezone },
+				ctx.now,
+				months
+			);
+			const monthNames = [
+				'Jan',
+				'Feb',
+				'Mar',
+				'Apr',
+				'May',
+				'Jun',
+				'Jul',
+				'Aug',
+				'Sep',
+				'Oct',
+				'Nov',
+				'Dec'
+			];
+			const label = (m: { y: number; m: number }) => `${monthNames[m.m - 1]} ${m.y}`;
+			const rows = r.months.map((m) => ({
+				month: `${m.month.y}-${String(m.month.m).padStart(2, '0')}`,
+				label: label(m.month),
+				free: fmt(m.freeMinor, ctx),
+				// A string, not Number(): minor units past 2^53 would lose precision,
+				// and this is a value a client may read and sum.
+				freeMinor: m.freeMinor.toString(),
+				estimated: m.estimated
+			}));
+			const data = {
+				months: rows,
+				clear_months: r.clearMonths,
+				first_short_month: r.firstShortMonth
+					? `${r.firstShortMonth.y}-${String(r.firstShortMonth.m).padStart(2, '0')}`
+					: null
+			};
+			const headline = r.firstShortMonth
+				? `First month projected short: ${label(r.firstShortMonth)}`
+				: `On track through ${rows[rows.length - 1]?.label ?? 'the horizon'}`;
+			const text =
+				`${headline} (projected, nothing spent yet)\n` +
+				rows
+					.map(
+						(d) =>
+							`- ${d.label}: ${d.free}${d.estimated ? ' (includes a bill awaiting its real price)' : ''}`
+					)
+					.join('\n');
+			return { text, data };
+		}
+	},
+	{
 		name: 'spending_trend',
 		description:
 			'Total spending per month over the last N months (default 6, max 24), oldest first, for spotting whether spending is rising or falling.',
@@ -678,15 +745,15 @@ export const TOOLS: McpTool[] = [
 	{
 		name: 'budget_status',
 		description:
-			'How spending tracks against category budgets for a month: budgeted, actual, and remaining (or over) per category.',
+			'How spending tracks against budgets: budgeted, actual, and remaining (or over) per category. this_month/last_month read monthly budgets; this_week/last_week read weekly ones.',
 		scope: 'read',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				period: {
 					type: 'string',
-					enum: ['this_month', 'last_month'],
-					description: 'Which month. Defaults to this_month.'
+					enum: ['this_month', 'last_month', 'this_week', 'last_week'],
+					description: 'Which period. Defaults to this_month.'
 				}
 			},
 			additionalProperties: false
@@ -694,12 +761,22 @@ export const TOOLS: McpTool[] = [
 		async handler(ctx, args) {
 			const tz = ctx.authed.workspace.timezone;
 			const today = calDateInZone(ctx.now, tz);
-			const period = args.period === 'last_month' ? previousMonthPeriod(today) : monthPeriod(today);
+			const wsd = ctx.authed.workspace.weekStartDay;
+			const kind = args.period === 'this_week' || args.period === 'last_week' ? 'week' : 'month';
+			const period =
+				args.period === 'last_month'
+					? previousMonthPeriod(today)
+					: args.period === 'this_week'
+						? weekPeriod(today, wsd)
+						: args.period === 'last_week'
+							? previousWeekPeriod(today, wsd)
+							: monthPeriod(today);
 			const lines = await budgetVsActual(
 				ctx.db,
 				{ ...viewScope(ctx), timezone: tz },
 				period,
-				ctx.now
+				ctx.now,
+				kind
 			);
 			const data = lines.map((l) => {
 				const remaining = l.budgetMinor - l.actualMinor;
@@ -717,6 +794,7 @@ export const TOOLS: McpTool[] = [
 					percent: pct
 				};
 			});
+			const noun = kind === 'week' ? 'week' : 'month';
 			const text = data.length
 				? data
 						.map(
@@ -724,14 +802,84 @@ export const TOOLS: McpTool[] = [
 								`- ${l.category}: ${l.spent} of ${l.budget} (${l.percent}%) · ${l.over ? `over by ${l.remaining}` : `${l.remaining} left`}`
 						)
 						.join('\n')
-				: 'No category budgets set for this month.';
+				: `No ${kind}ly budgets set for this ${noun}.`;
+			return { text, data };
+		}
+	},
+	{
+		name: 'household_settlement',
+		description:
+			'Who owes whom for a month: shared spending split into fair shares (evenly, or weighted by what each member earned — default evenly), each member\'s paid-vs-share balance, and the transfers that zero everyone out. Seal-aware, computed as the token\'s member sees it. Use for "what does Alex owe Sam?" questions.',
+		scope: 'read',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				period: {
+					type: 'string',
+					enum: ['this_month', 'last_month'],
+					description: 'Which month. Defaults to this_month.'
+				},
+				basis: {
+					type: 'string',
+					enum: ['equal', 'income'],
+					description: 'Fair-share basis: evenly (default) or weighted by income.'
+				}
+			},
+			additionalProperties: false
+		},
+		async handler(ctx, args) {
+			const tz = ctx.authed.workspace.timezone;
+			const today = calDateInZone(ctx.now, tz);
+			const period = args.period === 'last_month' ? previousMonthPeriod(today) : monthPeriod(today);
+			const basis = args.basis === 'income' ? 'income' : 'equal';
+
+			const scope = { ...viewScope(ctx), timezone: tz };
+			const [memberRows, paid, incomeRows] = await Promise.all([
+				listMembers(ctx.db, ctx.authed.workspace.id),
+				memberBreakdown(ctx.db, scope, period, ctx.now),
+				memberIncomeBreakdown(ctx.db, ctx.authed.workspace.id, period, tz, today)
+			]);
+			const paidBy = new Map(paid.map((p) => [p.memberId, p.totalMinor]));
+			const incomeBy = new Map(incomeRows.map((r) => [r.memberId, r.incomeMinor]));
+			const members = memberRows
+				.filter((r) => r.member.status === 'active')
+				.map((r) => ({
+					memberId: r.member.id,
+					name: r.user.displayName,
+					incomeMinor: incomeBy.get(r.member.id) ?? 0n,
+					paidMinor: paidBy.get(r.member.id) ?? 0n
+				}));
+
+			const s = settleUp(members, basis);
+			const data = {
+				basis: s.basis,
+				total_spent: fmt(s.totalSpentMinor, ctx),
+				shares: s.shares.map((x) => ({
+					member: x.name,
+					fair_share: fmt(x.fairShareMinor, ctx),
+					paid: fmt(x.paidMinor, ctx),
+					owed: fmt(x.owedMinor, ctx)
+				})),
+				transfers: s.transfers.map((t) => ({
+					from: t.fromName,
+					to: t.toName,
+					amount: fmt(t.amountMinor, ctx)
+				}))
+			};
+			const text =
+				(s.transfers.length
+					? s.transfers
+							.map((t) => `- ${t.fromName} pays ${t.toName} ${fmt(t.amountMinor, ctx)}`)
+							.join('\n')
+					: 'Everyone is even.') +
+				`\n(total ${data.total_spent}, split ${s.basis === 'income' ? 'by income' : 'evenly'}, as the token\'s member sees it)`;
 			return { text, data };
 		}
 	},
 	{
 		name: 'set_budget',
 		description:
-			'Set a monthly budget for a category (or the overall budget). Only workspace owners can. Effective this month by default, or a future month (YYYY-MM, up to 12 months out). Replaces the budget in force from that month; past months are untouched.',
+			"Set a budget for a category (or the overall budget), monthly by default or weekly. Only workspace owners can. Monthly takes effect this month or a future month (YYYY-MM, up to 12 out); weekly takes effect this week or a future week (the week's first day YYYY-MM-DD, up to 12 out). Replaces the budget of that cadence in force from that period; past periods and the other cadence are untouched.",
 		scope: 'write',
 		inputSchema: {
 			type: 'object',
@@ -741,9 +889,19 @@ export const TOOLS: McpTool[] = [
 					type: 'string',
 					description: 'Category to budget (see list_categories). Omit for the overall budget.'
 				},
+				period: {
+					type: 'string',
+					enum: ['month', 'week'],
+					description: 'Cadence: monthly (default) or weekly.'
+				},
 				effective_month: {
 					type: 'string',
-					description: 'Month it takes effect, YYYY-MM. Defaults to this month.'
+					description: 'Month a monthly budget takes effect, YYYY-MM. Defaults to this month.'
+				},
+				effective_week: {
+					type: 'string',
+					description:
+						"Week a weekly budget takes effect, the week's first day YYYY-MM-DD. Defaults to this week."
 				}
 			},
 			required: ['amount'],
@@ -758,23 +916,49 @@ export const TOOLS: McpTool[] = [
 
 			const tz = ctx.authed.workspace.timezone;
 			const today = calDateInZone(ctx.now, tz);
-			const allowed = schedulableBudgetMonths(today);
-			const chosen = str(args, 'effective_month') ?? allowed[0];
-			if (!allowed.includes(chosen)) {
-				return {
-					text: `effective_month must be between ${allowed[0]} and ${allowed.at(-1)} (this month through +12).`,
-					isError: true
-				};
+
+			let kind: 'month' | 'week' = 'month';
+			const periodArg = str(args, 'period');
+			if (periodArg === 'week') kind = 'week';
+			else if (periodArg === 'month') kind = 'month';
+			else if (periodArg) return { text: 'period must be "month" or "week".', isError: true };
+
+			let from: string;
+			let chosenLabel: string;
+			if (kind === 'week') {
+				const allowed = schedulableBudgetWeeks(today, ctx.authed.workspace.weekStartDay);
+				const chosen = str(args, 'effective_week') ?? allowed[0];
+				if (!allowed.includes(chosen)) {
+					return {
+						text: `effective_week must be between ${allowed[0]} and ${allowed.at(-1)} (this week through +12).`,
+						isError: true
+					};
+				}
+				from = chosen;
+				chosenLabel = chosen;
+			} else {
+				const allowed = schedulableBudgetMonths(today);
+				const chosen = str(args, 'effective_month') ?? allowed[0];
+				if (!allowed.includes(chosen)) {
+					return {
+						text: `effective_month must be between ${allowed[0]} and ${allowed.at(-1)} (this month through +12).`,
+						isError: true
+					};
+				}
+				from = `${chosen}-01`;
+				chosenLabel = chosen;
 			}
+
 			await setBudget(ctx.db, ctx.deps.ids, {
 				workspaceId: ctx.authed.workspace.id,
 				categoryId: str(args, 'category_id') ?? null,
 				amountMinor: amount.minor,
-				effectiveFrom: `${chosen}-01`
+				effectiveFrom: from,
+				period: kind
 			});
 			return {
-				text: `Set ${str(args, 'category_id') ? 'category' : 'overall'} budget to ${amount.format()} effective ${chosen}.`,
-				data: { amount: amount.format(), effective_month: chosen }
+				text: `Set ${str(args, 'category_id') ? 'category' : 'overall'} ${kind}ly budget to ${amount.format()} effective ${chosenLabel}.`,
+				data: { amount: amount.format(), period: kind, effective: chosenLabel }
 			};
 		}
 	},

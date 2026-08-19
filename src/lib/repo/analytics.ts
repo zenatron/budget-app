@@ -416,12 +416,18 @@ export interface BudgetLine {
 	actualMinor: bigint;
 }
 
-/** Month budgets in force during the period, with seal-filtered actuals. */
+/**
+ * Budgets of one cadence in force during the period, with seal-filtered
+ * actuals. Monthly and weekly budgets are separate timelines over the same
+ * scope, so the caller names the cadence it is viewing: a week view reads the
+ * weekly lines, a month view the monthly ones, and neither sees the other's.
+ */
 export async function budgetVsActual(
 	db: Db,
 	scope: AnalyticsScope,
 	period: Period,
-	now: Date
+	now: Date,
+	kind: 'month' | 'week' = 'month'
 ): Promise<BudgetLine[]> {
 	const pad = (n: number) => String(n).padStart(2, '0');
 	const fromStr = `${period.from.y}-${pad(period.from.m)}-${pad(period.from.d)}`;
@@ -438,7 +444,7 @@ export async function budgetVsActual(
 		.where(
 			and(
 				eq(budget.workspaceId, scope.workspaceId),
-				eq(budget.period, 'month'),
+				eq(budget.period, kind),
 				lte(budget.effectiveFrom, fromStr),
 				or(isNull(budget.effectiveTo), gt(budget.effectiveTo, fromStr))
 			)

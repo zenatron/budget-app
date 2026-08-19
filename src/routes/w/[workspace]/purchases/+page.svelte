@@ -334,6 +334,11 @@
 	// from under the user mid-typing.
 	const f = $derived(data.forecast);
 
+	// Svelte JS transitions escape the global reduced-motion clamp in CSS, so
+	// they read the query themselves — the same concession Money.svelte makes.
+	const reduceMotion =
+		typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 	// The months after this one: projected free cash, shown inside the expanded
 	// breakdown. Every figure is a projection; the caption says so.
 	const runway = $derived(data.runway);
@@ -750,7 +755,7 @@
 				<div
 					class="mt-4 border-t pt-3 text-[14px]"
 					style="border-color: var(--hairline)"
-					transition:slide={{ duration: 220 }}
+					transition:slide={{ duration: reduceMotion ? 0 : 220 }}
 				>
 					{@render runwayLine('Income', f.breakdown.incomeMinor, 'add')}
 					{@render runwayLine(
@@ -825,9 +830,14 @@
 								{#each runway.months as m (`${m.month.y}-${m.month.m}`)}
 									<div class="flex items-center justify-between py-0.5">
 										<span style="color: var(--ink-2)">{monthLabel(m.month)}</span>
+										<!-- The same dotted underline the current month's estimate
+										     wears: a projection whose bills include one that still asks
+										     for its real price. -->
 										<span
 											class="num"
-											style="color: {m.freeMinor < 0n ? 'var(--deny)' : 'var(--ink)'}"
+											style="color: {m.freeMinor < 0n ? 'var(--deny)' : 'var(--ink)'}; {m.estimated
+												? 'text-decoration: underline dotted; text-underline-offset: 3px;'
+												: ''}"
 											>{m.freeMinor >= 0n ? '' : '−'}{formatMinor(
 												m.freeMinor < 0n ? -m.freeMinor : m.freeMinor,
 												data.currency
@@ -839,7 +849,9 @@
 							{#if runwaySummary}
 								<p class="mt-2 text-[12px] leading-relaxed" style="color: var(--ink-3)">
 									{runwaySummary}. Projected from what repeats each month. Nothing here is spent
-									yet.
+									yet.{#if runway.months.some((m) => m.estimated)}
+										A dotted figure includes a bill that still asks for its real price.
+									{/if}
 								</p>
 							{/if}
 						</div>
@@ -947,7 +959,7 @@
 			class="fixed inset-0 z-50"
 			style="background: var(--scrim)"
 			use:dismiss={() => (showFilter = false)}
-			transition:fade={{ duration: 140 }}
+			transition:fade={{ duration: reduceMotion ? 0 : 140 }}
 		></div>
 		<div
 			class="fixed inset-x-4 top-[10vh] z-50 mx-auto flex max-h-[80vh] max-w-md flex-col"
@@ -959,7 +971,7 @@
 			onkeydown={(e) => {
 				if (e.key === 'Escape') showFilter = false;
 			}}
-			transition:scale={{ start: 0.96, duration: 170 }}
+			transition:scale={{ start: 0.96, duration: reduceMotion ? 0 : 170 }}
 		>
 			<div
 				class="card-lg flex min-h-0 flex-col overflow-hidden"

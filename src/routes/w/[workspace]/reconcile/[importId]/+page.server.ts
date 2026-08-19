@@ -3,12 +3,16 @@ import { getDb } from '$lib/server/db';
 import { getImport, listLines, matchCandidates } from '$lib/repo/statements';
 import {
 	ReconcileError,
+	closeImport,
 	confirmMatch,
+	createPurchaseFromLine,
 	ignoreLine,
 	linkManually,
+	reopenImport,
 	unignoreLine,
 	unlinkMatch
 } from '$lib/application/reconcile';
+import { getNotifier } from '$lib/server/notify';
 import { getLlmAssist } from '$lib/infra/llm';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { systemClock } from '$lib/infra/time/system-clock';
@@ -65,7 +69,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			lineCount: imp.lineCount,
 			periodStart: imp.periodStart?.toISOString() ?? null,
 			periodEnd: imp.periodEnd?.toISOString() ?? null,
-			modelRead: imp.modelRead
+			modelRead: imp.modelRead,
+			closed: imp.status === 'reconciled',
+			accountId: imp.accountId
 		},
 		lines: lines.map((l) => ({
 			id: l.id,
@@ -142,5 +148,35 @@ export const actions: Actions = {
 	unignore: async ({ request, locals }) => {
 		const id = String((await request.formData()).get('lineId') ?? '');
 		return run(() => unignoreLine(getDb(), deps, scopeOf(locals), id));
-	}
+	},
+	// The new door, and the one the modelRead column has been waiting for. The
+	// application layer carries the guard; the route only passes the person's
+	// optional edits through.
+	create: async ({ request, locals }) => {
+		const form = await request.formData();
+		const id = String(form.get('lineId') ?? '');
+		const itemName = String(form.get('itemName') ?? '').trim() || null;
+		const categoryId = String(form.get('categoryId') ?? '').trim() || null;
+		try {
+			const r = await createPurchaseFromLine(
+				getDb(),
+				{ ...deps, notifier: getNotifier() },
+				scopeOf(locals),
+				id,
+				{ itemName, categoryId }
+			);
+			return {
+				ok: true,
+				created: true,
+				pending: r.state === 'pending_approval'
+			};
+		} catch (e) {
+			if (e instanceof ReconcileError) return fail(400, { error: e.message });
+			throw e;
+		}
+	},
+	close: async ({ locals, params }) =>
+		run(() => closeImport(getDb(), deps, scopeOf(locals), params.importId)),
+	reopen: async ({ locals, params }) =>
+		run(() => reopenImport(getDb(), deps, scopeOf(locals), params.importId))
 };
