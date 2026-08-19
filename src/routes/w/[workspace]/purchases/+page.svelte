@@ -19,6 +19,7 @@
 		X
 	} from '@lucide/svelte';
 	import Money from '$lib/components/Money.svelte';
+	import SkeletonRow from '$lib/components/SkeletonRow.svelte';
 	import { dismiss } from '$lib/actions/dismiss';
 	import { modal } from '$lib/actions/modal';
 	import { swipe } from '$lib/actions/swipe';
@@ -1254,6 +1255,14 @@
 						{@render row(e, i === rest.length - 1)}
 					{/if}
 				{/each}
+				<!-- The page size is 20, but four placeholders carry the message as
+				     well as twenty would; a skeleton list as long as the content it
+				     imitates is theatre. -->
+				{#if loadingMore}
+					{#each Array(4) as _, i (i)}
+						<SkeletonRow last={i === 3} />
+					{/each}
+				{/if}
 			</div>
 		{/if}
 		{#if hasMore}

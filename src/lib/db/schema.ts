@@ -745,3 +745,33 @@ export const session = pgTable(
 	},
 	(t) => [index('session_user_idx').on(t.userId)]
 );
+
+/*
+ * A receipt photo shared into the app from the OS share sheet (the manifest's
+ * `share_target`), staged for the new-purchase form to pick up. Staging only:
+ * rows are swept an hour after creation, win or lose.
+ *
+ * The blob itself goes through the same content-addressed store as every
+ * other image, but it is NOT served by /blobs/[blobId] — that route gates on
+ * purchase attachment (isBlobVisible), and a share has no purchase yet. It
+ * gets its own member-scoped route instead, so the attachment invariant stays
+ * exactly as strict as it was.
+ */
+export const pendingShare = pgTable(
+	'pending_share',
+	{
+		id: uuid('id').primaryKey(),
+		workspaceId: uuid('workspace_id')
+			.notNull()
+			.references(() => workspace.id),
+		memberId: uuid('member_id')
+			.notNull()
+			.references(() => workspaceMember.id),
+		blobId: text('blob_id').notNull(),
+		filename: text('filename').notNull(),
+		contentType: text('content_type').notNull(),
+		byteSize: integer('byte_size').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull()
+	},
+	(t) => [index('pending_share_member_idx').on(t.workspaceId, t.memberId, t.createdAt)]
+);

@@ -401,6 +401,49 @@
 		}
 	}
 
+	/*
+	 * Skeletons — placeholder shapes for rows that are known to be loading,
+	 * never for whole pages (SvelteKit keeps the outgoing page until the new
+	 * data lands, so a page-level skeleton would invent a blank that isn't
+	 * there). Shaped in the row vocabulary: an icon square, a line or two.
+	 *
+	 * The gloss is the placeholder-shimmer idea on blocks instead of text: the
+	 * base is surface-2, the band lightens it toward the accent. The keyframes
+	 * hold the plain base at 0% and the band sits outside the box at 100%, so
+	 * the reduced-motion freeze and the loop seam both read as an ordinary
+	 * static block — a mid-glint freeze would look like a rendering bug.
+	 */
+	.skeleton {
+		background: linear-gradient(
+			100deg,
+			var(--surface-2) 42%,
+			light-dark(
+					color-mix(in oklab, var(--ws-accent, var(--accent)) 14%, var(--surface-2)),
+					color-mix(in oklab, var(--ws-accent, var(--accent)) 10%, var(--surface-2))
+				)
+				50%,
+			var(--surface-2) 58%
+		);
+		background-size: 250% 100%;
+		border-radius: calc(var(--r-sm) * 0.6);
+		animation: skeleton-gloss 1.8s linear infinite;
+	}
+	@keyframes skeleton-gloss {
+		from {
+			background-position: 100% 0;
+		}
+		to {
+			background-position: 0% 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skeleton {
+			/* Belt and braces: the global clamp below already freezes this, but the
+			   intent deserves saying here too. */
+			animation: none;
+		}
+	}
+
 	.btn {
 		display: inline-flex;
 		align-items: center;

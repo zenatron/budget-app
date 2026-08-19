@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { fade, scale } from 'svelte/transition';
 	import { submit } from '$lib/actions/submit';
+	import { swipe } from '$lib/actions/swipe';
 	import { page } from '$app/state';
 	import PlanTabs from '$lib/components/PlanTabs.svelte';
 	import RecurrencePicker from '$lib/components/RecurrencePicker.svelte';
@@ -14,6 +15,7 @@
 		ChevronRight,
 		CircleHelp,
 		Funnel,
+		OctagonX,
 		Pause,
 		Pencil,
 		Play,
@@ -431,65 +433,50 @@
 				{#if g.label}<p class="section-label px-1">{g.label}</p>{/if}
 				<div class="card overflow-hidden">
 					{#each g.rules as r, i (r.id)}
-						<div class="px-4 py-3.5 {i < g.rules.length - 1 ? 'hairline' : ''}">
-							<div class="flex items-center justify-between gap-3">
-								<div class="min-w-0">
-									<p class="flex items-center gap-1.5 text-[16px]" style="color: var(--ink)">
-										{r.itemName}
-										{#if r.status === 'paused'}
-											<span class="chip" style="color: var(--ink-3); background: var(--surface-2)"
-												>Paused</span
-											>
-										{/if}
-									</p>
-									<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
-										{r.cadence} · next {fmtNext(r.nextAt)}{r.autoComplete
-											? ''
-											: ' · needs confirming'}{r.bucketName ? ` · ${r.bucketName}` : ''}
-									</p>
-								</div>
-								<div class="shrink-0 text-right">
-									<Money
-										minor={r.amountMinor}
-										currency={r.currency}
-										block
-										class="text-[16px] font-semibold"
-									/>
-									{#if perMonth(r)}
-										<span class="num text-[12px]" style="color: var(--ink-3)">{perMonth(r)}</span>
-									{/if}
-								</div>
-							</div>
-							{#if r.mine}
-								<div class="mt-2.5 flex items-center gap-4 text-[13px]">
+						<!--
+							Swipe parity with the ledger, as a second affordance: the inline
+							actions stay, and a left swipe on your own rule reveals the two
+							state changes — Pause/Resume and End. Standing down while the row
+							is expanded into its edit form, like the other pages.
+						-->
+						{@const swipeable = r.mine && editing !== r.id}
+						<div
+							class="relative overflow-hidden {i < g.rules.length - 1 ? 'hairline' : ''}"
+							use:swipe={{ width: swipeable ? 176 : 0, enabled: swipeable }}
+						>
+							{#if swipeable}
+								<div class="absolute inset-y-0 right-0 z-0 flex">
 									{#if r.status === 'active'}
-										<form method="POST" action="?/pause" use:submit={{ success: 'Paused' }}>
+										<form
+											method="POST"
+											action="?/pause"
+											use:submit={{ success: 'Paused' }}
+											class="contents"
+										>
 											<input type="hidden" name="ruleId" value={r.id} />
 											<button
-												class="press inline-flex items-center gap-1"
-												style="color: var(--ink-3)"
+												class="press flex h-full w-[88px] flex-col items-center justify-center gap-1 text-[13px] font-semibold"
+												style="background: var(--pending); color: var(--paper)"
 											>
-												<Pause class="h-3.5 w-3.5" /> Pause
+												<Pause class="h-4 w-4" /> Pause
 											</button>
 										</form>
 									{:else}
-										<form method="POST" action="?/resume" use:submit={{ success: 'Resumed' }}>
+										<form
+											method="POST"
+											action="?/resume"
+											use:submit={{ success: 'Resumed' }}
+											class="contents"
+										>
 											<input type="hidden" name="ruleId" value={r.id} />
 											<button
-												class="press inline-flex items-center gap-1"
-												style="color: var(--approve)"
+												class="press flex h-full w-[88px] flex-col items-center justify-center gap-1 text-[13px] font-semibold"
+												style="background: var(--approve); color: var(--paper)"
 											>
-												<Play class="h-3.5 w-3.5" /> Resume
+												<Play class="h-4 w-4" /> Resume
 											</button>
 										</form>
 									{/if}
-									<button
-										onclick={() => startEdit(r)}
-										class="press inline-flex items-center gap-1"
-										style="color: var(--ink-2)"
-									>
-										<Pencil class="h-3.5 w-3.5" /> Edit
-									</button>
 									<form
 										method="POST"
 										action="?/end"
@@ -497,12 +484,98 @@
 											confirm: 'End this recurring charge? It stops generating new purchases.',
 											success: 'Recurring charge ended'
 										}}
-										class="ml-auto"
+										class="contents"
 									>
 										<input type="hidden" name="ruleId" value={r.id} />
-										<button class="press" style="color: var(--deny)">End</button>
+										<button
+											class="press flex h-full w-[88px] flex-col items-center justify-center gap-1 text-[13px] font-semibold"
+											style="background: var(--deny); color: var(--paper)"
+										>
+											<OctagonX class="h-4 w-4" /> End
+										</button>
 									</form>
 								</div>
+							{/if}
+							<div
+								data-swipe-content
+								class="relative z-10 px-4 py-3.5"
+								style="background: var(--surface); touch-action: pan-y"
+							>
+								<div class="flex items-center justify-between gap-3">
+									<div class="min-w-0">
+										<p class="flex items-center gap-1.5 text-[16px]" style="color: var(--ink)">
+											{r.itemName}
+											{#if r.status === 'paused'}
+												<span class="chip" style="color: var(--ink-3); background: var(--surface-2)"
+													>Paused</span
+												>
+											{/if}
+										</p>
+										<p class="mt-0.5 text-[13px]" style="color: var(--ink-3)">
+											{r.cadence} · next {fmtNext(r.nextAt)}{r.autoComplete
+												? ''
+												: ' · needs confirming'}{r.bucketName ? ` · ${r.bucketName}` : ''}
+										</p>
+									</div>
+									<div class="shrink-0 text-right">
+										<Money
+											minor={r.amountMinor}
+											currency={r.currency}
+											block
+											class="text-[16px] font-semibold"
+										/>
+										{#if perMonth(r)}
+											<span class="num text-[12px]" style="color: var(--ink-3)">{perMonth(r)}</span>
+										{/if}
+									</div>
+								</div>
+								{#if r.mine}
+									<div class="mt-2.5 flex items-center gap-4 text-[13px]">
+										{#if r.status === 'active'}
+											<form method="POST" action="?/pause" use:submit={{ success: 'Paused' }}>
+												<input type="hidden" name="ruleId" value={r.id} />
+												<button
+													class="press inline-flex items-center gap-1"
+													style="color: var(--ink-3)"
+												>
+													<Pause class="h-3.5 w-3.5" /> Pause
+												</button>
+											</form>
+										{:else}
+											<form method="POST" action="?/resume" use:submit={{ success: 'Resumed' }}>
+												<input type="hidden" name="ruleId" value={r.id} />
+												<button
+													class="press inline-flex items-center gap-1"
+													style="color: var(--approve)"
+												>
+													<Play class="h-3.5 w-3.5" /> Resume
+												</button>
+											</form>
+										{/if}
+										<button
+											onclick={() => startEdit(r)}
+											class="press inline-flex items-center gap-1"
+											style="color: var(--ink-2)"
+										>
+											<Pencil class="h-3.5 w-3.5" /> Edit
+										</button>
+										<form
+											method="POST"
+											action="?/end"
+											use:submit={{
+												confirm: 'End this recurring charge? It stops generating new purchases.',
+												success: 'Recurring charge ended'
+											}}
+											class="ml-auto"
+										>
+											<input type="hidden" name="ruleId" value={r.id} />
+											<button class="press" style="color: var(--deny)">End</button>
+										</form>
+									</div>
+								{/if}
+							</div>
+
+							{#if r.mine}
 								{#if editing === r.id}
 									<form
 										method="POST"

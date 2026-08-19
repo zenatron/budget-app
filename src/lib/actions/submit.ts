@@ -4,6 +4,7 @@ import type { ActionResult } from '@sveltejs/kit';
 import { toastError, toastSuccess } from '$lib/toast-state.svelte';
 import { requestConfirm, type ConfirmSpec } from '$lib/confirm-state.svelte';
 import { beginSubmit, endSubmit } from '$lib/submit-state.svelte';
+import { haptic } from '$lib/haptics.svelte';
 
 export interface SubmitOptions {
 	/**
@@ -94,6 +95,7 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 			// wedge the navigation, stranding the progress bar on a page whose
 			// submit already succeeded. `counted` likewise stays set until destroy,
 			// so a background SSE invalidateAll can't land mid-redirect and drop it.
+			haptic('success');
 			await applyAction(result);
 			return;
 		}
@@ -101,11 +103,15 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 		clearBusy();
 		const reset = opts.reset ?? true;
 		if (result.type === 'success') {
+			haptic('success');
 			if (opts.success) toastSuccess(opts.success);
 			opts.onSuccess?.();
 			await update({ reset });
 		} else if (result.type === 'failure') {
 			// The page renders `form.error` inline; only speak up when it can't.
+			// The haptic fires either way — a form that failed inline failed all
+			// the same, and a thumb on the submit button can't see the inline text.
+			haptic('error');
 			if (!(result.data as { error?: string } | undefined)?.error) {
 				toastError('Something went wrong. Try again.');
 			}
@@ -118,6 +124,7 @@ export function submit(node: HTMLFormElement, options: SubmitOptions = {}) {
 			// to try again rather than assuming it went through. Returning without
 			// applyAction keeps them on the page they filled in, rather than
 			// replacing it with an error screen that discards what they typed.
+			haptic('error');
 			if (typeof navigator !== 'undefined' && navigator.onLine === false) {
 				toastError("You're offline, this didn't save");
 				return;

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
 	import { page } from '$app/state';
+	import { toastError } from '$lib/toast-state.svelte';
 	import {
 		ArrowRight,
 		Calendar,
@@ -201,14 +202,45 @@
 		}
 	}
 
-	// The Harmony button's "log a purchase" door hands off here via ?describe=.
+	// The Harmony button's "log a purchase" door hands off here via ?describe=;
+	// the share sheet's lands via ?share= (a staged photo) or ?shareText=.
 	onMount(() => {
 		const d = page.url.searchParams.get('describe');
 		if (d) {
 			describeText = d;
 			void parseDescription();
 		}
+		const sharedText = page.url.searchParams.get('shareText');
+		if (sharedText && !itemName) itemName = sharedText.split('\n')[0].slice(0, 80);
+		const shareId = page.url.searchParams.get('share');
+		if (shareId) void pickupShare(shareId);
 	});
+
+	/**
+	 * A photo shared from the OS share sheet (the manifest's share_target)
+	 * arrives as a staged blob; pick it up and attach it exactly as if it had
+	 * been chosen here, so the preview, the "Read this receipt" offer, and the
+	 * submit-time processing are all the ones that already exist. The param is
+	 * stripped before the fetch: a refresh should be a clean form, not a
+	 * re-attach of a photo the sweep may already have collected.
+	 */
+	async function pickupShare(id: string) {
+		const url = new URL(location.href);
+		url.searchParams.delete('share');
+		// Native rather than $app/navigation's replaceState: that one throws
+		// before the router has initialised, and a share URL is always a hard
+		// load — the one case where onMount is guaranteed to beat it. The router
+		// patches history itself, so it stays in step with this call.
+		history.replaceState(history.state, '', url.toString());
+		try {
+			const res = await fetch(`/w/${slug}/share/${encodeURIComponent(id)}`);
+			if (!res.ok) throw new Error(String(res.status));
+			const blob = await res.blob();
+			attachImage(new File([blob], 'shared.jpg', { type: blob.type || 'image/jpeg' }));
+		} catch {
+			toastError('That shared photo is no longer available');
+		}
+	}
 	const amountMinorForPicker = $derived(
 		BigInt(Math.round((Number((amount || '0').replace(/[^0-9.]/g, '')) || 0) * 100))
 	);

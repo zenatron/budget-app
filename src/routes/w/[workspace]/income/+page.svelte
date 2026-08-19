@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { submit } from '$lib/actions/submit';
+	import { swipe } from '$lib/actions/swipe';
 	import { page } from '$app/state';
 	import { money } from '$lib/actions/money';
 	import { ArrowUpRight, CircleHelp, Pencil, Trash2, Wallet } from '@lucide/svelte';
@@ -110,8 +111,41 @@
 	{:else}
 		<div class="card overflow-hidden">
 			{#each data.entries as e, i (e.id)}
-				<div class="px-4 py-3.5 {i < data.entries.length - 1 ? 'hairline' : ''}">
-					<div class="flex items-center gap-3">
+				<!--
+					Swipe parity with the ledger, as a second affordance rather than a
+					replacement: the inline Edit/Remove stay for the pointer, and a left
+					swipe on your own row reveals a full-height Remove. The reveal (and
+					the gesture) stand down while the row is expanded into its edit form —
+					sliding a form out from under someone typing in it is not a feature.
+				-->
+				{@const swipeable = e.mine && editing !== e.id}
+				<div
+					class="relative overflow-hidden {i < data.entries.length - 1 ? 'hairline' : ''}"
+					use:swipe={{ width: swipeable ? 116 : 0, enabled: swipeable }}
+				>
+					{#if swipeable}
+						<div class="absolute inset-y-0 right-0 z-0 flex">
+							<form
+								method="POST"
+								action="?/remove"
+								use:submit={{ confirm: 'Remove this income entry?', success: 'Income removed' }}
+								class="contents"
+							>
+								<input type="hidden" name="incomeId" value={e.id} />
+								<button
+									class="press flex h-full w-[116px] flex-col items-center justify-center gap-1 text-[13px] font-semibold"
+									style="background: var(--deny); color: var(--paper)"
+								>
+									<Trash2 class="h-4 w-4" /> Remove
+								</button>
+							</form>
+						</div>
+					{/if}
+					<div
+						data-swipe-content
+						class="relative z-10 flex items-center gap-3 px-4 py-3.5"
+						style="background: var(--surface); touch-action: pan-y"
+					>
 						<span
 							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px]"
 							style="background: color-mix(in oklab, var(--approve) 18%, transparent)"

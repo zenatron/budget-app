@@ -7,6 +7,7 @@
 		Camera,
 		ChevronRight,
 		CircleHelp,
+		Download,
 		FileCheck,
 		Monitor,
 		Moon,
@@ -19,9 +20,21 @@
 	} from '@lucide/svelte';
 	import AccentPicker from '$lib/components/AccentPicker.svelte';
 	import { theme, setTheme, type ThemePref } from '$lib/theme.svelte';
+	import { haptics, setHaptics } from '$lib/haptics.svelte';
+	import { installPrompt, isIos, promptInstall, dismissInstall } from '$lib/install-prompt.svelte';
 	import { accentFor } from '$lib/accent';
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
+	let prompting = $state(false);
+
+	async function install() {
+		prompting = true;
+		try {
+			await promptInstall();
+		} finally {
+			prompting = false;
+		}
+	}
 
 	// Writable $derived: the picker reassigns it so the swatch responds instantly,
 	// and it re-syncs to the stored value whenever the load data changes. The Save
@@ -314,7 +327,97 @@
 			onselect={(v) => setTheme(v as ThemePref)}
 			ariaLabel="Theme"
 		/>
+		<!-- A per-device pref like the theme above it, so no server round-trip: the
+		     module writes localStorage directly and every wired surface reads it. -->
+		<div
+			class="mt-3.5 flex items-start gap-2.5 border-t pt-3.5"
+			style="border-color: var(--hairline)"
+		>
+			<input
+				id="haptics-pref"
+				type="checkbox"
+				class="mt-0.5"
+				checked={haptics.on}
+				onchange={(e) => setHaptics(e.currentTarget.checked)}
+			/>
+			<label for="haptics-pref" class="text-[15px]" style="color: var(--ink-2)">
+				Haptics
+				<span class="mt-0.5 block text-[13px]" style="color: var(--ink-3)">
+					A small buzz on confirmations, where the device can.
+				</span>
+			</label>
+		</div>
 	</div>
+
+	<!--
+		Install, offered rather than begged for: one quiet card that appears when
+		the platform has an install to offer (or is an iPhone, where the only
+		lever is Share → Add to Home Screen) and stays dismissed once answered.
+		Amber like every other "consider this" card; nothing pulses, nothing
+		re-appears after "Not now".
+	-->
+	{#if !installPrompt.installed && !installPrompt.dismissed}
+		{#if installPrompt.available}
+			<div
+				class="card p-4"
+				style="background: color-mix(in oklab, var(--pending) 12%, var(--surface))"
+			>
+				<div class="flex items-center gap-2.5">
+					<span
+						class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+						style="background: color-mix(in oklab, var(--pending) 16%, transparent)"
+					>
+						<Download class="h-4 w-4" style="color: var(--pending)" />
+					</span>
+					<div class="flex-1">
+						<p class="text-[15px] font-semibold" style="color: var(--pending)">Install Ledger</p>
+						<p class="text-[13px]" style="color: var(--ink-3)">
+							Full screen, its own window, and works offline.
+						</p>
+					</div>
+				</div>
+				<div class="mt-3 flex items-center gap-2.5">
+					<button
+						onclick={install}
+						disabled={prompting}
+						class="btn btn-accent px-4 py-2 text-[14px]"
+					>
+						Install
+					</button>
+					<button
+						onclick={dismissInstall}
+						disabled={prompting}
+						class="btn btn-plain px-4 py-2 text-[14px]"
+						style="color: var(--ink-3)">Not now</button
+					>
+				</div>
+			</div>
+		{:else if isIos()}
+			<div
+				class="card p-4"
+				style="background: color-mix(in oklab, var(--pending) 12%, var(--surface))"
+			>
+				<div class="flex items-center gap-2.5">
+					<span
+						class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+						style="background: color-mix(in oklab, var(--pending) 16%, transparent)"
+					>
+						<Download class="h-4 w-4" style="color: var(--pending)" />
+					</span>
+					<p class="text-[15px] font-semibold" style="color: var(--pending)">Install Ledger</p>
+				</div>
+				<p class="mt-1.5 text-[13px] leading-relaxed" style="color: var(--ink-2)">
+					In Safari, tap <strong style="color: var(--ink)">Share</strong> (the square with the
+					arrow) and choose <strong style="color: var(--ink)">Add to Home Screen</strong>.
+				</p>
+				<button
+					onclick={dismissInstall}
+					class="btn btn-plain mt-2 px-4 py-2 text-[14px]"
+					style="color: var(--ink-3)">Not now</button
+				>
+			</div>
+		{/if}
+	{/if}
 
 	{#if data.member.role === 'owner'}
 		<div class="card p-5">

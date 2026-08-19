@@ -36,6 +36,7 @@ import { addDays } from '$lib/domain/recurrence/rrule';
 import { listEvents, loadPurchase, memberNames } from '$lib/repo/purchases';
 import { listCategories } from '$lib/repo/workspaces';
 import { bucketBalance, loadBucket } from '$lib/repo/buckets';
+import { getNtfyTarget, listPushSubscriptions } from '$lib/repo/notifications';
 import { merchant, purchase as purchaseTable } from '$lib/db/schema';
 
 export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
@@ -47,6 +48,15 @@ export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
 	const scope = { workspaceId: ctx.workspace.id, viewerId: ctx.member.id };
 	const p = await loadPurchase(db, scope, params.id, { now });
 	if (!p) error(404, 'Not found');
+
+	// For the pending-state nudge: whether this member would hear about the
+	// decision (or the request) without staring at this page. Fetched only
+	// when it could matter — a decided purchase has nothing to wait for.
+	const pending = p.state === 'pending_approval';
+	const notifyConfigured = pending
+		? (await listPushSubscriptions(db, [ctx.user.id])).length > 0 ||
+			(await getNtfyTarget(db, ctx.user.id)) !== null
+		: false;
 
 	const [events, names, categories, images, merchants, createdRows] = await Promise.all([
 		listEvents(db, p.id),
@@ -103,9 +113,9 @@ export async function load(ctx: WorkspaceContext, { params }: LoadEvent) {
 	}
 
 	const mine = p.memberId === ctx.member.id;
-	const pending = p.state === 'pending_approval';
 	const sealed = isSealed(p, now);
 	return {
+		notifyConfigured,
 		purchase: {
 			id: p.id,
 			state: p.state,

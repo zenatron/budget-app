@@ -17,6 +17,7 @@
 	import CommandPaletteOverlay from '$lib/components/CommandPaletteOverlay.svelte';
 	import { paletteOpen, close as closePalette } from '$lib/command-palette-state.svelte';
 	import { dismiss } from '$lib/actions/dismiss';
+	import { menu } from '$lib/actions/menu';
 	import { toastError } from '$lib/toast-state.svelte';
 	import { submitting } from '$lib/submit-state.svelte';
 	import { accentFor } from '$lib/accent';
@@ -285,6 +286,14 @@
 			<div class="relative mx-auto flex max-w-3xl items-center justify-between px-5 py-2.5">
 				<button
 					onclick={() => (showSwitcher = !showSwitcher)}
+					onkeydown={(e) => {
+						// Arrow opens, per the menu pattern: a keyboard user reaching the
+						// trigger should never have to guess Enter is the only way in.
+						if (!showSwitcher && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+							e.preventDefault();
+							showSwitcher = true;
+						}
+					}}
 					class="press flex items-center gap-2.5"
 					aria-label="Switch workspace, currently {wsName}"
 					aria-expanded={showSwitcher}
@@ -327,6 +336,17 @@
 						class="material card-lg absolute top-full left-0 z-40 mt-1 w-64 overflow-hidden p-1.5"
 						style="box-shadow: var(--shadow-float); background: var(--surface); backdrop-filter: saturate(1.4) blur(24px); -webkit-backdrop-filter: saturate(1.4) blur(24px)"
 						role="menu"
+						aria-label="Workspaces"
+						use:menu
+						onfocusout={(e) => {
+							// Tab past the last item leaves the menu: close it, the way a
+							// native menu does, rather than leaving a popover open behind
+							// the keyboard cursor. A click on an item lands here first and
+							// closes harmlessly before the navigation runs.
+							if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+								showSwitcher = false;
+							}
+						}}
 					>
 						{#each data.workspaces as ws (ws.slug)}
 							{@const active = ws.slug === slug}
@@ -334,6 +354,8 @@
 							<a
 								href="/w/{ws.slug}"
 								onclick={() => (showSwitcher = false)}
+								role="menuitem"
+								aria-current={active ? 'true' : undefined}
 								class="press flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5"
 								style={active
 									? 'background: light-dark(color-mix(in oklab, var(--ink) 6%, transparent), color-mix(in oklab, var(--ink) 7%, transparent))'
@@ -355,6 +377,7 @@
 							<a
 								href="/welcome"
 								onclick={() => (showSwitcher = false)}
+								role="menuitem"
 								class="press flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5"
 							>
 								<span

@@ -21,6 +21,7 @@ import { sendSafeToSpendAlerts } from '$lib/application/safe-to-spend-alerts';
 import { materializeDueRules } from '$lib/application/recurring';
 import { checkBudgetAlerts } from '$lib/application/budget-alerts';
 import { materializeBucketAccruals } from '$lib/application/buckets';
+import { sweepExpiredShares } from '$lib/repo/shares';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { uuidv7 } from '$lib/infra/id/uuidv7';
 import { getNotifier } from '$lib/server/notify';
@@ -181,6 +182,22 @@ export const init: ServerInit = async () => {
 				JSON.stringify({
 					level: 'error',
 					msg: 'sweep: bucket accrual failed',
+					err: (e as Error).message
+				})
+			);
+		}
+		try {
+			const sweptShares = await sweepExpiredShares(getDb(), deps.clock.now());
+			if (sweptShares > 0) {
+				console.log(
+					JSON.stringify({ level: 'info', msg: 'sweep: shares expired', count: sweptShares })
+				);
+			}
+		} catch (e) {
+			console.log(
+				JSON.stringify({
+					level: 'error',
+					msg: 'sweep: share cleanup failed',
 					err: (e as Error).message
 				})
 			);

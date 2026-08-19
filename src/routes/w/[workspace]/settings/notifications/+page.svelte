@@ -156,14 +156,19 @@
 			<p class="mt-2 flex items-center gap-1.5 text-[14px]" style="color: var(--approve)">
 				<Check class="h-4 w-4" /> Enabled on this device
 			</p>
-			<button
-				onclick={disablePush}
-				disabled={busy}
-				class="btn btn-plain mt-2"
-				style="color: var(--ink-3)"
-			>
-				Turn off on this device
-			</button>
+			<div class="mt-2 flex flex-wrap items-center gap-2.5">
+				<form method="POST" action="?/pushTest" use:submit={{ success: 'Test sent' }}>
+					<button class="btn btn-ghost px-4 py-2 text-[14px]">Send test</button>
+				</form>
+				<button
+					onclick={disablePush}
+					disabled={busy}
+					class="btn btn-plain"
+					style="color: var(--ink-3)"
+				>
+					Turn off on this device
+				</button>
+			</div>
 		{:else}
 			<p class="mt-2 text-[14px]" style="color: var(--ink-3)">Get notified about approvals here.</p>
 			<button
