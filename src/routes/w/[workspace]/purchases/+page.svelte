@@ -823,8 +823,12 @@
 							</div>
 							{#if runwaySummary}
 								<p class="mt-2 text-[12px] leading-relaxed" style="color: var(--ink-3)">
+									<!-- The newline before the block is load-bearing: with `yet.{#if`
+									     adjacent, Svelte trims and the sentences run together as
+									     "yet.A dotted figure". -->
 									{runwaySummary}. Projected from what repeats each month. Nothing here is spent
-									yet.{#if runway.months.some((m) => m.estimated)}
+									yet.
+									{#if runway.months.some((m) => m.estimated)}
 										A dotted figure includes a bill that still asks for its real price.
 									{/if}
 								</p>

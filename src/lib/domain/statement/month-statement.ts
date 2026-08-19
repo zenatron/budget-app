@@ -141,13 +141,25 @@ export function narrateMonth(
 		// saved
 		tone = 'saved';
 		const ahead = fmt(s.netMinor);
-		lead =
-			f.savingsMinor > 0n
-				? `${fmt(f.incomeMinor)} came in against ${fmt(f.spentMinor)} out. You set aside ${fmt(f.savingsMinor)} and still ended ${ahead} ahead.`
-				: `${fmt(f.incomeMinor)} came in against ${fmt(f.spentMinor)} out, leaving you ${ahead} ahead ${openerLower}.`;
-		if (f.isPartial) {
-			// "Ended ahead" overclaims a month that hasn't ended.
-			lead = lead.replace('ended', 'sitting').replace(`ahead ${openerLower}`, `ahead so far`);
+		/*
+		 * "Ended ahead" overclaims a month that hasn't ended, so a partial month
+		 * says where it stands instead of how it finished.
+		 *
+		 * Written as four whole sentences rather than one sentence patched
+		 * afterwards. The previous version rewrote the finished wording by string
+		 * replacement — 'ended' became 'sitting' — which produced "You set aside
+		 * $2,350.00 and still sitting $9,715.71 ahead". A replacement cannot know
+		 * that the word it is swapping was carrying the sentence's only verb.
+		 */
+		const opener = `${fmt(f.incomeMinor)} came in against ${fmt(f.spentMinor)} out`;
+		if (f.savingsMinor > 0n) {
+			lead = f.isPartial
+				? `${opener}. You set aside ${fmt(f.savingsMinor)} and are ${ahead} ahead so far.`
+				: `${opener}. You set aside ${fmt(f.savingsMinor)} and still ended ${ahead} ahead.`;
+		} else {
+			lead = f.isPartial
+				? `${opener}, leaving you ${ahead} ahead so far.`
+				: `${opener}, leaving you ${ahead} ahead ${openerLower}.`;
 		}
 	}
 

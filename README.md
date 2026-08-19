@@ -7,13 +7,20 @@ PostgreSQL 17 + Drizzle, auth via an external [Pocket ID](https://pocket-id.org)
 ## Screenshots
 
 Captured from the seeded static demo by `scripts/capture-screenshots.ts`
-(`bun run demo:build && bun scripts/capture-screenshots.ts`); the same PNGs
-feed the manifest's install-sheet screenshots.
+(`bun run demo:build && bun scripts/capture-screenshots.ts`) at an iPhone
+viewport. The same shots, without the rounded corners, feed the manifest's
+install sheet.
 
-|                                                           |                                                    |
-| --------------------------------------------------------- | -------------------------------------------------- |
-| ![Ledger with Safe to Spend](docs/screenshots/ledger.png) | ![Approval request](docs/screenshots/approval.png) |
-| ![Activity breakdown](docs/screenshots/activity.png)      | ![New purchase form](docs/screenshots/new.png)     |
+|                                                                                                         |                                                                                                           |                                                                                                        |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| <img src="docs/screenshots/ledger.png" width="240" alt="The ledger, with Safe to Spend at the top" />   | <img src="docs/screenshots/safe-to-spend.png" width="240" alt="Safe to Spend broken down line by line" /> | <img src="docs/screenshots/approval.png" width="240" alt="An approval request, awaiting a decision" /> |
+| **Ledger.** What everyone spent, newest first. What is left this month sits above it.                   | **Safe to Spend.** Income minus what is already promised, and the months after.                           | **Approve.** The centerpiece: a big amount and one gesture.                                            |
+| <img src="docs/screenshots/new.png" width="240" alt="Logging a new purchase" />                         | <img src="docs/screenshots/activity.png" width="240" alt="Spending by category for the month" />          | <img src="docs/screenshots/settle-up.png" width="240" alt="Who owes whom for the month" />             |
+| **Log it.** Type it, or dictate a sentence and confirm what it read.                                    | **Activity.** Where the money went, by category and by week.                                              | **Settle up.** Fair shares of shared spending, and the transfers that even it out.                     |
+| <img src="docs/screenshots/buckets.png" width="240" alt="Savings buckets with progress toward goals" /> | <img src="docs/screenshots/recurring.png" width="240" alt="Recurring bills and their schedule" />         | <img src="docs/screenshots/income.png" width="240" alt="Recurring and past income" />                  |
+| **Buckets.** Money set aside on a schedule, each with an owner and a goal.                              | **Recurring.** Bills that arrive on their own, per month and per year.                                    | **Income.** What repeats, with everything already received below it.                                   |
+| <img src="docs/screenshots/statement.png" width="240" alt="The monthly statement with Harmony read" />  |                                                                                                           |                                                                                                        |
+| **Statement.** The month totaled up, with Harmony's plain-language read.                                |                                                                                                           |                                                                                                        |
 
 ## Demo
 

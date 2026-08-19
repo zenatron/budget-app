@@ -29,7 +29,13 @@
 		{
 			"name": "New purchase",
 			"url": "/new",
-			"icons": [{ "src": "/icons/shortcut-new-96.png", "sizes": "96x96", "type": "image/png" }]
+			"icons": [
+				{
+					"src": "/icons/shortcut-new-96.png",
+					"sizes": "96x96",
+					"type": "image/png"
+				}
+			]
 		},
 		{
 			"name": "Ledger",
@@ -44,13 +50,22 @@
 			"title": "title",
 			"text": "text",
 			"url": "url",
-			"files": [{ "name": "photo", "accept": ["image/webp", "image/jpeg", "image/png"] }]
+			"files": [
+				{
+					"name": "photo",
+					"accept": [
+						"image/webp",
+						"image/jpeg",
+						"image/png"
+					]
+				}
+			]
 		}
 	},
 	"screenshots": [
 		{
 			"src": "/screenshots/ledger.png",
-			"sizes": "540x1170",
+			"sizes": "786x1704",
 			"type": "image/png",
 			"form_factor": "narrow",
 			"label": "The ledger with Safe to Spend",
@@ -59,7 +74,7 @@
 		},
 		{
 			"src": "/screenshots/approval.png",
-			"sizes": "540x1170",
+			"sizes": "786x1704",
 			"type": "image/png",
 			"form_factor": "narrow",
 			"label": "An approval, one thumb away",
@@ -67,8 +82,26 @@
 			"background_color": "#F4EEE1"
 		},
 		{
+			"src": "/screenshots/safe-to-spend.png",
+			"sizes": "786x1704",
+			"type": "image/png",
+			"form_factor": "narrow",
+			"label": "What's actually free to spend",
+			"theme_color": "#F4EEE1",
+			"background_color": "#F4EEE1"
+		},
+		{
+			"src": "/screenshots/new.png",
+			"sizes": "786x1704",
+			"type": "image/png",
+			"form_factor": "narrow",
+			"label": "Log a purchase as it happens",
+			"theme_color": "#201c17",
+			"background_color": "#201c17"
+		},
+		{
 			"src": "/screenshots/activity.png",
-			"sizes": "540x1170",
+			"sizes": "786x1704",
 			"type": "image/png",
 			"form_factor": "narrow",
 			"label": "Where the money went",
@@ -76,11 +109,47 @@
 			"background_color": "#201c17"
 		},
 		{
-			"src": "/screenshots/new.png",
-			"sizes": "540x1170",
+			"src": "/screenshots/settle-up.png",
+			"sizes": "786x1704",
 			"type": "image/png",
 			"form_factor": "narrow",
-			"label": "Log a purchase as it happens",
+			"label": "Who owes whom",
+			"theme_color": "#F4EEE1",
+			"background_color": "#F4EEE1"
+		},
+		{
+			"src": "/screenshots/buckets.png",
+			"sizes": "786x1704",
+			"type": "image/png",
+			"form_factor": "narrow",
+			"label": "Money set aside, on a schedule",
+			"theme_color": "#F4EEE1",
+			"background_color": "#F4EEE1"
+		},
+		{
+			"src": "/screenshots/recurring.png",
+			"sizes": "786x1704",
+			"type": "image/png",
+			"form_factor": "narrow",
+			"label": "Bills that arrive on their own",
+			"theme_color": "#201c17",
+			"background_color": "#201c17"
+		},
+		{
+			"src": "/screenshots/income.png",
+			"sizes": "786x1704",
+			"type": "image/png",
+			"form_factor": "narrow",
+			"label": "What comes in",
+			"theme_color": "#F4EEE1",
+			"background_color": "#F4EEE1"
+		},
+		{
+			"src": "/screenshots/statement.png",
+			"sizes": "786x1704",
+			"type": "image/png",
+			"form_factor": "narrow",
+			"label": "The month, read back to you",
 			"theme_color": "#201c17",
 			"background_color": "#201c17"
 		}

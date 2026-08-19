@@ -11,6 +11,7 @@ build-demo
 data
 demo-assets
 node_modules
+docs
 
 .env
 .env.*

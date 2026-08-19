@@ -152,6 +152,10 @@ await db.insert(schema.workspaceMember).values([
 		approvalPolicy: { mode: 'none', routing: { mode: 'any_of', approver_ids: [] } },
 		status: 'active',
 		summaryCadence: 'weekly',
+		// The demo exists to show the app. The column now defaults to 'masked',
+		// which is right for a household and useless for a screenshot: it renders
+		// the one number the ledger is built around as four dots.
+		safeToSpendDisplay: 'shown',
 		safeToSpendAlertLevel: 0,
 		joinedAt: now
 	},
@@ -168,6 +172,7 @@ await db.insert(schema.workspaceMember).values([
 		},
 		status: 'active',
 		summaryCadence: 'monthly',
+		safeToSpendDisplay: 'shown',
 		safeToSpendAlertLevel: 0,
 		joinedAt: now
 	},
@@ -182,6 +187,7 @@ await db.insert(schema.workspaceMember).values([
 		},
 		status: 'active',
 		summaryCadence: 'off',
+		safeToSpendDisplay: 'shown',
 		safeToSpendAlertLevel: 0,
 		joinedAt: now
 	}
@@ -195,6 +201,7 @@ if (devUserId) {
 		approvalPolicy: { mode: 'none', routing: { mode: 'any_of', approver_ids: [] } },
 		status: 'active',
 		summaryCadence: 'off',
+		safeToSpendDisplay: 'shown',
 		safeToSpendAlertLevel: 0,
 		joinedAt: now
 	});

@@ -135,6 +135,26 @@ describe('narrateMonth', () => {
 		expect(n.lead).not.toContain('ended');
 	});
 
+	it('stays a sentence when a partial month also set money aside', () => {
+		// The hedge used to be a string replacement over the finished wording,
+		// which swapped out the clause's only verb and left "You set aside
+		// $500.00 and still sitting $1,500.00 ahead" on the statement.
+		const n = narrateMonth(
+			{
+				...base,
+				incomeMinor: 500_000n,
+				spentMinor: 100_000n,
+				savingsMinor: 50_000n,
+				isPartial: true
+			},
+			fmt
+		);
+		expect(n.lead).toContain('set aside $500.00');
+		expect(n.lead).toContain('ahead so far');
+		expect(n.lead).not.toContain('still sitting');
+		expect(n.lead).not.toContain('ended');
+	});
+
 	it('adds a top-category note and flags a dominant share', () => {
 		const n = narrateMonth(
 			{
