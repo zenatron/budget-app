@@ -171,6 +171,32 @@ point.
 
 <table>
 <tr>
+<td width="270" valign="top"><img src="docs/screenshots/map.png" width="250" alt="Spending drawn on a map" /></td>
+<td valign="top">
+
+### Where it happened
+
+Attach a place to a purchase and see the month drawn on a map, sized by what you
+spent and colored by category. Bubbles cluster in screen pixels, so a pinch
+re-clusters instantly.
+
+Location is never captured on its own. You tap **Use my location**, paste a map
+link (read offline, on your device) or type an address. Coordinates are rounded
+to integer millidegrees, roughly 110 m, which is not anonymity and the settings
+copy says so out loud. Places follow the same seal rules as everything else: a
+purchase you cannot see has no pin you can see.
+
+With no basemap configured the map still works and draws a plotted graticule
+instead of streets. When one is configured the tiles are fetched by your server
+and re-served from your origin, so your browser never talks to the tile
+provider.
+
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
 <td width="270" valign="top"><img src="docs/screenshots/api.png" width="250" alt="API tokens and the MCP server" /></td>
 <td valign="top">
 
@@ -215,12 +241,6 @@ answered. iPhone gets the Add to Home Screen path spelled out.
   auto-approve a sealed purchase says so in the audit log.
 - **Images.** A content-addressed blob store with magic-byte validation, EXIF
   stripping and WebP derivatives. Originals are discarded.
-- **Places.** Optional per-purchase location, captured only when you tap, paste a
-  map link (read offline) or type an address. Coordinates are stored as integer
-  millidegrees, roughly 110 m, which is not anonymity and the settings copy says
-  so. The spending map clusters in screen pixels and draws a plotted graticule
-  when no basemap is configured. Tiles are fetched by the server and re-served
-  from this origin, so your browser never talks to the tile provider.
 - **Command palette.** A local intent parser over spending questions, net
   position, bucket creation and navigation. No model required.
 
@@ -425,3 +445,13 @@ src/routes/            thin routes; authorization resolved once in hooks.server.
 The periodic sweep lives in `hooks.server.ts`: unseal due purchases, materialize
 recurring rules and bucket accruals, send stale nudges and budget alerts. It runs
 on boot and every 5 minutes, never overlapping itself, and stops on SIGTERM.
+
+---
+
+## License
+
+[GNU Affero General Public License v3.0 or later](LICENSE).
+
+Copyleft, and the network clause is the point. If you run a modified copy of
+Ledger as a service other people can reach, they are entitled to its source.
+Running it unmodified for your own household asks nothing of you.

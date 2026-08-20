@@ -259,9 +259,11 @@ const SERVER_SHOTS: Shot[] = [
 		theme: 'light',
 		click: 'Policy'
 	},
-	// No map shot: the seeder does not place any purchase, so the map renders
-	// empty and an empty map shows nothing about the feature. Worth adding once
-	// seed-workspace.ts pins a few.
+	{
+		name: 'map',
+		url: `/w/${SERVER_WS}/analytics/map`,
+		theme: 'dark'
+	},
 	{
 		name: 'reconcile',
 		url: `/w/${SERVER_WS}/reconcile`,

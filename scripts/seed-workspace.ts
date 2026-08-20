@@ -15,7 +15,7 @@
  */
 
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import * as schema from '../src/lib/db/schema';
 import { parseRRule, nextOccurrence, formatRRule } from '../src/lib/domain/recurrence/rrule';
@@ -126,6 +126,7 @@ await db.insert(schema.workspace).values({
 	accentColor: '#FF9F0A',
 	billImportEnabled: true,
 	barcodeEnabled: true,
+	locationEnabled: true,
 	intelligenceEnabled: true,
 	safeToSpendAlertsEnabled: true,
 	aiMode: 'local',
@@ -224,6 +225,46 @@ const cats = [
 ].map((c) => ({ id: uuid(), workspaceId: wsId, ...c, isBuiltIn: true }));
 await db.insert(schema.category).values(cats);
 const catIds = cats.map((c) => c.id);
+
+// ── Places ────────────────────────────────────────────────────────────────
+/*
+ * Somewhere for the map to draw. Without these the spending map renders an
+ * empty grid, which is a screenshot of nothing and a feature nobody can
+ * evaluate.
+ *
+ * Coordinates are integer millidegrees, the same ~110 m resolution the app
+ * stores, and they are spread across the city the workspace's timezone implies
+ * so the clustering has something to cluster. Everything here is invented: the
+ * names are not businesses, and the points land on ordinary streets rather
+ * than on anybody's door.
+ *
+ * Only a subset of purchases get one. Capture is opt-in per purchase in the
+ * real app and most rows will always be null, so seeding every purchase with a
+ * pin would misrepresent how the feature is used.
+ */
+interface PlaceSeed {
+	label: string;
+	latE3: number;
+	lngE3: number;
+	/** Which category indexes plausibly happen here. */
+	cats: number[];
+}
+const places: PlaceSeed[] = [
+	{ label: 'Wicker Park Grocery', latE3: 41909, lngE3: -87677, cats: [0] },
+	{ label: 'Lakeview Market', latE3: 41940, lngE3: -87654, cats: [0] },
+	{ label: 'Pilsen Provisions', latE3: 41857, lngE3: -87656, cats: [0, 7] },
+	{ label: 'Fulton Street Diner', latE3: 41886, lngE3: -87648, cats: [1] },
+	{ label: 'Logan Square Coffee', latE3: 41929, lngE3: -87707, cats: [1] },
+	{ label: 'Hyde Park Cinema', latE3: 41794, lngE3: -87590, cats: [2] },
+	{ label: 'Loop Transit Center', latE3: 41879, lngE3: -87630, cats: [4] },
+	{ label: 'Michigan Ave Shops', latE3: 41898, lngE3: -87624, cats: [5, 10] },
+	{ label: 'Near North Clinic', latE3: 41897, lngE3: -87637, cats: [6] },
+	{ label: 'Uptown Hardware', latE3: 41966, lngE3: -87655, cats: [7] },
+	{ label: 'Andersonville Vets', latE3: 41977, lngE3: -87669, cats: [9] },
+	{ label: "O'Hare Departures", latE3: 41978, lngE3: -87904, cats: [11] }
+];
+/** The places that make sense for a category, or none. */
+const placesFor = (catIdx: number) => places.filter((p) => p.cats.includes(catIdx));
 const catId = (n: number) => catIds[n];
 
 // ── Purchase helpers ──────────────────────────────────────────────────────
@@ -243,6 +284,8 @@ async function addPurchase(opts: {
 	nudgeCount?: number;
 	lastNudgedAt?: Date | null;
 	approvedMinor?: bigint | null;
+	/** A pin, when this purchase happened somewhere worth recording. */
+	place?: PlaceSeed | null;
 }) {
 	const id = uuid();
 	await db.insert(schema.purchase).values({
@@ -254,6 +297,12 @@ async function addPurchase(opts: {
 		note: opts.note ?? null,
 		categoryId: catId(opts.catIdx),
 		merchantId: null,
+		latE3: opts.place?.latE3 ?? null,
+		lngE3: opts.place?.lngE3 ?? null,
+		placeLabel: opts.place?.label ?? null,
+		// 'geocode' rather than 'device': these read as addresses somebody typed,
+		// which is the path that leaves no claim about where a person stood.
+		locationSource: opts.place ? 'geocode' : null,
 		requestedAmountMinor: opts.minor,
 		approvedAmountMinor: opts.approvedMinor ?? null,
 		finalAmountMinor:
@@ -683,13 +732,19 @@ function monthlyPurchases(monthAgo: number, member: string): Promise<void>[] {
 				default:
 					minor = BigInt(rng(500, 5000));
 			}
+			// About a third, and only where the category has somewhere to be. Pins
+			// are opt-in per purchase in the real app, so a fully pinned ledger
+			// would be a lie about how the feature gets used.
+			const candidates = placesFor(c);
+			const place = candidates.length > 0 && rng(0, 2) === 0 ? pick(candidates) : null;
 			const p = addPurchase({
 				member,
 				state: 'completed',
 				item: pick(pool),
 				catIdx: c,
 				minor,
-				day: d
+				day: d,
+				place
 			}).then((id) => addEvent(id, member, 'draft', 'completed', daysAgo(d)));
 			promises.push(p);
 		}
@@ -1475,6 +1530,10 @@ const [budgetCount] = await db
 	.select({ count: sql`count(*)::int` })
 	.from(schema.budget)
 	.where(eq(schema.budget.workspaceId, wsId));
+const [placed] = await db
+	.select({ count: sql`count(*)::int` })
+	.from(schema.purchase)
+	.where(and(eq(schema.purchase.workspaceId, wsId), isNotNull(schema.purchase.latE3)));
 
 console.log(
 	[
@@ -1489,8 +1548,9 @@ console.log(
 		`  ${incomeCount?.count ?? '?'} income entries (4 recurring + ${oneOffIncome.length} one-off)`,
 		`  ${bucketCount?.count ?? '?'} savings buckets (10 active, 1 paused, 1 archived)`,
 		`  ${budgetCount?.count ?? '?'} budget periods (overall + 12 categories)`,
+		`  ${placed?.count ?? '?'} purchases with a place, across ${places.length} locations`,
 		'  All notification prefs enabled',
-		'  All product features enabled (AI local, barcode, bill import, Safe-to-Spend)',
+		'  All product features enabled (AI local, barcode, bill import, places, Safe-to-Spend)',
 		'',
 		'  To rebuild:  bun scripts/seed-workspace.ts --reset',
 		'  For a new one: bun scripts/seed-workspace.ts --name "Demo 4"',
