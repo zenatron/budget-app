@@ -1,37 +1,232 @@
 # Ledger
 
-Self-hosted workspace budget & approval tracker. SvelteKit 2 (Svelte 5 runes) + Bun +
-PostgreSQL 17 + Drizzle, auth via an external [Pocket ID](https://pocket-id.org) instance
-(OIDC, passkeys only). Single app container + database behind your reverse proxy.
+**A self-hosted budget and approval tracker for the people you actually share money
+with.** Ask before you buy, log what you spent, and see where it went. It runs on
+your own server, on your own database, and it is built for a phone.
 
-## Screenshots
+SvelteKit 2 (Svelte 5 runes), Bun, PostgreSQL 17 and Drizzle, with auth from an
+external [Pocket ID](https://pocket-id.org) instance (OIDC, passkeys only). One app
+container and a database behind your reverse proxy.
 
-Captured from the seeded static demo by `scripts/capture-screenshots.ts`
-(`bun run demo:build && bun scripts/capture-screenshots.ts`) at an iPhone
-viewport. The same shots, without the rounded corners, feed the manifest's
-install sheet.
+**[Try the live demo](https://ledger.pvi.sh)** with no signup. It is the real app
+running Postgres compiled to WASM in your tab, over fictional seeded data.
 
-|                                                                                                         |                                                                                                           |                                                                                                        |
-| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| <img src="docs/screenshots/ledger.png" width="240" alt="The ledger, with Safe to Spend at the top" />   | <img src="docs/screenshots/safe-to-spend.png" width="240" alt="Safe to Spend broken down line by line" /> | <img src="docs/screenshots/approval.png" width="240" alt="An approval request, awaiting a decision" /> |
-| **Ledger.** What everyone spent, newest first. What is left this month sits above it.                   | **Safe to Spend.** Income minus what is already promised, and the months after.                           | **Approve.** The centerpiece: a big amount and one gesture.                                            |
-| <img src="docs/screenshots/new.png" width="240" alt="Logging a new purchase" />                         | <img src="docs/screenshots/activity.png" width="240" alt="Spending by category for the month" />          | <img src="docs/screenshots/settle-up.png" width="240" alt="Who owes whom for the month" />             |
-| **Log it.** Type it, or dictate a sentence and confirm what it read.                                    | **Activity.** Where the money went, by category and by week.                                              | **Settle up.** Fair shares of shared spending, and the transfers that even it out.                     |
-| <img src="docs/screenshots/buckets.png" width="240" alt="Savings buckets with progress toward goals" /> | <img src="docs/screenshots/recurring.png" width="240" alt="Recurring bills and their schedule" />         | <img src="docs/screenshots/income.png" width="240" alt="Recurring and past income" />                  |
-| **Buckets.** Money set aside on a schedule, each with an owner and a goal.                              | **Recurring.** Bills that arrive on their own, per month and per year.                                    | **Income.** What repeats, with everything already received below it.                                   |
-| <img src="docs/screenshots/statement.png" width="240" alt="The monthly statement with Harmony read" />  |                                                                                                           |                                                                                                        |
-| **Statement.** The month totaled up, with Harmony's plain-language read.                                |                                                                                                           |                                                                                                        |
+|                                                                                                      |                                                                                                       |                                                                                                          |
+| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| <img src="docs/screenshots/ledger.png" width="250" alt="The ledger with Safe to Spend at the top" /> | <img src="docs/screenshots/approval.png" width="250" alt="An approval request awaiting a decision" /> | <img src="docs/screenshots/statement.png" width="250" alt="The monthly statement with Harmony's read" /> |
 
-## Demo
+---
 
-<!-- Embed once recorded:
-<video src="https://github.com/user-attachments/assets/VIDEO_ID" controls muted></video>
--->
+## Features
 
-> Add a demo video before release. Suggested flow: dictate a purchase, request
-> approval, approve it from a partner's phone, check the month statement.
+<table>
+<tr>
+<td width="270" valign="top"><img src="docs/screenshots/approval.png" width="250" alt="Approving a request" /><br /><img src="docs/screenshots/new.png" width="250" alt="Logging a purchase" /><br /><img src="docs/screenshots/members.png" width="250" alt="Per-member approval policy" /></td>
+<td valign="top">
 
-### Static demo build
+### Ask first, or log it after
+
+Every purchase is either a request or a record. A member's policy decides which:
+never needs approval, needs it above an amount, or always. Requests route to any
+approver or to one named person.
+
+Answering one is the thing this app is built around. A big amount, one gesture,
+no form. Overspending an approved amount sends it back for re-approval, and so
+does editing one. A denial is not the end: the person who asked can ask again
+with a note, and an approver who said no can allow it after all. Every decision
+lands in an append-only audit log.
+
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="270" valign="top"><img src="docs/screenshots/safe-to-spend.png" width="250" alt="Safe to Spend broken down line by line" /></td>
+<td valign="top">
+
+### Safe to Spend
+
+One number at the top of the ledger: what is actually free to spend this month.
+It is income minus what has already gone out, what is approved but unpaid, the
+bills still to come, and what you set aside.
+
+Open it and the arithmetic unfolds line by line, because a number you cannot
+check is a number you cannot trust. Underneath, the months after this one are
+projected from what repeats. Nothing here is a guess by a model. It is addition,
+and it shows its working.
+
+It reads across a café from the next table, so it hides until you tap by default.
+
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="270" valign="top"><img src="docs/screenshots/harmony.png" width="250" alt="Harmony answering a spending question" /><br /><img src="docs/screenshots/assist.png" width="250" alt="AI assist settings" /></td>
+<td valign="top">
+
+### Harmony
+
+Ask a question in plain language and get an answer computed from your own data.
+The parser is local, deterministic and ships with the app, so this works with no
+model configured and no network call.
+
+A language model is optional and deliberately boxed in. It can only pick from
+option sets the app already owns, or transcribe glyphs for the app's own parsers.
+It cannot approve a purchase, move money, or decide your Safe to Spend. Every
+output is checked before it counts, so a hallucination becomes an empty
+suggestion. Nothing it produces is saved without a person confirming it, and
+every surface still works with the assist off.
+
+Run it against a model on your own machine over Ollama, or any OpenAI-compatible
+endpoint.
+
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="270" valign="top"><img src="docs/screenshots/buckets.png" width="250" alt="Savings buckets with goals" /><br /><img src="docs/screenshots/recurring.png" width="250" alt="Recurring bills" /><br /><img src="docs/screenshots/income.png" width="250" alt="Recurring and past income" /><br /><img src="docs/screenshots/calendar.png" width="250" alt="What is coming this month" /></td>
+<td valign="top">
+
+### Plan what is coming
+
+**Buckets** set money aside on a schedule, each owned by one person, each with a
+goal. Charge a purchase to one and it comes out of that pot instead of this
+month's spending. A bucket can name exactly who is allowed to charge it, which
+is how an allowance works: a capped pot only its owner can spend, where going
+over asks a parent first.
+
+**Recurring charges** run on a purpose-built RRULE subset with timezone-correct
+times, capped catch-up after downtime, and either auto-complete or
+confirm-at-the-real-price.
+
+**Income** takes one-off entries and repeating templates, expanded when you look
+at them, with everything already received folded away below.
+
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="270" valign="top"><img src="docs/screenshots/activity.png" width="250" alt="Spending by category" /><br /><img src="docs/screenshots/settle-up.png" width="250" alt="Who owes whom" /><br /><img src="docs/screenshots/statement.png" width="250" alt="The monthly statement" /></td>
+<td valign="top">
+
+### See where it went
+
+Every figure is computed on the fly and filtered for the person looking. Month
+against last month, a daily trend, breakdowns by category and by member, and
+budgets set overall or per category.
+
+**Settle up** answers who owes whom: the period's shared spending split into fair
+shares, evenly or weighted by what each person earned, and the transfers that
+even it out.
+
+The **monthly statement** totals the month and reads it back in plain language.
+
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="270" valign="top"><img src="docs/screenshots/reconcile.png" width="250" alt="Importing a bank statement" /></td>
+<td valign="top">
+
+### Reconcile against your bank
+
+Import a CSV or a PDF and tick it against what is recorded. A PDF is parsed in
+your browser, so the document never leaves the device: only the date, amount and
+description columns are posted.
+
+Matching never guesses. An ambiguous line stays unmatched with a ranked shortlist
+for a person to choose from. Importing marks what has cleared and changes nothing
+else, so a bank file can never rewrite your ledger.
+
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="270" valign="top"><img src="docs/screenshots/appearance.png" width="250" alt="Theme and accent settings" /><br /><img src="docs/screenshots/appearance-dark.png" width="250" alt="The same settings in dark" /><br /><img src="docs/screenshots/ledger-dark.png" width="250" alt="The ledger in dark" /><br /><img src="docs/screenshots/categories.png" width="250" alt="Custom categories" /></td>
+<td valign="top">
+
+### Make it yours
+
+Light and dark, following the device by default, flipped before first paint so
+there is no white flash. Eight workspace accents, and each workspace keeps its
+own, so two households on one server never look alike.
+
+Categories are yours to add, rename and retire. The built-in set is a starting
+point.
+
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="270" valign="top"><img src="docs/screenshots/api.png" width="250" alt="API tokens and the MCP server" /></td>
+<td valign="top">
+
+### Connect an assistant
+
+Bearer tokens with read, log and approve scopes, and an MCP server so Claude,
+ChatGPT or your editor can query the workspace in plain language.
+
+A token acts as its member. Approvals still apply to it, gift-mode seals still
+hide from it, and a member capped to their own buckets is capped over the API
+too. There is deliberately no write path for coordinates.
+
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="270" valign="top"><img src="docs/screenshots/notifications.png" width="250" alt="Notification routing" /></td>
+<td valign="top">
+
+### Notifications, and a real install
+
+Web Push and ntfy, with per-member, per-event, per-channel routing. A channel
+that cannot deliver is switched off rather than left tickable.
+
+Installed to a home screen it behaves like an app: safe-area aware, offline
+capable, its own window, with an install prompt that asks once and stays
+answered. iPhone gets the Add to Home Screen path spelled out.
+
+</td>
+</tr>
+</table>
+
+### And the rest
+
+- **Workspaces.** Create one or join with an invite code. Owner and member roles,
+  per-member approval policies, and a switcher for people in more than one.
+- **Gift mode.** Hide a purchase from chosen people until a date. It is hidden
+  everywhere: lists, search, detail pages, and every total is recomputed as though
+  it did not exist, so nothing leaks by subtraction. The one path that can
+  auto-approve a sealed purchase says so in the audit log.
+- **Images.** A content-addressed blob store with magic-byte validation, EXIF
+  stripping and WebP derivatives. Originals are discarded.
+- **Places.** Optional per-purchase location, captured only when you tap, paste a
+  map link (read offline) or type an address. Coordinates are stored as integer
+  millidegrees, roughly 110 m, which is not anonymity and the settings copy says
+  so. The spending map clusters in screen pixels and draws a plotted graticule
+  when no basemap is configured. Tiles are fetched by the server and re-served
+  from this origin, so your browser never talks to the tile provider.
+- **Command palette.** A local intent parser over spending questions, net
+  position, bucket creation and navigation. No model required.
+
+---
+
+## The static demo
 
 The app also builds as a static site with no server and no database, for
 GitHub Pages. It is the same app, not a mock: the real routes, use cases and
@@ -48,9 +243,9 @@ bun run demo:preview # both of the above, then serves it
 
 The demo ships the ledger, a purchase's detail and the new-purchase form,
 buckets, income, analytics, the calendar, the month statement, recurring,
-categories and the workspace overview. Left out because they need a backend:
-auth, Harmony, MCP, the API, reconciliation, the map, CSV export and the
-notification/member/model settings.
+categories, appearance and the workspace overview. Left out because they need a
+backend: auth, Harmony, MCP, the API, reconciliation, the map, CSV export and
+the notification/member/model settings.
 
 `demo:seed` reuses `scripts/seed-workspace.ts` unchanged, so the demo's data
 cannot drift from the seeder the dev environment uses. `demo:build` generates a
@@ -77,7 +272,7 @@ every push to `main`, and on demand from the Actions tab.
 The build runs in GitHub Actions rather than Cloudflare's Git integration
 because the seed needs a real Postgres to migrate, seed and `pg_dump`, which a
 Pages build container does not provide. Cloudflare only receives the finished
-directory, uploaded with Wrangler — so the snapshot is rebuilt from the current
+directory, uploaded with Wrangler, so the snapshot is rebuilt from the current
 schema every run and never has to be committed.
 
 One-time setup:
@@ -107,71 +302,10 @@ cannot replace a working demo. It deliberately does not run the e2e suite: that
 needs Postgres, a fake identity provider and browsers, and belongs in its own
 workflow.
 
-Note that the demo is **public**. The seeded data is entirely fictional — the
+Note that the demo is **public**. The seeded data is entirely fictional: the
 generator invents every name, merchant and amount.
 
-## Features
-
-- **Workspaces.** Create or join via invite codes. Owner and member roles,
-  per-member approval policies, workspace switcher.
-- **The approval loop.** Log what you already spent, or ask first. Policies are
-  never / above an amount / always, routed to any approver or one specific
-  person. Overspending an approved amount or editing it sends it back for
-  re-approval. Every decision is kept in an append-only audit log.
-- **Gift mode (sealed purchases).** Hide a purchase from chosen people until a
-  date. Hidden everywhere: lists, search, detail pages, and every aggregate is
-  recomputed as if it did not exist, so nothing leaks by subtraction. The only
-  seal-aware auto-approval path is disclosed in the audit log.
-- **Images.** Content-addressed blob store with magic-byte validation, EXIF
-  stripping, and WebP derivatives (originals discarded).
-- **PWA & notifications.** Web Push (VAPID) and ntfy channels, per-member,
-  per-event, per-channel preferences, iOS Add-to-Home-Screen onboarding.
-  Installed from a browser that offers it, the app is installed from Settings
-  with one tap. The manifest carries one `theme_color` (the cream paper) —
-  a platform limitation — but the browser chrome itself flips dark pre-paint
-  via `static/theme-init.js` and at runtime via `$lib/theme.svelte`, and the
-  manifest's screenshots declare their own dark colors for the install sheet.
-- **Recurring charges.** A purpose-built RRULE subset (intervals, BYDAY,
-  last-day-of-month) with timezone-correct times, capped catch-up after
-  downtime, pause/resume/end, price changes for future occurrences, and
-  auto-complete or confirm-at-actual-price. Recurring charges skip approval.
-- **Buckets.** Per-member sinking funds on the same RRULE subset. Purchases can
-  be charged to a bucket; an overdraft is allowed and counted as ordinary
-  spending.
-- **Analytics.** Computed on the fly and seal-filtered per viewer: month vs
-  last-month comparison, daily trend, category and member breakdowns, monthly
-  budgets overall and per category, net cash flow and savings rate.
-- **Income.** One-off entries plus recurring templates expanded at query time.
-  Income is workspace-open by design.
-- **Safe to Spend.** A deterministic cash-flow read of the current month:
-  income minus spent, approved, upcoming bills, and savings. The narration and
-  alerts are interpretations of that arithmetic, nothing more.
-- **Reconciliation.** Import a bank CSV or PDF and tick it against what is
-  recorded. PDFs are parsed in the browser (pdf.js), so the document never
-  leaves the device; only the date/amount/description columns are posted.
-  Matching never guesses: ambiguous lines stay unmatched with a ranked
-  shortlist for a person to pick from. Importing marks cleared lines and
-  changes nothing else.
-- **Optional AI assist.** A narrow `LlmAssist` port with a null adapter as the
-  default, plus Ollama and OpenAI-compatible adapters. The model can only pick
-  from option sets the caller already owns or transcribe glyphs for the app's
-  own parsers; every output passes `domain/intelligence/constrain` or
-  `read-fields` before it counts. A hallucination becomes an empty suggestion.
-  Nothing it produces is written without a person confirming, and every surface
-  degrades to its deterministic behavior with the assist off (the property the
-  test suite pins down).
-- **Command palette.** A local intent parser (no LLM) over spending questions,
-  net-position questions, bucket creation, and navigation. With a model on, it
-  can also answer open-ended questions over a computed briefing.
-- **Places.** Optional per-purchase location, captured only on explicit tap,
-  pasted map link (read offline), or typed address. Coordinates are stored as
-  integer millidegrees (~110 m, which is not anonymity and the settings copy
-  says so). A spending map with grid clustering in screen pixels; with no
-  basemap configured it draws a plotted graticule instead of streets. Optional
-  raster tiles are fetched by the server and re-served from this origin.
-  There is deliberately no MCP write path for coordinates.
-- **API & MCP.** Bearer tokens with read / log / approve scopes, and an MCP
-  server so an assistant can query the workspace in plain language.
+---
 
 ## Development
 
@@ -195,6 +329,28 @@ The fake IdP auto-approves logins. Switch identities with
 - `bun run check` - svelte-check
 - `bun run lint` / `bun run format`
 - `bun run db:generate` - create a migration after editing `src/lib/server/db/schema.ts`
+
+### Screenshots
+
+The images in this file and in the install sheet are committed output, rerun on
+redesign rather than on every build. The capture happens in two passes, because
+they need different things:
+
+```sh
+# 1. Everything the demo can render. Needs only this repo, and is reproducible.
+bun run demo:build && bun scripts/capture-screenshots.ts
+
+# 2. The pages that need a server behind them: Harmony, AI assist, members,
+#    reconcile, API and notifications. Needs a seeded database and DEV_MODE.
+DEV_MODE=true bun run dev &
+CAPTURE_SERVER_WS=<slug> bun scripts/capture-screenshots.ts --server http://localhost:5173
+```
+
+Pass one alone leaves the server-only images untouched and says so. Both write
+full-bleed PNGs to `static/screenshots/` for the web manifest, and the same
+shots with the phone's corner radius to `docs/screenshots/` for this file. The
+manifest's screenshot list is generated from the same array that drives the
+capture, so the two cannot drift.
 
 Migrations run automatically on app boot (single-flight via Postgres advisory lock).
 

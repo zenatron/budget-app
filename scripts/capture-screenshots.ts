@@ -120,6 +120,8 @@ interface Shot {
 	 * screenshot of a form; a filled one is a screenshot of using the app.
 	 */
 	fill?: [placeholder: string, value: string][];
+	/** Type this into the command palette and wait for the answer. */
+	ask?: string;
 }
 
 /**
@@ -193,6 +195,87 @@ const SHOTS: Shot[] = [
 		url: '/w/demo/statement',
 		theme: 'dark',
 		label: 'The month, read back to you'
+	},
+	{
+		name: 'calendar',
+		url: '/w/demo/calendar',
+		theme: 'dark',
+		label: 'What is coming, and when'
+	},
+	{
+		name: 'categories',
+		url: '/w/demo/settings/categories',
+		theme: 'light'
+	},
+	// The same screen twice, because the pair is the point: one theme setting,
+	// one accent, and the whole app follows both.
+	{
+		name: 'appearance',
+		url: '/w/demo/settings/appearance',
+		theme: 'light'
+	},
+	{
+		name: 'appearance-dark',
+		url: '/w/demo/settings/appearance',
+		theme: 'dark'
+	},
+	{
+		name: 'ledger-dark',
+		url: '/w/demo/purchases',
+		theme: 'dark'
+	}
+];
+
+/**
+ * Pages the demo build has no server for, so they are shot against a running
+ * dev instance instead: `bun scripts/capture-screenshots.ts --server <origin>`.
+ *
+ * Kept apart from the list above on purpose. The demo pass needs nothing but
+ * this repo and reproduces byte for byte; this pass needs Postgres, a seeded
+ * workspace and DEV_MODE. Folding them together would make the cheap, certain
+ * half of the job depend on the expensive, environmental half.
+ */
+const SERVER_WS = process.env.CAPTURE_SERVER_WS ?? 'demo';
+const SERVER_SHOTS: Shot[] = [
+	{
+		name: 'harmony',
+		url: `/w/${SERVER_WS}/purchases`,
+		theme: 'light',
+		// The palette's own button, then a question its local parser answers with
+		// no model configured — which is the honest demonstration, since that is
+		// what every install does out of the box.
+		click: 'Ask Harmony',
+		ask: 'how much did I spend on groceries this month'
+	},
+	{
+		name: 'assist',
+		url: `/w/${SERVER_WS}/settings/intelligence`,
+		theme: 'light',
+		scrollTo: 'AI assistance'
+	},
+	{
+		name: 'members',
+		url: `/w/${SERVER_WS}/settings/members`,
+		theme: 'light',
+		click: 'Policy'
+	},
+	// No map shot: the seeder does not place any purchase, so the map renders
+	// empty and an empty map shows nothing about the feature. Worth adding once
+	// seed-workspace.ts pins a few.
+	{
+		name: 'reconcile',
+		url: `/w/${SERVER_WS}/reconcile`,
+		theme: 'light'
+	},
+	{
+		name: 'api',
+		url: `/w/${SERVER_WS}/settings/api`,
+		theme: 'dark'
+	},
+	{
+		name: 'notifications',
+		url: `/w/${SERVER_WS}/settings/notifications`,
+		theme: 'light'
 	}
 ];
 
@@ -202,12 +285,18 @@ async function settle(page: Page) {
 	await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
 }
 
-async function shoot(shot: Shot) {
+/**
+ * `networkidle` for the static demo, where it usefully waits out PGlite's boot.
+ * Never for a live server: the app holds an SSE stream open, so the network is
+ * never idle and the wait can only time out.
+ */
+async function shoot(shot: Shot, at: string = origin) {
+	const waitUntil = at === origin ? 'networkidle' : 'domcontentloaded';
 	await page.evaluate((t) => {
 		if (t === 'dark') localStorage.setItem('theme', 'dark');
 		else localStorage.removeItem('theme');
 	}, shot.theme);
-	await page.goto(`${origin}${shot.url}`, { waitUntil: 'networkidle' });
+	await page.goto(`${at}${shot.url}`, { waitUntil });
 	await settle(page);
 
 	for (const [placeholder, value] of shot.fill ?? []) {
@@ -225,12 +314,40 @@ async function shoot(shot: Shot) {
 	}
 
 	if (shot.click) {
-		const target = page.getByText(shot.click, { exact: false }).first();
+		// By visible text, then by accessible name: the palette's trigger is an
+		// icon with an aria-label and no text of its own, so text alone misses it.
+		let target = page.getByText(shot.click, { exact: false }).first();
+		if (!(await target.isVisible().catch(() => false))) {
+			target = page.getByRole('button', { name: shot.click }).first();
+		}
 		if (await target.isVisible().catch(() => false)) {
 			await target.click();
 			await settle(page);
 		} else {
 			console.warn(`  ${shot.name}: nothing matching "${shot.click}" to click`);
+		}
+	}
+	if (shot.ask) {
+		const field = page.getByPlaceholder('Ask', { exact: false }).first();
+		if (await field.isVisible().catch(() => false)) {
+			await field.fill(shot.ask);
+			await page.keyboard.press('Enter');
+			// The local parser is synchronous, but a model-backed answer is not;
+			// wait for either to land rather than for a fixed beat.
+			await page
+				.getByText(/spent|Nothing|couldn|sorry/i)
+				.first()
+				.waitFor({ timeout: 15_000 })
+				.catch(() => console.warn(`  ${shot.name}: no answer appeared`));
+			// The caret sits at the end of a long query, which scrolls the field so
+			// the shot shows its tail. Put it back to the start.
+			await field.evaluate((el: HTMLInputElement) => {
+				el.scrollLeft = 0;
+				el.blur();
+			});
+			await settle(page);
+		} else {
+			console.warn(`  ${shot.name}: the palette did not open`);
 		}
 	}
 	if (shot.scrollTo) {
@@ -252,8 +369,12 @@ async function shoot(shot: Shot) {
 	 * and twenty of them live in the repo forever.
 	 */
 	const raw = await page.screenshot();
-	const full = `${ROOT}/static/screenshots/${shot.name}.png`;
-	await sharp(raw).png(PNG_OPTS).toFile(full);
+	// The manifest copy exists only for the shots the install sheet names. The
+	// rest are README-only, and shipping them in static/ would put half a
+	// megabyte of unreferenced PNG into every deploy.
+	if (shot.label) {
+		await sharp(raw).png(PNG_OPTS).toFile(`${ROOT}/static/screenshots/${shot.name}.png`);
+	}
 
 	/*
 	 * The README copy gets the phone's corners; the manifest copy does not.
@@ -264,7 +385,7 @@ async function shoot(shot: Shot) {
 	 */
 	// Measured, not computed: mobile emulation does not always hand back
 	// width×dpr, and a mask even a pixel off is rejected outright.
-	const shrunk = sharp(full);
+	const shrunk = sharp(raw);
 	const { width: w = 0, height: h = 0 } = await shrunk.metadata();
 	const r = Math.round(CORNER_RADIUS * (w / VIEWPORT.width));
 	const mask = Buffer.from(
@@ -282,9 +403,26 @@ await mkdir(`${ROOT}/static/screenshots`, { recursive: true });
 await mkdir(`${ROOT}/docs/screenshots`, { recursive: true });
 // Stale files from an earlier, differently-named set would otherwise sit in the
 // repo forever, referenced by nothing and quietly out of date.
-for (const dir of [`${ROOT}/static/screenshots`, `${ROOT}/docs/screenshots`]) {
+/*
+ * Orphans only. Everything this script still shoots is overwritten in place,
+ * so a demo-only run leaves the server shots alone — clearing them up front
+ * would delete images this run has no intention of replacing.
+ */
+const all = [...SHOTS, ...SERVER_SHOTS];
+const inDocs = new Set(all.map((s) => `${s.name}.png`));
+const inStatic = new Set(all.filter((s) => s.label).map((s) => `${s.name}.png`));
+// approval is named at runtime, from the seed, and is in the manifest.
+inDocs.add('approval.png');
+inStatic.add('approval.png');
+for (const [dir, keep] of [
+	[`${ROOT}/static/screenshots`, inStatic],
+	[`${ROOT}/docs/screenshots`, inDocs]
+] as const) {
 	for (const f of await readdir(dir)) {
-		if (f.endsWith('.png')) await rm(`${dir}/${f}`);
+		if (f.endsWith('.png') && !keep.has(f)) {
+			await rm(`${dir}/${f}`);
+			console.log('removed stale', f);
+		}
 	}
 }
 
@@ -320,6 +458,33 @@ if (pendingId) {
 for (const shot of SHOTS.slice(1)) {
 	await shoot(shot);
 	captured.push(shot);
+}
+
+/*
+ * The server pass. Skipped unless asked for, and loud about it: these images
+ * stay in the repo whether or not they were refreshed, so a silent skip is how
+ * a screenshot goes quietly out of date.
+ */
+const serverArg = process.argv.indexOf('--server');
+const serverOrigin = serverArg >= 0 ? process.argv[serverArg + 1] : process.env.CAPTURE_SERVER;
+if (serverOrigin) {
+	const reachable = await fetch(serverOrigin)
+		.then((r) => r.ok || r.status < 500)
+		.catch(() => false);
+	if (!reachable) {
+		console.error(`\ncannot reach ${serverOrigin} — server shots not refreshed`);
+	} else {
+		console.log(`\nserver pass against ${serverOrigin}`);
+		for (const shot of SERVER_SHOTS) {
+			await shoot(shot, serverOrigin);
+			captured.push(shot);
+		}
+	}
+} else {
+	console.warn(
+		`\nskipped ${SERVER_SHOTS.length} server-only shots (${SERVER_SHOTS.map((s) => s.name).join(', ')}).` +
+			'\nThey need a running instance: bun scripts/capture-screenshots.ts --server http://localhost:5173'
+	);
 }
 
 await browser.close();

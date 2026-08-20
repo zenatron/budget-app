@@ -99,6 +99,18 @@ export interface TimePeriod {
 	label: string;
 }
 
+/**
+ * A period label as a phrase you can drop into a sentence.
+ *
+ * Labels come in two shapes and only one of them takes a preposition. "August
+ * 2026" needs one; "this month" already is one, and answers were reading
+ * "$741.36 spent on Groceries in this month". Relative labels start with a
+ * determiner, which is the whole of the test.
+ */
+export function periodPhrase(period: TimePeriod): string {
+	return /^(this|last)\b/.test(period.label) ? period.label : `in ${period.label}`;
+}
+
 const MONTHS: Record<string, number> = {
 	january: 1,
 	february: 2,

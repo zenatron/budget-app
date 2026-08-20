@@ -18,7 +18,7 @@ import {
 } from '$lib/domain/analytics/period';
 import { systemClock } from '$lib/infra/time/system-clock';
 import { calDateInZone } from '$lib/domain/time/zoned';
-import { parse, type TimePeriod } from '$lib/intelligence/parser';
+import { parse, periodPhrase, type TimePeriod } from '$lib/intelligence/parser';
 import { answerAsk, askOutcomeToWire, ASK_FALLBACK } from '$lib/application/ask';
 import { formatPct } from '$lib/format';
 import { getLlmAssist } from '$lib/infra/llm';
@@ -251,11 +251,11 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			);
 			if (matched.length > 0) {
 				const catTotal = matched.reduce((s, c) => s + c.totalMinor, 0n);
-				answer = `${Money.of(catTotal, currency).format()} spent on ${matched.map((c) => c.name).join(', ')} in ${parsed.period.label}`;
+				answer = `${Money.of(catTotal, currency).format()} spent on ${matched.map((c) => c.name).join(', ')} ${periodPhrase(parsed.period)}`;
 				detail = matched.map((c) => ({ label: c.name, amountMinor: c.totalMinor.toString() }));
 				highlight = Number(catTotal);
 			} else {
-				answer = `No spending found for "${parsed.category}" in ${parsed.period.label}`;
+				answer = `No spending found for "${parsed.category}" ${periodPhrase(parsed.period)}`;
 			}
 		} else if (parsed.member) {
 			const matched = members.filter((m) =>
@@ -263,10 +263,10 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			);
 			if (matched.length > 0) {
 				const mTotal = matched.reduce((s, m) => s + m.totalMinor, 0n);
-				answer = `${matched[0].name} spent ${Money.of(mTotal, currency).format()} in ${parsed.period.label}`;
+				answer = `${matched[0].name} spent ${Money.of(mTotal, currency).format()} ${periodPhrase(parsed.period)}`;
 				highlight = Number(mTotal);
 			} else {
-				answer = `No spending found for "${parsed.member}" in ${parsed.period.label}`;
+				answer = `No spending found for "${parsed.member}" ${periodPhrase(parsed.period)}`;
 			}
 		} else {
 			answer = `Total spending in ${parsed.period.label}: ${Money.of(total, currency).format()}`;

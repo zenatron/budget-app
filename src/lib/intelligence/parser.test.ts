@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parse, understand } from './parser';
+import { parse, periodPhrase, understand } from './parser';
 
 // Pinned so relative periods ("last month") resolve deterministically.
 const NOW = new Date('2026-07-18T12:00:00Z');
@@ -305,5 +305,21 @@ describe('parse — set budget', () => {
 
 	it('does not steal a budget question', () => {
 		expect(at('how much budget is left').intent).not.toBe('set_budget');
+	});
+});
+
+describe('periodPhrase', () => {
+	it('gives an absolute label its preposition', () => {
+		expect(periodPhrase({ type: 'month', month: 8, year: 2026, label: 'August 2026' })).toBe(
+			'in August 2026'
+		);
+		expect(periodPhrase({ type: 'year', year: 2026, label: '2026' })).toBe('in 2026');
+	});
+
+	it('leaves a relative label alone, because it already is one', () => {
+		// The answers read "$741.36 spent on Groceries in this month" before this.
+		for (const label of ['this month', 'last month', 'this week', 'last week']) {
+			expect(periodPhrase({ type: 'month', year: 2026, label })).toBe(label);
+		}
 	});
 });

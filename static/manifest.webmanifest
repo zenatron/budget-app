@@ -152,6 +152,15 @@
 			"label": "The month, read back to you",
 			"theme_color": "#201c17",
 			"background_color": "#201c17"
+		},
+		{
+			"src": "/screenshots/calendar.png",
+			"sizes": "786x1704",
+			"type": "image/png",
+			"form_factor": "narrow",
+			"label": "What is coming, and when",
+			"theme_color": "#201c17",
+			"background_color": "#201c17"
 		}
 	]
 }

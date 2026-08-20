@@ -34,6 +34,7 @@ export const DEMO_ROUTES = [
 	'w/[workspace]/analytics',
 	'w/[workspace]/calendar',
 	'w/[workspace]/recurring',
+	'w/[workspace]/settings/appearance',
 	'w/[workspace]/settings/categories',
 	'w/[workspace]/settings/help',
 	'w/[workspace]/statement',
