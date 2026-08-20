@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { submit } from '$lib/actions/submit';
-	import { haptic } from '$lib/haptics.svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { formatMinor, tryParseMinor } from '$lib/money-format';
@@ -574,9 +573,7 @@
 						action="?/approve"
 						use:enhance={() => {
 							deciding = 'approve';
-							return async ({ result, update }) => {
-								if (result.type === 'success' || result.type === 'redirect') haptic('success');
-								else haptic('error');
+							return async ({ update }) => {
 								await update();
 								deciding = null;
 							};
@@ -604,9 +601,7 @@
 							action="?/deny"
 							use:enhance={() => {
 								deciding = 'deny';
-								return async ({ result, update }) => {
-									if (result.type === 'success' || result.type === 'redirect') haptic('success');
-									else haptic('error');
+								return async ({ update }) => {
 									await update();
 									deciding = null;
 								};

@@ -376,9 +376,7 @@
 		</span>
 		<div class="flex-1">
 			<p class="text-[15px] font-medium" style="color: var(--ink)">Appearance</p>
-			<p class="text-[13px]" style="color: var(--ink-3)">
-				Theme, haptics, and the workspace accent
-			</p>
+			<p class="text-[13px]" style="color: var(--ink-3)">Theme and the workspace accent</p>
 		</div>
 		<ChevronRight class="h-4 w-4" style="color: var(--ink-4)" />
 	</a>

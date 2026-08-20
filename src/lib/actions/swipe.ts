@@ -15,7 +15,6 @@
  *    finger can leave the row without dropping the gesture.
  *  - Only one row is open at a time, via a module-level registry.
  */
-import { haptic } from '$lib/haptics.svelte';
 
 let openRegistry: (() => void) | null = null;
 
@@ -53,9 +52,6 @@ export function swipe(node: HTMLElement, opts: SwipeOptions) {
 		if (openRegistry && openRegistry !== doClose) openRegistry();
 		openRegistry = doClose;
 		open = true;
-		// The latch has no visual of its own beyond the slide, and the slide is
-		// over in a fifth of a second — the tick is what tells a thumb it landed.
-		haptic('tick');
 		setTransform(-width, true);
 	};
 	function doClose() {
