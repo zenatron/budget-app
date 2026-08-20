@@ -1,19 +1,36 @@
 # Ledger
 
-**A self-hosted budget and approval tracker for the people you actually share money
-with.** Ask before you buy, log what you spent, and see where it went. It runs on
-your own server, on your own database, and it is built for a phone.
+**A self-hosted budget tracker for households.** Ask before you buy or record it
+afterwards, then see where the money went. Designed for phones and run entirely
+on your own server.
 
-SvelteKit 2 (Svelte 5 runes), Bun, PostgreSQL 17 and Drizzle, with auth from an
-external [Pocket ID](https://pocket-id.org) instance (OIDC, passkeys only). One app
-container and a database behind your reverse proxy.
+SvelteKit 2 (Svelte 5 runes), Bun, PostgreSQL 17 and Drizzle. Authentication
+comes from an external [Pocket ID](https://pocket-id.org) instance over OIDC,
+passkeys only. Deployment is one app container and a database behind your
+reverse proxy.
 
-**[Try the live demo](https://ledger.pvi.sh)** with no signup. It is the real app
-running Postgres compiled to WASM in your tab, over fictional seeded data.
+**[Try the live demo](https://ledger.pvi.sh)**, no signup. It runs the real
+application against Postgres compiled to WASM in the browser tab, over invented
+seed data.
 
 |                                                                                                      |                                                                                                       |                                                                                                          |
 | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | <img src="docs/screenshots/ledger.png" width="250" alt="The ledger with Safe to Spend at the top" /> | <img src="docs/screenshots/approval.png" width="250" alt="An approval request awaiting a decision" /> | <img src="docs/screenshots/statement.png" width="250" alt="The monthly statement with Harmony's read" /> |
+
+---
+
+## Demo
+
+<!--
+Record it, drag the file into a GitHub issue or PR comment to get a
+user-attachments URL, then replace this comment with:
+
+<video src="https://github.com/user-attachments/assets/VIDEO_ID" controls muted></video>
+-->
+
+A walkthrough is coming. The narration script, timed to fit under three minutes,
+is in [docs/demo-script.md](docs/demo-script.md). In the meantime the
+[live demo](https://ledger.pvi.sh) is the real thing and takes no signup.
 
 ---
 
@@ -26,15 +43,15 @@ running Postgres compiled to WASM in your tab, over fictional seeded data.
 
 ### Ask first, or log it after
 
-Every purchase is either a request or a record. A member's policy decides which:
-never needs approval, needs it above an amount, or always. Requests route to any
-approver or to one named person.
+Every purchase is either a request or a record, and each member's policy decides
+which. Approval can be off entirely, required above a set amount, or required
+always. Requests go to whichever approvers you nominate, or to one named person.
 
-Answering one is the thing this app is built around. A big amount, one gesture,
-no form. Overspending an approved amount sends it back for re-approval, and so
-does editing one. A denial is not the end: the person who asked can ask again
-with a note, and an approver who said no can allow it after all. Every decision
-lands in an append-only audit log.
+Deciding one takes a single tap. If the final price lands well above what was
+approved, or somebody edits an approved purchase, it comes back for another
+decision. Denials are not final either: the requester can appeal with a note
+explaining what changed, and an approver can reverse their own denial. All of
+this is written to an append-only audit log.
 
 </td>
 </tr>
@@ -47,16 +64,17 @@ lands in an append-only audit log.
 
 ### Safe to Spend
 
-One number at the top of the ledger: what is actually free to spend this month.
-It is income minus what has already gone out, what is approved but unpaid, the
-bills still to come, and what you set aside.
+A single figure at the top of the ledger showing what is free to spend for the
+rest of the month. It starts from your income and subtracts money already spent,
+purchases approved but not yet paid for, bills still due before month end, and
+anything moved into a bucket.
 
-Open it and the arithmetic unfolds line by line, because a number you cannot
-check is a number you cannot trust. Underneath, the months after this one are
-projected from what repeats. Nothing here is a guess by a model. It is addition,
-and it shows its working.
+Tap it and the whole calculation expands, one line per term, followed by a
+projection of the next few months built from whatever repeats. No language model
+touches any of it; the figure is arithmetic over rows you can go and look at.
 
-It reads across a café from the next table, so it hides until you tap by default.
+Because it is legible from a few feet away, it is masked by default and reveals
+on tap.
 
 </td>
 </tr>
@@ -69,19 +87,18 @@ It reads across a café from the next table, so it hides until you tap by defaul
 
 ### Harmony
 
-Ask a question in plain language and get an answer computed from your own data.
-The parser is local, deterministic and ships with the app, so this works with no
-model configured and no network call.
+Ask a question in ordinary language and get an answer computed from your own
+figures. The parser runs locally and ships with the app, so it works without any
+model configured and makes no network calls.
 
-A language model is optional and deliberately boxed in. It can only pick from
-option sets the app already owns, or transcribe glyphs for the app's own parsers.
-It cannot approve a purchase, move money, or decide your Safe to Spend. Every
-output is checked before it counts, so a hallucination becomes an empty
-suggestion. Nothing it produces is saved without a person confirming it, and
-every surface still works with the assist off.
+Connecting a language model is optional, and what it is allowed to do is narrow.
+It can pick from option sets the app already holds, or read text for the app's
+own parsers. It has no route to approving a purchase or changing a figure. Every
+response is validated first, so a bad one turns into an empty suggestion instead
+of bad data, and nothing reaches the database without somebody confirming it.
+Switch it off and every screen falls back to the deterministic behavior.
 
-Run it against a model on your own machine over Ollama, or any OpenAI-compatible
-endpoint.
+Point it at Ollama on your own machine, or at any OpenAI-compatible endpoint.
 
 </td>
 </tr>
@@ -94,11 +111,11 @@ endpoint.
 
 ### Plan what is coming
 
-**Buckets** set money aside on a schedule, each owned by one person, each with a
-goal. Charge a purchase to one and it comes out of that pot instead of this
-month's spending. A bucket can name exactly who is allowed to charge it, which
-is how an allowance works: a capped pot only its owner can spend, where going
-over asks a parent first.
+**Buckets** move money aside on a schedule. Each has an owner and an optional
+goal, and charging a purchase to one draws it down instead of counting against
+this month. A bucket can also name who is allowed to charge it, which is what
+makes an allowance possible: a pot only its owner can spend from, where anything
+over the balance goes to an approver first.
 
 **Recurring charges** run on a purpose-built RRULE subset with timezone-correct
 times, capped catch-up after downtime, and either auto-complete or
@@ -143,9 +160,10 @@ Import a CSV or a PDF and tick it against what is recorded. A PDF is parsed in
 your browser, so the document never leaves the device: only the date, amount and
 description columns are posted.
 
-Matching never guesses. An ambiguous line stays unmatched with a ranked shortlist
-for a person to choose from. Importing marks what has cleared and changes nothing
-else, so a bank file can never rewrite your ledger.
+The matcher does not guess. Where a line could plausibly be one of several
+purchases it stays unmatched and offers a ranked shortlist to choose from.
+Importing only marks lines as cleared, so a bank file cannot alter what you
+recorded.
 
 </td>
 </tr>
@@ -158,18 +176,17 @@ else, so a bank file can never rewrite your ledger.
 
 ### Make it yours
 
-Ten accents, and each workspace keeps its own, so two households on one server
-never look alike. The four here are magenta, evergreen, azure and cerulean, and
-they are the real thing: the accent is one stored value that every tint, chip
-and control derives from, so picking one moves the whole app.
+Ten accents, stored per workspace, so two households sharing a server do not
+look alike. The screenshots here use magenta, evergreen, azure and cerulean. The
+accent is a single stored value that every tint and control derives from, so
+changing it moves the entire interface.
 
-Light and dark follow the device by default, flipped before first paint so there
-is no white flash. The theme is per device and the accent is per workspace,
-which is the right split: how bright your screen is, and whose money this is,
-are different questions.
+Light and dark follow the device unless you override them, and the theme is
+applied before first paint to avoid a white flash on load. Theme is stored per
+device, while the accent belongs to the workspace.
 
-Categories are yours to add, rename and retire. The built-in set is a starting
-point.
+Categories can be added, renamed and retired. The built-in set is only a
+starting point.
 
 </td>
 </tr>
@@ -186,11 +203,11 @@ Attach a place to a purchase and see the month drawn on a map, sized by what you
 spent and colored by category. Bubbles cluster in screen pixels, so a pinch
 re-clusters instantly.
 
-Location is never captured on its own. You tap **Use my location**, paste a map
-link (read offline, on your device) or type an address. Coordinates are rounded
-to integer millidegrees, roughly 110 m, which is not anonymity and the settings
-copy says so out loud. Places follow the same seal rules as everything else: a
-purchase you cannot see has no pin you can see.
+Nothing is captured automatically. You either tap **Use my location**, paste a
+map link (parsed on your device, with no request made), or type an address.
+Coordinates are rounded to integer millidegrees, about 110 m, which the settings
+copy is explicit about not being anonymity. Pins inherit the same visibility
+rules as their purchase, so anything hidden from you has no marker you can see.
 
 With no basemap configured the map still works and draws a plotted graticule
 instead of streets. When one is configured the tiles are fetched by your server
@@ -211,9 +228,9 @@ provider.
 Bearer tokens with read, log and approve scopes, and an MCP server so Claude,
 ChatGPT or your editor can query the workspace in plain language.
 
-A token acts as its member. Approvals still apply to it, gift-mode seals still
-hide from it, and a member capped to their own buckets is capped over the API
-too. There is deliberately no write path for coordinates.
+A token acts as the member it belongs to, so approval policies still apply,
+gift-mode seals still hide purchases from it, and a member limited to their own
+buckets stays limited over the API. Coordinates have no write path at all.
 
 </td>
 </tr>
@@ -226,12 +243,14 @@ too. There is deliberately no write path for coordinates.
 
 ### Notifications, and a real install
 
-Web Push and ntfy, with per-member, per-event, per-channel routing. A channel
-that cannot deliver is switched off rather than left tickable.
+Web Push and ntfy, routed per member, per event and per channel. A channel with
+nothing configured behind it is disabled, so you cannot arm one that has no way
+to deliver.
 
-Installed to a home screen it behaves like an app: safe-area aware, offline
-capable, its own window, with an install prompt that asks once and stays
-answered. iPhone gets the Add to Home Screen path spelled out.
+Added to a home screen the app runs in its own window, respects the safe area
+and works offline. The install prompt asks once and remembers the answer. On
+iPhone, where installation is manual, the Add to Home Screen steps are spelled
+out.
 
 </td>
 </tr>
@@ -249,6 +268,63 @@ answered. iPhone gets the Add to Home Screen path spelled out.
   stripping and WebP derivatives. Originals are discarded.
 - **Command palette.** A local intent parser over spending questions, net
   position, bucket creation and navigation. No model required.
+
+---
+
+## Quick start
+
+You need Docker, and a [Pocket ID](https://pocket-id.org) instance for sign-in.
+Pocket ID is a small OIDC provider that does passkeys; Ledger has no password
+login of its own, by design.
+
+```sh
+git clone https://github.com/zenatron/ledger.git
+cd ledger
+cp .env.example .env
+```
+
+Edit `.env` and set four values:
+
+| Variable                  | What it is                                                           |
+| ------------------------- | -------------------------------------------------------------------- |
+| `PUBLIC_ORIGIN`           | The URL people will actually open, e.g. `https://ledger.example.com` |
+| `POCKET_ID_ISSUER`        | Your Pocket ID base URL. No trailing slash, no path.                 |
+| `POCKET_ID_CLIENT_ID`     | From a **confidential** OIDC client in Pocket ID                     |
+| `POCKET_ID_CLIENT_SECRET` | The same client's secret                                             |
+
+In Pocket ID, under Administration then OIDC Clients, register the callback
+exactly as `https://your-host/auth/callback`. A mismatch here is the single most
+common reason a first login fails.
+
+Then:
+
+```sh
+docker compose up -d --build
+```
+
+That starts the app on port 3000 and a Postgres 17 container beside it.
+Migrations run automatically on boot. Open `PUBLIC_ORIGIN`, sign in, and create
+a workspace; the account that creates it becomes its owner.
+
+Everything else is optional and off until configured: Web Push, ntfy, basemap
+tiles, address search, barcode lookup and the AI assist. `.env.example`
+documents each one and the app works without all of them.
+
+To put it behind a reverse proxy, forward to port 3000 and make sure
+`PUBLIC_ORIGIN` matches the external URL. The app trusts exactly one
+`X-Forwarded-For` hop, so the rate limiter sees real client addresses rather
+than your proxy.
+
+### Upgrading
+
+```sh
+git pull
+docker compose up -d --build
+```
+
+Migrations are applied on boot behind a Postgres advisory lock, so starting
+several instances at once is safe. Take a backup first; see
+[Backup and restore](#backup--restore).
 
 ---
 
@@ -273,8 +349,7 @@ categories, appearance and the workspace overview. Left out because they need a
 backend: auth, Harmony, MCP, the API, reconciliation, the map, CSV export and
 the notification/member/model settings.
 
-It seeds two workspaces, so switching between them is a thing you can actually
-do rather than a menu with one entry. Deleting one lands you on the other;
+It seeds two workspaces, so switching between them does something. Deleting one lands you on the other;
 deleting both lands you on the sign-in page, where the demo offers to reseed.
 Signing out ends the tab's session the way the real one ends a cookie.
 
@@ -363,8 +438,8 @@ The fake IdP auto-approves logins. Switch identities with
 
 ### Screenshots
 
-The images in this file and in the install sheet are committed output, rerun on
-redesign rather than on every build. The capture happens in two passes, because
+The images in this file and in the install sheet are committed output. They get
+regenerated on a redesign, not on every build. The capture happens in two passes, because
 they need different things:
 
 ```sh
@@ -392,24 +467,24 @@ capture, so the two cannot drift.
 
 Migrations run automatically on app boot (single-flight via Postgres advisory lock).
 
-## Production
+## Running it in production
 
-```sh
-cp .env.example .env   # fill in Pocket ID + origin values
-docker compose up -d --build
-```
+[Quick start](#quick-start) covers the first boot. `.env.example` documents the
+full environment contract. Beyond that:
 
-See `.env.example` for the full env contract. Notes:
-
-- **Pocket ID issuer** is the instance's base URL, no trailing slash, no path.
-- Create a **confidential** OIDC client in Pocket ID (Administration → OIDC Clients)
-  and register `https://your-host/auth/callback` exactly.
-- Blobs live in the `blobs` volume (`/data/blobs`); back up the DB first, then the
-  blob dir (blobs are content-addressed and append-only, so that order is safe).
-- **Basemap tiles are not a blob.** `TILE_CACHE_DIR` (`/data/tiles` by default)
-  holds disposable third-party imagery keyed by coordinate, with a 30-day TTL.
-  Do not back it up: it would carry hundreds of megabytes of somebody else's
-  map into every archive. Deleting it at any time is safe.
+- Blobs live in the `blobs` volume at `/data/blobs`. Back up the database first
+  and the blob directory second. Blobs are content-addressed and append-only, so
+  that order never strands a reference.
+- **Basemap tiles are not a blob.** `TILE_CACHE_DIR`, `/data/tiles` by default,
+  holds disposable third-party imagery keyed by coordinate with a 30 day TTL.
+  Leave it out of your backups. It would otherwise carry hundreds of megabytes
+  of somebody else's map into every archive, and deleting it is safe at any
+  time.
+- The optional self-hosted geocoder is behind a compose profile:
+  `docker compose --profile geocoder up -d`. It is not started by default
+  because the first run imports an OpenStreetMap extract, which takes a while
+  and wants real disk. Set `NOMINATIM_IMPORT_URL` to your own region; the
+  default is a placeholder that finds almost nothing.
 
 ## Backup & restore
 
@@ -466,10 +541,21 @@ on boot and every 5 minutes, never overlapping itself, and stops on SIGTERM.
 
 ---
 
+## Support
+
+Ledger is free, and it stays that way. If it saved you a subscription and you
+want to put something back, there is a Ko-fi:
+
+**[ko-fi.com/zenatron](https://ko-fi.com/zenatron)**
+
+Filing a good bug report is worth as much, and costs nothing.
+
+---
+
 ## License
 
 [GNU Affero General Public License v3.0 or later](LICENSE).
 
-Copyleft, and the network clause is the point. If you run a modified copy of
-Ledger as a service other people can reach, they are entitled to its source.
-Running it unmodified for your own household asks nothing of you.
+The network clause is why this license and not a permissive one. If you modify
+Ledger and run it as a service other people can reach, they are entitled to your
+changes. Running it unmodified for your own household asks nothing of you.

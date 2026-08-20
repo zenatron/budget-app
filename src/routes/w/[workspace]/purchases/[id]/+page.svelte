@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { submit } from '$lib/actions/submit';
+	import { decide } from '$lib/actions/decide';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { formatMinor, tryParseMinor } from '$lib/money-format';
@@ -571,13 +572,10 @@
 					<form
 						method="POST"
 						action="?/approve"
-						use:enhance={() => {
-							deciding = 'approve';
-							return async ({ update }) => {
-								await update();
-								deciding = null;
-							};
-						}}
+						use:enhance={decide(
+							() => (deciding = 'approve'),
+							() => (deciding = null)
+						)}
 						class="flex-1"
 					>
 						<button class="btn btn-accent w-full py-3.5 text-[17px]" disabled={deciding !== null}>
@@ -599,13 +597,10 @@
 							id="deny-form"
 							method="POST"
 							action="?/deny"
-							use:enhance={() => {
-								deciding = 'deny';
-								return async ({ update }) => {
-									await update();
-									deciding = null;
-								};
-							}}
+							use:enhance={decide(
+								() => (deciding = 'deny'),
+								() => (deciding = null)
+							)}
 							class="shrink-0"
 						>
 							<button
