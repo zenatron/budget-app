@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Wallet } from '@lucide/svelte';
+	import DemoSignIn from '$lib/components/DemoSignIn.svelte';
 </script>
 
 <svelte:head><title>Ledger</title></svelte:head>
@@ -29,9 +30,19 @@
 	</div>
 
 	<div>
-		<a href="/auth/login" class="btn btn-accent w-full py-4 text-[17px]">Sign in with Pocket ID</a>
-		<p class="mt-4 text-center text-[13px]" style="color: var(--ink-3)">
-			Open source · Self-hosted · Passkey auth · Optional AI integration
-		</p>
+		<!--
+			The demo has no identity provider to sign in to, so the button says what
+			it does there: it opens the seeded workspace. __DEMO__ is a build-time
+			constant, so only one of these two reaches either bundle.
+		-->
+		{#if __DEMO__}
+			<DemoSignIn />
+		{:else}
+			<a href="/auth/login" class="btn btn-accent w-full py-4 text-[17px]">Sign in with Pocket ID</a
+			>
+			<p class="mt-4 text-center text-[13px]" style="color: var(--ink-3)">
+				Open source · Self-hosted · Passkey auth · Optional AI integration
+			</p>
+		{/if}
 	</div>
 </main>

@@ -153,14 +153,20 @@ else, so a bank file can never rewrite your ledger.
 
 <table>
 <tr>
-<td width="270" valign="top"><img src="docs/screenshots/appearance.png" width="250" alt="Theme and accent settings" /><br /><img src="docs/screenshots/appearance-dark.png" width="250" alt="The same settings in dark" /><br /><img src="docs/screenshots/ledger-dark.png" width="250" alt="The ledger in dark" /><br /><img src="docs/screenshots/categories.png" width="250" alt="Custom categories" /></td>
+<td width="270" valign="top"><img src="docs/screenshots/appearance.png" width="250" alt="Appearance settings on the magenta accent" /><br /><img src="docs/screenshots/categories.png" width="250" alt="Custom categories on the evergreen accent" /><br /><img src="docs/screenshots/appearance-dark.png" width="250" alt="Appearance settings in dark on the azure accent" /><br /><img src="docs/screenshots/ledger-dark.png" width="250" alt="The ledger in dark on the cerulean accent" /></td>
 <td valign="top">
 
 ### Make it yours
 
-Light and dark, following the device by default, flipped before first paint so
-there is no white flash. Eight workspace accents, and each workspace keeps its
-own, so two households on one server never look alike.
+Ten accents, and each workspace keeps its own, so two households on one server
+never look alike. The four here are magenta, evergreen, azure and cerulean, and
+they are the real thing: the accent is one stored value that every tint, chip
+and control derives from, so picking one moves the whole app.
+
+Light and dark follow the device by default, flipped before first paint so there
+is no white flash. The theme is per device and the accent is per workspace,
+which is the right split: how bright your screen is, and whose money this is,
+are different questions.
 
 Categories are yours to add, rename and retire. The built-in set is a starting
 point.
@@ -267,6 +273,11 @@ categories, appearance and the workspace overview. Left out because they need a
 backend: auth, Harmony, MCP, the API, reconciliation, the map, CSV export and
 the notification/member/model settings.
 
+It seeds two workspaces, so switching between them is a thing you can actually
+do rather than a menu with one entry. Deleting one lands you on the other;
+deleting both lands you on the sign-in page, where the demo offers to reseed.
+Signing out ends the tab's session the way the real one ends a cookie.
+
 `demo:seed` reuses `scripts/seed-workspace.ts` unchanged, so the demo's data
 cannot drift from the seeder the dev environment uses. `demo:build` generates a
 parallel route tree at `.demo/routes` rather than touching `src/routes`; routes
@@ -361,10 +372,17 @@ they need different things:
 bun run demo:build && bun scripts/capture-screenshots.ts
 
 # 2. The pages that need a server behind them: Harmony, AI assist, members,
-#    reconcile, API and notifications. Needs a seeded database and DEV_MODE.
+#    the map, reconcile, API, notifications, and the accent set. Needs a seeded
+#    database and DEV_MODE.
 DEV_MODE=true bun run dev &
-CAPTURE_SERVER_WS=<slug> bun scripts/capture-screenshots.ts --server http://localhost:5173
+CAPTURE_SERVER_WS=<slug> CAPTURE_DB_URL=$DATABASE_URL \
+  bun scripts/capture-screenshots.ts --server http://localhost:5173
 ```
+
+`CAPTURE_DB_URL` is what lets the accent shots write the column the accent
+actually lives in. Without it those shots still render, in whatever accent the
+workspace already has, and the run says so. The original accent is put back
+afterwards, so capturing is not a mutation.
 
 Pass one alone leaves the server-only images untouched and says so. Both write
 full-bleed PNGs to `static/screenshots/` for the web manifest, and the same

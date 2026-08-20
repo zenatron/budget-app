@@ -92,7 +92,9 @@ export async function runDemoAction(action: URL, formData: FormData): Promise<Ac
 	}
 
 	try {
-		const ctx = await getDemoContext(base);
+		// The workspace comes from the action's own path, so a form posted from
+		// one workspace cannot write into another.
+		const ctx = await getDemoContext(base, params.workspace);
 		const request = new Request(action, { method: 'POST', body: formData });
 		// Params come from matching the action's own path, so an action on a
 		// dynamic route gets its `params.id` however it was reached.
@@ -107,7 +109,19 @@ export async function runDemoAction(action: URL, formData: FormData): Promise<Ac
 		}
 		return { type: 'success', status: 200, data: data ?? undefined };
 	} catch (e) {
-		if (isRedirect(e)) return { type: 'redirect', status: e.status, location: e.location };
+		if (isRedirect(e))
+			return { type: 'redirect', status: e.status, location: withBase(e.location) };
 		return { type: 'error', status: 500, error: e };
 	}
+}
+
+/**
+ * Handlers redirect to server paths, because on the server that is what they
+ * are: `deleteWorkspace` sends you to `/`. A demo served from a subpath
+ * (DEMO_BASE) has to carry that prefix, and no handler knows about it. Nothing
+ * to do when the demo sits at the root, which is how it is deployed.
+ */
+function withBase(location: string): string {
+	if (!base || !location.startsWith('/') || location.startsWith(`${base}/`)) return location;
+	return `${base}${location}`;
 }

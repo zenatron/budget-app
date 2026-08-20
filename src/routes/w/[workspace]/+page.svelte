@@ -16,9 +16,20 @@
 		Webhook
 	} from '@lucide/svelte';
 	import { installPrompt, isIos, promptInstall, dismissInstall } from '$lib/install-prompt.svelte';
+	import { goto } from '$app/navigation';
+	import { base } from '$app/paths';
 	let { data, form } = $props();
 	let slug = $derived(page.params.workspace);
 	let prompting = $state(false);
+
+	// Imported at click time, the way DemoBanner does it: a static import would
+	// keep $lib/demo in the production bundle even though `{#if __DEMO__}`
+	// removes the call.
+	async function demoSignOut() {
+		const { signOut } = await import('$lib/demo/session');
+		signOut();
+		await goto(`${base}/`);
+	}
 
 	async function install() {
 		prompting = true;
@@ -115,9 +126,22 @@
 				<p class="mt-0.5 text-[13px]" style="color: var(--deny)">{form.error}</p>
 			{/if}
 		</div>
-		<form method="POST" action="/auth/logout">
-			<button class="btn btn-ghost px-4 py-2 text-[14px]">Sign out</button>
-		</form>
+		<!--
+			Signing out is a server act: the session row is destroyed and the cookie
+			cleared by /auth/logout. The demo has neither, and posting to an endpoint
+			that isn't in the static build landed on the error page, so there it ends
+			the tab's session and returns to the landing page instead. The visitor's
+			data is left alone; "Reset demo" in the banner is what discards it.
+		-->
+		{#if __DEMO__}
+			<button type="button" onclick={demoSignOut} class="btn btn-ghost px-4 py-2 text-[14px]">
+				Sign out
+			</button>
+		{:else}
+			<form method="POST" action="/auth/logout">
+				<button class="btn btn-ghost px-4 py-2 text-[14px]">Sign out</button>
+			</form>
+		{/if}
 	</div>
 
 	<!--
@@ -466,5 +490,17 @@
 		</div>
 	{/if}
 
-	<p class="pt-2 text-center text-[12px]" style="color: var(--ink-3)">Ledger v{data.version}</p>
+	<!-- One block, so the page's `space-y-4` spaces the footer as a whole and the
+	     two lines keep their own tighter gap. -->
+	<div class="pt-2 text-center">
+		<p class="text-[12px]" style="color: var(--ink-3)">Ledger v{data.version}</p>
+		<p class="mt-2 text-[12px]" style="color: var(--ink-4)">
+			Made with ❤️ by <a
+				href="https://github.com/zenatron"
+				target="_blank"
+				rel="noopener noreferrer"
+				style="color: var(--accent-ink)">zenatron</a
+			>
+		</p>
+	</div>
 </div>

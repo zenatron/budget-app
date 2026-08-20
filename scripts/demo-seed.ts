@@ -56,9 +56,29 @@ async function main() {
 	await runMigrations(seedUrl, `${ROOT}/drizzle`);
 
 	console.log('3. seeding…');
-	await $`bun scripts/seed-workspace.ts --name ${'Demo Household'} --slug demo --reset --months 18`
-		.env({ ...process.env, DATABASE_URL: seedUrl })
-		.cwd(ROOT);
+	/*
+	 * Two workspaces, because the header's switcher is a real control and a
+	 * single workspace leaves it with nothing to switch to. The second one is
+	 * short (4 months against 18) so it costs little in snapshot size, and it is
+	 * enough to show that switching changes the ledger under you.
+	 *
+	 * `seed-workspace.ts` upserts its users on the OIDC subject, so both runs
+	 * produce the same owner: one visitor, two memberships, which is what the
+	 * switcher lists.
+	 */
+	for (const ws of [
+		{ name: 'Demo Household', slug: 'demo', months: 18 },
+		{ name: 'Lake House', slug: 'lake-house', months: 4 }
+	]) {
+		await $`bun scripts/seed-workspace.ts --name ${ws.name} --slug ${ws.slug} --reset --months ${String(ws.months)}`
+			.env({ ...process.env, DATABASE_URL: seedUrl })
+			.cwd(ROOT);
+	}
+
+	// Each workspace paints the app its own accent, and two identical oranges
+	// make a switch look like nothing happened. The seeder has no flag for it,
+	// so the second one is recolored here, to another color from ACCENTS.
+	await $`psql ${seedUrl} -v ON_ERROR_STOP=1 -c ${"update workspace set accent_color = '#0A84FF' where slug = 'lake-house'"}`.quiet();
 
 	console.log('4. dumping…');
 	const dump =
@@ -74,9 +94,10 @@ async function main() {
 
 	const [{ n }] = (await client.query<{ n: number }>('select count(*)::int as n from purchase'))
 		.rows;
-	const [{ slug }] = (await client.query<{ slug: string }>('select slug from workspace limit 1'))
-		.rows;
-	console.log(`   ${n} purchases in workspace "${slug}"`);
+	const slugs = (
+		await client.query<{ slug: string }>('select slug from workspace order by created_at')
+	).rows.map((r) => r.slug);
+	console.log(`   ${n} purchases across ${slugs.length} workspace(s): ${slugs.join(', ')}`);
 
 	console.log('6. writing snapshot…');
 	const blob = await client.dumpDataDir('gzip');

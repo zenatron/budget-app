@@ -38,13 +38,14 @@ const STUBS: Array<{ path: string; reply: () => Response }> = [
 	{ path: 'places/search', reply: () => json({ results: [] }) }
 ];
 
-const WORKSPACE_PATH = /^\/w\/[^/]+\/(.*)$/;
+const WORKSPACE_PATH = /^\/w\/([^/]+)\/(.*)$/;
 
 function match(url: URL, method: string) {
-	const rest = WORKSPACE_PATH.exec(url.pathname)?.[1];
-	if (!rest) return null;
+	const hit = WORKSPACE_PATH.exec(url.pathname);
+	if (!hit) return null;
+	const [, slug, rest] = hit;
 	const route = ROUTES.find((r) => r.path === rest && r.method === method);
-	if (route) return { kind: 'handler' as const, route };
+	if (route) return { kind: 'handler' as const, route, slug };
 	const stub = STUBS.find((s) => s.path === rest);
 	if (stub) return { kind: 'stub' as const, stub };
 	return null;
@@ -87,7 +88,9 @@ export function installDemoEndpoints(base = ''): void {
 		if (hit.kind === 'stub') return hit.stub.reply();
 
 		try {
-			const ctx = await getDemoContext(base);
+			// Same as the form path: the workspace comes from the URL that was
+			// fetched, so a call made in one workspace reads only that one.
+			const ctx = await getDemoContext(base, hit.slug);
 			const request = input instanceof Request ? input : new Request(url, init);
 			return await hit.route.handler(ctx, { request, url });
 		} catch (e) {

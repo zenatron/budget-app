@@ -22,6 +22,7 @@ import { chromium, type Page } from '@playwright/test';
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import sharp from 'sharp';
+import postgres from 'postgres';
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const DEMO_DIR = `${ROOT}/build-demo`;
@@ -122,6 +123,14 @@ interface Shot {
 	fill?: [placeholder: string, value: string][];
 	/** Type this into the command palette and wait for the answer. */
 	ask?: string;
+	/**
+	 * Set the workspace's accent to this hex before shooting. Server pass only,
+	 * and it writes the real column: the accent is one stored value that every
+	 * other token derives from in CSS, and the picker's tick reads that same
+	 * value. Overriding the variable would recolor the chrome and leave the
+	 * wrong swatch ticked, which is a picture of a state the app cannot be in.
+	 */
+	accent?: string;
 }
 
 /**
@@ -201,29 +210,10 @@ const SHOTS: Shot[] = [
 		url: '/w/demo/calendar',
 		theme: 'dark',
 		label: 'What is coming, and when'
-	},
-	{
-		name: 'categories',
-		url: '/w/demo/settings/categories',
-		theme: 'light'
-	},
-	// The same screen twice, because the pair is the point: one theme setting,
-	// one accent, and the whole app follows both.
-	{
-		name: 'appearance',
-		url: '/w/demo/settings/appearance',
-		theme: 'light'
-	},
-	{
-		name: 'appearance-dark',
-		url: '/w/demo/settings/appearance',
-		theme: 'dark'
-	},
-	{
-		name: 'ledger-dark',
-		url: '/w/demo/purchases',
-		theme: 'dark'
 	}
+	// The theme and accent shots live in the server pass: varying the accent
+	// means writing the column it is stored in, and the demo's database is a
+	// baked snapshot with one value in it.
 ];
 
 /**
@@ -264,6 +254,35 @@ const SERVER_SHOTS: Shot[] = [
 		url: `/w/${SERVER_WS}/analytics/map`,
 		theme: 'dark'
 	},
+	/*
+	 * Four screens, four accents, two of each theme. The point of the set is
+	 * that the accent is a workspace's own and the whole app follows it, which
+	 * one screenshot in one color cannot show.
+	 */
+	{
+		name: 'appearance',
+		url: `/w/${SERVER_WS}/settings/appearance`,
+		theme: 'light',
+		accent: '#FF375F' // Magenta
+	},
+	{
+		name: 'categories',
+		url: `/w/${SERVER_WS}/settings/categories`,
+		theme: 'light',
+		accent: '#0D9E3A' // Evergreen
+	},
+	{
+		name: 'appearance-dark',
+		url: `/w/${SERVER_WS}/settings/appearance`,
+		theme: 'dark',
+		accent: '#0A84FF' // Azure
+	},
+	{
+		name: 'ledger-dark',
+		url: `/w/${SERVER_WS}/purchases`,
+		theme: 'dark',
+		accent: '#1795A9' // Cerulean
+	},
 	{
 		name: 'reconcile',
 		url: `/w/${SERVER_WS}/reconcile`,
@@ -281,6 +300,35 @@ const SERVER_SHOTS: Shot[] = [
 	}
 ];
 
+/*
+ * The accent lives in a column, so varying it means writing that column. Opened
+ * lazily and only when a shot asks for one, because the demo pass has no
+ * database to talk to and must not require one.
+ */
+let sql: ReturnType<typeof postgres> | null = null;
+let originalAccent: string | null = null;
+
+async function setAccent(hex: string) {
+	const url = process.env.CAPTURE_DB_URL ?? process.env.DATABASE_URL;
+	if (!url) {
+		console.warn(`  accent ${hex} not applied: set CAPTURE_DB_URL to the app's database`);
+		return;
+	}
+	sql ??= postgres(url, { max: 1 });
+	if (originalAccent === null) {
+		const [row] = await sql`select accent_color from workspace where slug = ${SERVER_WS}`;
+		originalAccent = row?.accent_color ?? '';
+	}
+	await sql`update workspace set accent_color = ${hex} where slug = ${SERVER_WS}`;
+}
+
+/** Put back whatever the workspace had, so capturing is not a mutation. */
+async function restoreAccent() {
+	if (!sql || originalAccent === null) return;
+	await sql`update workspace set accent_color = ${originalAccent} where slug = ${SERVER_WS}`;
+	await sql.end();
+}
+
 async function settle(page: Page) {
 	await page.waitForTimeout(WAIT_AFTER_LOAD_MS);
 	// One more frame after any scrolling, so transitions have landed.
@@ -294,6 +342,7 @@ async function settle(page: Page) {
  */
 async function shoot(shot: Shot, at: string = origin) {
 	const waitUntil = at === origin ? 'networkidle' : 'domcontentloaded';
+	if (shot.accent) await setAccent(shot.accent);
 	await page.evaluate((t) => {
 		if (t === 'dark') localStorage.setItem('theme', 'dark');
 		else localStorage.removeItem('theme');
@@ -489,6 +538,7 @@ if (serverOrigin) {
 	);
 }
 
+await restoreAccent();
 await browser.close();
 server.stop(true);
 
