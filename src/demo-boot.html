@@ -1,0 +1,43 @@
+<!--
+	The demo's first paint.
+
+	The static demo ships an empty shell: every route sets `ssr = false`, so
+	nothing renders until the bundle arrives, and the data behind it is Postgres
+	compiled to WASM plus a 5 MB seed downloaded into the tab. On a cold visit
+	that is several seconds of blank paper. This is what fills them.
+
+	It is markup, not a component, because a component cannot run before the
+	bundle it lives in has loaded. `scripts/demo-build.ts` injects this file into
+	the demo's copy of app.html, and the root layout removes the element once
+	Svelte mounts (see `#boot` there). The production build never sees it: it
+	renders on the server, so its first paint is already the page.
+
+	Styles are in demo-boot.css beside this file, loaded as a real stylesheet,
+	because the app's CSP allows no inline <style> element. `demo-finalize.ts`
+	copies it into the build the same way it copies the seed.
+-->
+<div id="boot" class="boot" role="status">
+	<div class="boot-inner">
+		<div class="boot-mark">
+			<svg
+				viewBox="0 0 24 24"
+				width="22"
+				height="22"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				aria-hidden="true"
+			>
+				<path
+					d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"
+				/>
+				<path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" />
+			</svg>
+		</div>
+		<p class="boot-overline">The Ledger</p>
+		<div class="boot-rule"><span></span></div>
+		<p class="boot-note">Setting up the demo in your browser.</p>
+	</div>
+</div>

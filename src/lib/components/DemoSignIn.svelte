@@ -66,9 +66,17 @@
 		disabled={!entry || working}
 		class="btn btn-accent w-full py-4 text-[17px]"
 	>
-		{working ? 'Opening…' : 'Open the demo'}
+		<!--
+			Three states, because two of them are waits the visitor can feel. The
+			database behind this button is Postgres compiled to WASM, restored from
+			a 5 MB snapshot on a first visit, and `checked` is false for all of it.
+			A disabled button with no label change reads as a broken page.
+		-->
+		{#if working}Opening…{:else if checked}Open the demo{:else}Setting up…{/if}
 	</button>
 	<p class="mt-4 text-center text-[13px]" style="color: var(--ink-3)">
-		No account needed. Everything runs in your browser.
+		{checked
+			? 'No account needed. Everything runs in your browser.'
+			: 'Loading the sample data into your browser.'}
 	</p>
 {/if}

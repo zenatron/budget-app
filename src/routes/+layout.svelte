@@ -53,6 +53,27 @@
 	// Captures the browser's install offer so the settings hub can present it;
 	// a no-op everywhere the event never fires (Safari, Firefox).
 	onMount(initInstallPrompt);
+
+	/*
+	 * Hand off from the demo's boot screen.
+	 *
+	 * Only the demo has one: it renders nothing on the server, so the shell it
+	 * ships would otherwise be blank paper while the bundle, the WASM database and
+	 * the seed arrive. The markup is injected into that build's app.html by
+	 * scripts/demo-build.ts, and this is the moment it has done its job. __DEMO__
+	 * is a build-time constant, so none of it reaches the production bundle.
+	 */
+	if (__DEMO__) {
+		onMount(() => {
+			const boot = document.getElementById('boot');
+			if (!boot) return;
+			boot.style.opacity = '0';
+			// Long enough for the fade in demo-boot.css; removed rather than left
+			// transparent so it cannot swallow a tap.
+			const t = setTimeout(() => boot.remove(), 260);
+			return () => clearTimeout(t);
+		});
+	}
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>

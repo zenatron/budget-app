@@ -365,8 +365,15 @@ Deploying to a project site (`user.github.io/repo`) needs the base path:
 DEMO_BASE=/repo bun run demo:build
 ```
 
+The demo also gets its own `app.html`, generated from the real one with the
+boot screen in it (`src/demo-boot.html` and `src/demo-boot.css`). Its routes
+render nothing on the server, so the shell would otherwise be blank paper while
+the bundle, the WASM database and the seed arrive; the root layout removes the
+element once Svelte mounts. Production renders on the server and never includes
+it.
+
 `bun run demo:build` finishes with `scripts/demo-finalize.ts`, which copies the
-seed in, writes `404.html` (GitHub Pages serves it for any path it has no file
+seed and the boot stylesheet in, writes `404.html` (GitHub Pages serves it for any path it has no file
 for, which is what makes deep links work), adds `.nojekyll`, and rewrites the
 web manifest's `scope`, `start_url` and icons for the base path.
 

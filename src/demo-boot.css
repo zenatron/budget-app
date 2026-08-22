@@ -1,0 +1,157 @@
+/*
+ * Styles for the demo's boot screen (demo-boot.html beside this file).
+ *
+ * A standalone stylesheet for the same reason static/theme-init.js is a
+ * standalone script: the app's CSP has no unsafe-inline, so a <style> element
+ * written into app.html would be dropped. It loads before the bundle, which is
+ * the whole point, so it can reference nothing the bundle provides. The paper
+ * values below mirror --paper / --ink / --ink-3 / --surface / --hairline in
+ * src/routes/layout.css; if those move, move these. Font files are addressed
+ * relative to this stylesheet so a project-site base path carries them along.
+ */
+@font-face {
+	font-family: 'Hanken Grotesk Variable';
+	src: url('fonts/hanken-grotesk-latin-wght-normal.woff2') format('woff2-variations');
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Atkinson Hyperlegible';
+	src: url('fonts/atkinson-hyperlegible-latin-700-normal.woff2') format('woff2');
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+}
+
+.boot {
+	position: fixed;
+	inset: 0;
+	z-index: 100;
+	display: grid;
+	place-items: center;
+	padding: 24px;
+	color: light-dark(oklch(0.245 0.021 62), oklch(0.95 0.01 84));
+	background: light-dark(oklch(0.965 0.013 88), oklch(0.18 0.012 78));
+	font-family:
+		'Hanken Grotesk Variable',
+		-apple-system,
+		BlinkMacSystemFont,
+		'Helvetica Neue',
+		Arial,
+		sans-serif;
+	-webkit-font-smoothing: antialiased;
+	transition: opacity 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The paper tooth from layout.css, at the same weight, so the screen the demo
+   opens on is made of the same material as every screen after it. */
+.boot::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	opacity: 0.06;
+	mix-blend-mode: multiply;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/*
+ * The paper is there from the first frame; the masthead waits 240ms. A demo
+ * served warm from cache is running by then, and the visitor sees the app
+ * rather than a splash that flashed at them. Same delay NavProgress uses, for
+ * the same reason.
+ */
+.boot-inner {
+	position: relative;
+	z-index: 1;
+	width: 15rem;
+	max-width: 100%;
+	text-align: center;
+	animation: boot-in 260ms cubic-bezier(0.16, 1, 0.3, 1) 240ms both;
+}
+
+.boot-mark {
+	width: 36px;
+	height: 36px;
+	margin: 0 auto;
+	display: grid;
+	place-items: center;
+	border-radius: 9px;
+	background: light-dark(oklch(0.245 0.021 62), oklch(0.95 0.01 84));
+	color: light-dark(oklch(0.965 0.013 88), oklch(0.18 0.012 78));
+}
+
+.boot-overline {
+	margin: 14px 0 0;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: light-dark(oklch(0.52 0.016 64), oklch(0.67 0.012 84));
+}
+
+/* A ledger rule that draws itself: the hairline vocabulary the app is ruled
+   with, doing the job a spinner would otherwise do. */
+.boot-rule {
+	position: relative;
+	height: 1px;
+	margin: 18px 0;
+	overflow: hidden;
+	background: light-dark(oklch(0.28 0.02 65 / 0.16), oklch(0.92 0.02 80 / 0.13));
+}
+.boot-rule span {
+	display: block;
+	height: 100%;
+	width: 100%;
+	transform-origin: left;
+	background: light-dark(oklch(0.245 0.021 62), oklch(0.95 0.01 84));
+	animation: boot-rule 1.4s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+}
+
+.boot-note {
+	margin: 0;
+	font-size: 13px;
+	line-height: 1.5;
+	color: light-dark(oklch(0.52 0.016 64), oklch(0.67 0.012 84));
+}
+
+@keyframes boot-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@keyframes boot-rule {
+	0% {
+		transform: scaleX(0);
+		opacity: 1;
+	}
+	70% {
+		transform: scaleX(0.85);
+	}
+	100% {
+		transform: scaleX(1);
+		opacity: 0.4;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.boot,
+	.boot-inner,
+	.boot-rule span {
+		animation: none;
+		transition: none;
+	}
+	/* The static fallback is a drawn rule at rest, held short of full so it
+	   still reads as work in progress. */
+	.boot-rule span {
+		width: 45%;
+		opacity: 0.6;
+	}
+}

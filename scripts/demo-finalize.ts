@@ -12,6 +12,8 @@ import { copyFile, readFile, writeFile, access } from 'node:fs/promises';
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const OUT = `${ROOT}/build-demo`;
 const SEED = `${ROOT}/demo-assets/demo-seed.tar.gz`;
+/** Styles for the boot screen injected into the demo's app.html. */
+const BOOT_CSS = `${ROOT}/src/demo-boot.css`;
 
 /** Matches vite.config.ts — a project site is served from /<repo>. */
 const BASE = process.env.DEMO_BASE ?? '';
@@ -50,6 +52,14 @@ async function main() {
 		throw new Error('demo-assets/demo-seed.tar.gz missing — run `bun run demo:seed` first');
 	}
 	await copyFile(SEED, `${OUT}/demo-seed.tar.gz`);
+
+	// Same reasoning as the seed: the boot screen belongs to the demo alone, so
+	// its stylesheet lives outside static/ and is placed here instead of shipping
+	// in every production build. app.html asks for it at the base's root.
+	if (!(await exists(BOOT_CSS))) {
+		throw new Error('src/demo-boot.css missing — the boot screen has no styles');
+	}
+	await copyFile(BOOT_CSS, `${OUT}/demo-boot.css`);
 
 	if (HOST === 'github') {
 		// The fallback *is* 404.html here — GitHub Pages has no rewrite rules.

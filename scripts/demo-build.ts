@@ -20,6 +20,9 @@ import { existsSync } from 'node:fs';
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const SRC = `${ROOT}/src/routes`;
 const OUT = `${ROOT}/.demo/routes`;
+const APP_HTML = `${ROOT}/src/app.html`;
+const DEMO_APP_HTML = `${ROOT}/.demo/app.html`;
+const BOOT_HTML = `${ROOT}/src/demo-boot.html`;
 
 /**
  * Routes the demo ships. Everything absent is excluded by construction rather
@@ -79,9 +82,37 @@ export const load = async (event: Parameters<typeof h.load>[1]) =>
 `;
 }
 
+/**
+ * The demo's copy of app.html: the real one with the boot screen in it.
+ *
+ * Generated rather than kept as a second template, so the head — theme script,
+ * manifest, icons, the meta the installed app reads — has one source. The boot
+ * markup and its stylesheet only make sense here: production renders on the
+ * server, so a splash over it would cover a page that had already arrived.
+ * `vite.config.ts` points `kit.files.appTemplate` at the result when DEMO=1.
+ */
+async function writeAppTemplate() {
+	const html = await readFile(APP_HTML, 'utf8');
+	const boot = (await readFile(BOOT_HTML, 'utf8')).trimEnd();
+
+	const withCss = html.replace(
+		'%sveltekit.head%',
+		`<link rel="stylesheet" href="%sveltekit.assets%/demo-boot.css" />\n\t\t%sveltekit.head%`
+	);
+	if (withCss === html) throw new Error('demo: app.html has no %sveltekit.head% to inject before');
+
+	const withBoot = withCss.replace(/(<body[^>]*>)/, `$1\n\t\t${boot.replace(/\n/g, '\n\t\t')}`);
+	if (withBoot === withCss)
+		throw new Error('demo: app.html has no <body> to inject the boot screen into');
+
+	await writeFile(DEMO_APP_HTML, withBoot);
+}
+
 async function main() {
 	await rm(`${ROOT}/.demo`, { recursive: true, force: true });
 	await mkdir(OUT, { recursive: true });
+
+	await writeAppTemplate();
 
 	// Root-level shell: the layout, its stylesheet, the error page, and the
 	// landing page — where signing out and deleting your last workspace both
